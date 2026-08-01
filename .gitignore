@@ -1,0 +1,12 @@
+# Ignore FFmpeg source and local binary folders
+ffmpeg/
+ffmpeg1/
+
+# Ignore preview output and temporary work folders
+preview_one/
+*.log
+
+# Ignore editor and system files
+.vscode/
+Thumbs.db
+.DS_Store
