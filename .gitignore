@@ -4,7 +4,15 @@ ffmpeg1/
 
 # Ignore preview output and temporary work folders
 preview_one/
+video_join_work_*/
+output.mp4
+preview*.mp4
 *.log
+
+# Ignore Python local state
+__pycache__/
+*.py[cod]
+.venv/
 
 # Ignore editor and system files
 .vscode/

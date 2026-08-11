@@ -72,6 +72,11 @@ class MediaError(RuntimeError):
     """An error tied to one input media file."""
 
 
+def expanded_path(value: str) -> Path:
+    """Return a user-supplied path with `~` expanded."""
+    return Path(value).expanduser()
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -81,25 +86,25 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--input-dir",
-        type=Path,
-        default=Path(r"D:\Input"),
-        help=r"folder containing source media (default: D:\Input)",
+        type=expanded_path,
+        default=Path.home() / "Input",
+        help="folder containing source media (default: ~/Input)",
     )
     parser.add_argument(
         "--output",
-        type=Path,
+        type=expanded_path,
         default=None,
         help="final MP4 path (default: <input-dir>/output.mp4)",
     )
     parser.add_argument(
         "--error-log",
-        type=Path,
+        type=expanded_path,
         default=None,
         help="error log path (default: next to output as errors.log)",
     )
     parser.add_argument(
         "--font-file",
-        type=Path,
+        type=expanded_path,
         default=None,
         help="optional TrueType/OpenType font used for the timestamp",
     )
@@ -350,14 +355,22 @@ def russian_weekday_abbrev(dt: datetime) -> str:
 
 
 def find_default_font() -> Path | None:
-    windows_fonts = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts"
-    candidates = (
-        windows_fonts / "comic.ttf",
-        windows_fonts / "comicbd.ttf",
-        windows_fonts / "arial.ttf",
-        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
-        Path("/System/Library/Fonts/Supplemental/Arial.ttf"),
-    )
+    home = Path.home()
+    candidates = [
+        home / "AppData/Local/Microsoft/Windows/Fonts/comic.ttf",
+        home / "AppData/Local/Microsoft/Windows/Fonts/comicbd.ttf",
+        home / "AppData/Local/Microsoft/Windows/Fonts/arial.ttf",
+        home / ".local/share/fonts/DejaVuSans.ttf",
+        home / "Library/Fonts/Arial.ttf",
+    ]
+    windows_dir = os.environ.get("WINDIR")
+    if windows_dir:
+        windows_fonts = Path(windows_dir) / "Fonts"
+        candidates[:0] = [
+            windows_fonts / "comic.ttf",
+            windows_fonts / "comicbd.ttf",
+            windows_fonts / "arial.ttf",
+        ]
     return next((font for font in candidates if font.is_file()), None)
 
 
