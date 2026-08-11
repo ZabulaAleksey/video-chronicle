@@ -2,7 +2,7 @@
 
 Скрипт `join_media.py` нормализует видео и фотографии, добавляет дату с сокращённым днём недели и собирает их в один MP4-файл.
 
-Рабочий репозиторий располагается в `~/projects/video-chronicle`.
+Рабочий репозиторий располагается в `~/codex-workspace/projects/video-chronicle`.
 
 ## Что делает проект
 
@@ -53,7 +53,7 @@
 ## Пример запуска
 
 ```powershell
-python ~/projects/video-chronicle/join_media.py --input-dir ~/Input --output ~/Input/preview.mp4 --ffmpeg ~/projects/video-chronicle/ffmpeg1/bin/ffmpeg.exe --ffprobe ~/projects/video-chronicle/ffmpeg1/bin/ffprobe.exe --overwrite
+python ~/codex-workspace/projects/video-chronicle/join_media.py --input-dir ~/Input --output ~/Input/preview.mp4 --ffmpeg ~/codex-workspace/projects/video-chronicle/ffmpeg1/bin/ffmpeg.exe --ffprobe ~/codex-workspace/projects/video-chronicle/ffmpeg1/bin/ffprobe.exe --overwrite
 ```
 
 Если FFmpeg уже добавлен в `PATH`, параметры `--ffmpeg` и `--ffprobe` можно не указывать.
