@@ -536,6 +536,43 @@ def concatenate(
     )
 
 
+def publish_output(temporary_output: Path, output: Path, overwrite: bool) -> None:
+    """Publish a finished movie without an unauthorized replacement race."""
+
+    if overwrite:
+        os.replace(temporary_output, output)
+        return
+
+    used_hard_link = os.name != "nt"
+    try:
+        if used_hard_link:
+            # The work directory is deliberately created next to the output,
+            # so a hard link is an atomic create-if-absent operation on POSIX.
+            os.link(temporary_output, output)
+        else:
+            # Unlike POSIX rename(), Windows rename fails if the destination
+            # exists and works on FAT/exFAT without hard-link support.
+            os.rename(temporary_output, output)
+    except FileExistsError as exc:
+        raise RuntimeError(
+            f"output appeared during processing: {output}. "
+            "Run again with --overwrite to replace it."
+        ) from exc
+    except OSError as exc:
+        raise RuntimeError(
+            "could not publish the output without replacing an existing file; "
+            "the destination filesystem must support an atomic no-replace "
+            "operation or the user must explicitly allow --overwrite"
+        ) from exc
+    if used_hard_link:
+        try:
+            temporary_output.unlink()
+        except OSError:
+            # The published hard link is already complete. The known work
+            # directory cleanup will make a best effort to remove the old name.
+            pass
+
+
 def collect_source_paths(input_dir: Path, output: Path, error_log: Path) -> list[Path]:
     excluded = {output.resolve(), error_log.resolve()}
     return sorted(
@@ -649,7 +686,7 @@ def main() -> int:
                 temporary_output,
                 ffmpeg,
             )
-            os.replace(temporary_output, output)
+            publish_output(temporary_output, output, args.overwrite)
             logger.info("Done: %s", output)
             logger.info("Files skipped with errors: %d", failed_count)
             logger.info("Error log: %s", error_log)

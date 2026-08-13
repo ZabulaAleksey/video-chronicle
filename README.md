@@ -2,6 +2,10 @@
 
 Скрипт `join_media.py` нормализует видео и фотографии, добавляет дату с сокращённым днём недели и собирает их в один MP4-файл.
 
+Проект также содержит начальную PySide6 GUI-оболочку. Она не дублирует
+медиалогику, а запускает существующий скрипт в отдельном процессе и показывает
+его журнал.
+
 Рабочий репозиторий располагается в `~/codex-workspace/projects/video-chronicle`.
 
 ## Что делает проект
@@ -55,6 +59,22 @@
 ```powershell
 python ~/codex-workspace/projects/video-chronicle/join_media.py --input-dir ~/Input --output ~/Input/preview.mp4 --ffmpeg ~/codex-workspace/projects/video-chronicle/ffmpeg1/bin/ffmpeg.exe --ffprobe ~/codex-workspace/projects/video-chronicle/ffmpeg1/bin/ffprobe.exe --overwrite
 ```
+
+## Запуск GUI
+
+```powershell
+cd ~/codex-workspace/projects/video-chronicle
+python -m venv .venv
+.venv/Scripts/python -m pip install -r requirements.txt
+.venv/Scripts/python video_chronicle_gui.py
+```
+
+В окне можно выбрать входную папку, итоговый MP4, FFmpeg/FFprobe, CRF и preset.
+FFmpeg и FFprobe запускаются с правами пользователя, поэтому указывайте только
+доверенные сборки. По умолчанию используются команды из `PATH`.
+Существующий результат требует отдельного подтверждения. Во время обработки
+окно показывает журнал и остаётся отзывчивым; безопасная отмена и закрытие окна
+до завершения пока не поддерживаются.
 
 Если FFmpeg уже добавлен в `PATH`, параметры `--ffmpeg` и `--ffprobe` можно не указывать.
 

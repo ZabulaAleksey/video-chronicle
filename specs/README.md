@@ -7,4 +7,4 @@
 
 | Область | SPEC | Статус |
 | --- | --- | --- |
-| Сборка хронологии из фото и видео | [Timeline Builder](features/timeline-builder.spec.md) | Черновик |
+| Сборка хронологии из фото и видео | [Timeline Builder](features/timeline-builder.spec.md) | Черновик; срез GUI-001 утверждён |

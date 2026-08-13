@@ -13,6 +13,7 @@ preview*.mp4
 __pycache__/
 *.py[cod]
 .venv/
+.pytest_cache/
 
 # Ignore editor and system files
 .vscode/
