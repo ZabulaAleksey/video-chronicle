@@ -212,7 +212,7 @@ def test_metadata_date_has_priority_over_filename_date(tmp_path: Path) -> None:
 
     path = tmp_path / "clip_20250102_030405.mp4"
     original_probe_media = join_media.probe_media
-    join_media.probe_media = lambda _path, _ffprobe: probe
+    join_media.probe_media = lambda _path, _ffprobe, _runner=None: probe
     try:
         item = join_media.inspect_item(path, "ffprobe")
     finally:
@@ -239,7 +239,9 @@ def test_main_orders_items_by_date_then_casefolded_name(
     }
     encoded_order: list[str] = []
 
-    def fake_inspect(path: Path, _ffprobe: str) -> join_media.MediaItem:
+    def fake_inspect(
+        path: Path, _ffprobe: str, _probe=None, _runner=None
+    ) -> join_media.MediaItem:
         return join_media.MediaItem(
             path=path,
             taken_at=timestamps[path.name],
@@ -255,6 +257,7 @@ def test_main_orders_items_by_date_then_casefolded_name(
         _font_file: Path | None,
         _crf: int,
         _preset: str,
+        _runner=None,
     ) -> None:
         encoded_order.append(item.path.name)
         destination.write_bytes(b"clip")
@@ -264,6 +267,7 @@ def test_main_orders_items_by_date_then_casefolded_name(
         _concat_file: Path,
         temporary_output: Path,
         _ffmpeg: str,
+        _runner=None,
     ) -> None:
         temporary_output.write_bytes(b"movie")
 
@@ -477,7 +481,7 @@ def test_partial_encoding_success_publishes_only_complete_result_and_keeps_input
     monkeypatch.setattr(
         join_media,
         "inspect_item",
-        lambda path, ffprobe: join_media.MediaItem(
+        lambda path, ffprobe, probe=None, runner=None: join_media.MediaItem(
             path=path,
             taken_at=datetime_from_name(path.name),
             is_photo=False,
@@ -493,13 +497,15 @@ def test_partial_encoding_success_publishes_only_complete_result_and_keeps_input
         font_file: Path | None,
         crf: int,
         preset: str,
+        runner=None,
     ) -> None:
         if "bad" in item.path.name:
             raise join_media.MediaError("encoding failed")
         destination.write_bytes(b"normalized-good")
 
     def fake_concatenate(
-        clips: list[Path], concat_file: Path, temporary_output: Path, ffmpeg: str
+        clips: list[Path], concat_file: Path, temporary_output: Path, ffmpeg: str,
+        runner=None,
     ) -> None:
         assert len(clips) == 1
         assert clips[0].read_bytes() == b"normalized-good"

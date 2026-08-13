@@ -2,20 +2,20 @@
 
 ## Текущий этап
 
-Этапы 00–02 завершены. Текущий этап — 03, core extraction. По прямому запросу
+Этапы 00–03 завершены. Текущий этап — 04, metadata/date engine. По прямому запросу
 пользователя вне очереди реализован ограниченный GUI-срез GUI-001: PySide6
 оболочка запускает совместимый legacy CLI через `QProcess`. Устанавливаемый
-package и entry points готовы; очередь, кэш и application services ещё не реализованы.
+package, entry points и application service готовы; очередь и кэш ещё не реализованы.
 
-Текущий ограниченный срез этапа 03 хранится в `docs/AI_PLAN.md`. Этапы 01–17
+Текущий ограниченный срез этапа 04 хранится в `docs/AI_PLAN.md`. Этапы 01–17
 разделены на самостоятельные project prompts в `prompts/stages/`; они
 загружаются по одному и не заменяют SPEC или текущий план.
 
 ## Текущая истина
 
-- `join_media.py` — эталонная и единственная реализация медиаконвейера;
-- `src/video_chronicle/` предоставляет устанавливаемые ленивые entry points,
-  пока делегирующие выполнение совместимым root-level модулям;
+- `src/video_chronicle/` содержит единственный production path:
+  `domain → ports → application → pipeline adapters`;
+- `join_media.py` — тонкий compatibility shim и direct-source entry point;
 - доступны прямой CLI и переходная GUI-оболочка без сервера и базы данных;
 - `gui_contract.py` строит argv, а `video_chronicle_gui.py` управляет формой и
   асинхронным процессом, не копируя медиалогику;
@@ -44,8 +44,10 @@ package и entry points готовы; очередь, кэш и application serv
 - синтетический mixed photo/video smoke на FFmpeg/FFprobe 9.0.1;
 - устанавливаемый пакет версии 0.2.0 с console/GUI entry points и группой
   зависимостей `dev`;
-- 58 успешно пройденных unit/contract/GUI/integration тестов, включая реальный
+- 65 успешно пройденных unit/contract/GUI/integration тестов, включая реальный
   FFmpeg smoke;
+- один symlink-specific тест корректно пропущен в текущем Windows-окружении,
+  где создание symbolic link недоступно без дополнительных прав;
 - атомарная no-replace финализация закрывает коллизию, возникшую уже во время
   длительного рендера.
 
@@ -69,7 +71,7 @@ package и entry points готовы; очередь, кэш и application serv
 
 ## Следующая задача
 
-Выполнить этап 03: извлечь медиаконвейер в типизированные package core/application
-границы, оставить `join_media.py` тонким compatibility entry point и сохранить
-CLI/GUI parity. Исполняемые границы находятся в `docs/AI_PLAN.md` и
-`prompts/stages/03-core-extraction.md`.
+Выполнить этап 04: формализовать обратно совместимую date policy, выделить
+детерминированный metadata/date engine с provenance, timezone и conflict
+diagnostics, сохранив overlay и порядок legacy-наборов. Исполняемые границы
+находятся в `docs/AI_PLAN.md` и `prompts/stages/04-metadata-date-engine.md`.

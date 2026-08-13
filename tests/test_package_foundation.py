@@ -50,11 +50,25 @@ def test_source_package_imports_without_importing_gui_runtime() -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_cli_wrapper_delegates_to_legacy_main(monkeypatch: pytest.MonkeyPatch) -> None:
-    import join_media
+def test_cli_wrapper_delegates_to_application_service(monkeypatch: pytest.MonkeyPatch) -> None:
     from video_chronicle import cli
 
-    monkeypatch.setattr(join_media, "main", lambda: 17)
+    input_dir = Path.cwd()
+    monkeypatch.setattr(cli, "parse_args", lambda argv=None: type("Args", (), {
+        "input_dir": input_dir,
+        "output": input_dir / "result.mp4",
+        "error_log": input_dir / "errors.log",
+        "font_file": None,
+        "ffmpeg": "ffmpeg",
+        "ffprobe": "ffprobe",
+        "crf": 20,
+        "preset": "medium",
+        "overwrite": False,
+        "keep_work": False,
+    })())
+    monkeypatch.setattr(cli.pipeline, "configure_logging", lambda path: object())
+    monkeypatch.setattr(cli, "_build_request", lambda args: object())
+    monkeypatch.setattr(cli, "execute_export", lambda request, logger: 17)
 
     assert cli.main() == 17
 

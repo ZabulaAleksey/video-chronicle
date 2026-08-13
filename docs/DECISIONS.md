@@ -80,3 +80,31 @@
 - Последствия: package wrappers импортируют legacy-модули лениво, поэтому CLI
   не загружает PySide6. Временные compatibility modules удаляются постепенно
   после этапа 03, сохраняя один production path.
+
+## 2026-08-14 — единый package application path
+
+- Решение: разделить охарактеризованный конвейер на Qt-free `domain`, typed
+  `ports`, `application` orchestration и production `pipeline` adapters;
+  `join_media.py` оставить тонким shim, который экспортирует канонические
+  объекты и поддерживает прямой запуск из checkout.
+- Причина: CLI, GUI subprocess и будущий desktop application должны использовать
+  одну медиалогику, которую можно тестировать с подменяемыми границами.
+- Альтернативы: сохранить всю логику в root-модуле; скопировать реализацию в
+  package; сразу добавить metadata policy, queue и persistence.
+- Последствия: прежние argv/messages/codes и атомарная публикация сохранены;
+  дальнейшие metadata и project models добавляются независимо от Qt.
+
+## 2026-08-14 — безопасные границы workspace, log и subprocess
+
+- Решение: включить command/probe/workspace lifecycle в typed ports; до открытия
+  error log отвергать его коллизии с output/source и symlink/reparse targets;
+  не включать symlink media в план; запрещать управляющие символы в concat
+  manifest; ограничить FFprobe 30 секундами и 8 MiB ответа.
+- Причина: извлечение core сделало границы явно тестируемыми и выявило
+  унаследованные пути усечения данных, чтения вне input и неограниченного
+  буферизования ответа инструмента.
+- Альтернативы: отложить всё до общего hardening; разрешать symlink после
+  canonical containment; добавить timeout всему FFmpeg-конвейеру.
+- Последствия: существующий `.log` остаётся перезаписываемым по контракту, но
+  существующий файл другого типа не используется как log. Общий FFmpeg timeout
+  не вводится до process-tree cancellation этапа 09.
