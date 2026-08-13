@@ -2,45 +2,44 @@
 
 ## Срез
 
-- Этап: **02 — Package foundation**
+- Этап: **03 — Core extraction**
 - Статус: выполняется по прямой команде пользователя
-- Prompt: `prompts/stages/02-package-foundation.md`
-- Зависимости: этап 01 завершён; baseline и FFmpeg smoke зелёные
-- Требования: `SYS-FR-001`, `SYS-FR-002`, `SYS-COMP-001`, `FR-011`
+- Prompt: `prompts/stages/03-core-extraction.md`
+- Зависимости: этапы 01 и 02 завершены; package, entry points и baseline зелёные
+- Требования: `SYS-FR-001`, `SYS-FR-002`, `SYS-COMP-001`, `FR-011`, `NFR-001`
 - Критерии: `SYS-AC-001`, `SYS-AC-002`, `AC-008`, `GUI-AC-001–003`
 
 ## Цель
 
-Создать устанавливаемую структуру Python-пакета, единые console/GUI entry
-points, dependency groups и logging/config boundary, сохранив legacy scripts и
-весь characterization baseline.
+Извлечь медиаконвейер из root-level legacy-модуля в тестируемые package-границы
+без изменения CLI/GUI-поведения и без появления второго production path.
 
-## Scope
+## Последовательность
 
-- `pyproject.toml` и `src/` package layout;
-- runtime/dev dependency groups;
-- package console и GUI entry points;
-- тонкие compatibility shims `join_media.py`, `gui_contract.py` и
-  `video_chronicle_gui.py`;
-- install/import/entry point tests в изолированном окружении.
+1. Зафиксировать чистые модели и ports для subprocess/filesystem boundary.
+2. Перенести неизменённую медиалогику в package core/application modules.
+3. Переключить package CLI и legacy `join_media.py` на единый application path.
+4. Подтвердить characterization, GUI contract и реальный FFmpeg smoke.
+5. Провести обязательные review и security review границ subprocess/filesystem.
 
 ## Non-goals
 
-- извлечение медиалогики из legacy-модуля;
-- изменение CLI, дат, FFmpeg argv или UI;
-- EXE packaging, БД, очередь, cancel и cache;
-- изменение `ffmpeg/` или `ffmpeg1/`.
+- новая metadata/date policy;
+- project persistence, очередь, cancel или cache;
+- изменение FFmpeg argv, кодов выхода, сообщений или форматов результата;
+- UI redesign и новые пользовательские режимы.
 
 ## Quality gates и DoD
 
-- editable/wheel install и import проходят в чистом venv;
-- `video-chronicle` и `video-chronicle-gui` entry points запускаются;
-- legacy scripts сохраняют parity и весь этап 01 зелёный;
-- dependency check, compileall, `git diff --check` проходят;
-- архитектура/решение package layout обновлены;
-- после commit `AI_STATUS` и `AI_PLAN` переключены на этап 03.
+- `join_media.py` является тонким compatibility entry point;
+- медиалогика существует в одном production path;
+- публичные package-границы типизированы и тестируемы без Qt;
+- argv всегда передаются списком, исходники read-only, публикация атомарна;
+- все baseline/package/GUI tests и FFmpeg smoke зелёные;
+- compileall, package build и `git diff --check` проходят;
+- после commit `AI_STATUS` и `AI_PLAN` переключены на этап 04.
 
 ## Откат
 
-Legacy scripts остаются compatibility boundary. Package additions удаляются
-одним stage commit без изменения пользовательских медиа или результатов.
+Этап фиксируется отдельным commit. При regression откатывается extraction-блок,
+а не ослабляются characterization-тесты.

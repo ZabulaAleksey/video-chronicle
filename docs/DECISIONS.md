@@ -66,3 +66,17 @@
   требований. Перед этапом Codex проверяет SPEC и DoD зависимости, переносит
   только выбранный срез в `AI_PLAN`, после acceptance обновляет `AI_STATUS` и
   следующий `AI_PLAN`. Новые hooks, Skills или generic agents не добавляются.
+
+## 2026-08-14 — устанавливаемый пакет поверх совместимых entry points
+
+- Решение: использовать `pyproject.toml`, `setuptools` и `src/video_chronicle`
+  для устанавливаемого пакета; предоставить `video-chronicle` и
+  `video-chronicle-gui`, сохранив root-level модули в wheel как временные
+  compatibility modules.
+- Причина: единая установка и стабильные entry points нужны до извлечения core,
+  но этап 02 не должен менять уже охарактеризованный медиаконвейер.
+- Альтернативы: сразу перенести всю медиалогику; оставить только запуск файлов
+  из checkout; дублировать root-level код внутри пакета.
+- Последствия: package wrappers импортируют legacy-модули лениво, поэтому CLI
+  не загружает PySide6. Временные compatibility modules удаляются постепенно
+  после этапа 03, сохраняя один production path.

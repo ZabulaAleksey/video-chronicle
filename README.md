@@ -8,6 +8,24 @@
 
 Рабочий репозиторий располагается в `~/codex-workspace/projects/video-chronicle`.
 
+## Установка
+
+```powershell
+cd ~/codex-workspace/projects/video-chronicle
+python -m venv .venv
+.venv/Scripts/python -m pip install -e ".[dev]"
+```
+
+После установки доступны единые entry points:
+
+```powershell
+.venv/Scripts/video-chronicle --help
+.venv/Scripts/video-chronicle-gui
+.venv/Scripts/python -m video_chronicle --help
+```
+
+Совместимые `join_media.py` и `video_chronicle_gui.py` пока сохраняются.
+
 ## Что делает проект
 
 - Сканирует папку с медиафайлами (`--input-dir` или `~/Input` по умолчанию).
@@ -65,8 +83,8 @@ python ~/codex-workspace/projects/video-chronicle/join_media.py --input-dir ~/In
 ```powershell
 cd ~/codex-workspace/projects/video-chronicle
 python -m venv .venv
-.venv/Scripts/python -m pip install -r requirements.txt
-.venv/Scripts/python video_chronicle_gui.py
+.venv/Scripts/python -m pip install -e ".[dev]"
+.venv/Scripts/video-chronicle-gui
 ```
 
 В окне можно выбрать входную папку, итоговый MP4, FFmpeg/FFprobe, CRF и preset.

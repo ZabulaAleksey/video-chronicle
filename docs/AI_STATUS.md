@@ -2,18 +2,20 @@
 
 ## Текущий этап
 
-Этапы 00 и 01 завершены. Текущий этап — 02, package foundation. По прямому запросу
+Этапы 00–02 завершены. Текущий этап — 03, core extraction. По прямому запросу
 пользователя вне очереди реализован ограниченный GUI-срез GUI-001: PySide6
-оболочка запускает совместимый legacy CLI через `QProcess`. Пакетирование, очередь,
-кэш и application services ещё не реализуются.
+оболочка запускает совместимый legacy CLI через `QProcess`. Устанавливаемый
+package и entry points готовы; очередь, кэш и application services ещё не реализованы.
 
-Текущий ограниченный срез этапа 02 хранится в `docs/AI_PLAN.md`. Этапы 01–17
+Текущий ограниченный срез этапа 03 хранится в `docs/AI_PLAN.md`. Этапы 01–17
 разделены на самостоятельные project prompts в `prompts/stages/`; они
 загружаются по одному и не заменяют SPEC или текущий план.
 
 ## Текущая истина
 
 - `join_media.py` — эталонная и единственная реализация медиаконвейера;
+- `src/video_chronicle/` предоставляет устанавливаемые ленивые entry points,
+  пока делегирующие выполнение совместимым root-level модулям;
 - доступны прямой CLI и переходная GUI-оболочка без сервера и базы данных;
 - `gui_contract.py` строит argv, а `video_chronicle_gui.py` управляет формой и
   асинхронным процессом, не копируя медиалогику;
@@ -40,7 +42,9 @@
 - завершённый characterization baseline дат, сортировки, FFmpeg argv, ошибок,
   partial success, коллизий и неизменности исходников;
 - синтетический mixed photo/video smoke на FFmpeg/FFprobe 9.0.1;
-- 53 успешно пройденных unit/contract/GUI/integration теста, включая реальный
+- устанавливаемый пакет версии 0.2.0 с console/GUI entry points и группой
+  зависимостей `dev`;
+- 57 успешно пройденных unit/contract/GUI/integration тестов, включая реальный
   FFmpeg smoke;
 - атомарная no-replace финализация закрывает коллизию, возникшую уже во время
   длительного рендера.
@@ -65,7 +69,7 @@
 
 ## Следующая задача
 
-Выполнить этап 02: создать устанавливаемый Python package, dependency groups,
-console/GUI entry points и compatibility shims без изменения CLI/GUI
-поведения. Исполняемые границы находятся в `docs/AI_PLAN.md` и
-`prompts/stages/02-package-foundation.md`.
+Выполнить этап 03: извлечь медиаконвейер в типизированные package core/application
+границы, оставить `join_media.py` тонким compatibility entry point и сохранить
+CLI/GUI parity. Исполняемые границы находятся в `docs/AI_PLAN.md` и
+`prompts/stages/03-core-extraction.md`.

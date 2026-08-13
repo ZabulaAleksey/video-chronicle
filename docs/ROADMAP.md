@@ -29,30 +29,36 @@
 Этап завершён: characterization baseline и synthetic smoke подтверждены на
 FFmpeg/FFprobe 9.0.1.
 
-## Текущий этап — 02. Package foundation
+## Выполненный этап — 02. Package foundation
 
 Самостоятельный prompt: [`02-package-foundation.md`](../prompts/stages/02-package-foundation.md).
 
-## Запланированный MVP — этапы 03–10
+Этап завершён: добавлены устанавливаемый `src`-package, runtime/dev dependency
+groups, console/GUI entry points и временные compatibility modules без изменения
+наблюдаемого CLI/GUI-поведения.
+
+## Текущий этап — 03. Core extraction
+
+Самостоятельный prompt: [`03-core-extraction.md`](../prompts/stages/03-core-extraction.md).
+
+## Запланированный MVP — этапы 04–10
 
 Этапы выполняются последовательно и только после критериев завершения
 предыдущего этапа.
 
-1. **[03 — Core extraction](../prompts/stages/03-core-extraction.md):** постепенное извлечение чистой логики за
-   интерфейсы с проверкой CLI parity.
-2. **[04 — Metadata/date engine](../prompts/stages/04-metadata-date-engine.md):** объяснимая политика дат, происхождение
+1. **[04 — Metadata/date engine](../prompts/stages/04-metadata-date-engine.md):** объяснимая политика дат, происхождение
    значений, timezone и адаптеры метаданных.
-3. **[05 — Project/queue model](../prompts/stages/05-project-queue-model.md):** независимые от UI timeline и состояние
+2. **[05 — Project/queue model](../prompts/stages/05-project-queue-model.md):** независимые от UI timeline и состояние
    долгих заданий; конкретное хранилище выбирается отдельным решением.
-4. **[06 — GUI baseline](../prompts/stages/06-gui-application-services.md):** заменить переходный CLI-адаптер на application
+3. **[06 — GUI baseline](../prompts/stages/06-gui-application-services.md):** заменить переходный CLI-адаптер на application
    services, добавить проверку состава/порядка и сохранить отсутствие
    медиаработы в UI-потоке.
-5. **[07 — Overlay editor](../prompts/stages/07-overlay-editor.md):** единая конфигурация подписи даты и предпросмотр.
-6. **[08 — Join/Chronicle modes](../prompts/stages/08-join-chronicle-modes.md):** понятные режимы без дублирования
+4. **[07 — Overlay editor](../prompts/stages/07-overlay-editor.md):** единая конфигурация подписи даты и предпросмотр.
+5. **[08 — Join/Chronicle modes](../prompts/stages/08-join-chronicle-modes.md):** понятные режимы без дублирования
    медиаконвейера и с сохранением legacy join.
-7. **[09 — Export/progress/cancel](../prompts/stages/09-export-progress-cancel.md):** план экспорта, прогресс, безопасная отмена,
+6. **[09 — Export/progress/cancel](../prompts/stages/09-export-progress-cancel.md):** план экспорта, прогресс, безопасная отмена,
    проверка коллизий и атомарная финализация.
-8. **[10 — Resume/cache](../prompts/stages/10-resume-cache.md):** совместимые ключи, инвалидирование и безопасное
+7. **[10 — Resume/cache](../prompts/stages/10-resume-cache.md):** совместимые ключи, инвалидирование и безопасное
    возобновление. Этот этап завершает целевой MVP.
 
 ## Позже — целевой v1, этапы 11–16
