@@ -45,26 +45,31 @@ groups, console/GUI entry points и временные compatibility modules б�
 а root CLI оставлен тонким compatibility shim. CLI и переходный GUI сходятся в
 одном production path.
 
-## Текущий этап — 04. Metadata/date engine
+## Выполненный этап — 04. Metadata/date engine
 
 Самостоятельный prompt: [`04-metadata-date-engine.md`](../prompts/stages/04-metadata-date-engine.md).
 
-## Запланированный MVP — этапы 05–10
+Этап завершён: DATE-001 engine детерминированно выбирает metadata/filename date,
+сохраняет raw provenance, timezone и conflicts и не меняет legacy overlay.
+
+## Текущий этап — 05. Project/queue model
+
+Самостоятельный prompt: [`05-project-queue-model.md`](../prompts/stages/05-project-queue-model.md).
+
+## Запланированный MVP — этапы 06–10
 
 Этапы выполняются последовательно и только после критериев завершения
 предыдущего этапа.
 
-1. **[05 — Project/queue model](../prompts/stages/05-project-queue-model.md):** независимые от UI timeline и состояние
-   долгих заданий; конкретное хранилище выбирается отдельным решением.
-2. **[06 — GUI baseline](../prompts/stages/06-gui-application-services.md):** заменить переходный CLI-адаптер на application
+1. **[06 — GUI baseline](../prompts/stages/06-gui-application-services.md):** заменить переходный CLI-адаптер на application
    services, добавить проверку состава/порядка и сохранить отсутствие
    медиаработы в UI-потоке.
-3. **[07 — Overlay editor](../prompts/stages/07-overlay-editor.md):** единая конфигурация подписи даты и предпросмотр.
-4. **[08 — Join/Chronicle modes](../prompts/stages/08-join-chronicle-modes.md):** понятные режимы без дублирования
+2. **[07 — Overlay editor](../prompts/stages/07-overlay-editor.md):** единая конфигурация подписи даты и предпросмотр.
+3. **[08 — Join/Chronicle modes](../prompts/stages/08-join-chronicle-modes.md):** понятные режимы без дублирования
    медиаконвейера и с сохранением legacy join.
-5. **[09 — Export/progress/cancel](../prompts/stages/09-export-progress-cancel.md):** план экспорта, прогресс, безопасная отмена,
+4. **[09 — Export/progress/cancel](../prompts/stages/09-export-progress-cancel.md):** план экспорта, прогресс, безопасная отмена,
    проверка коллизий и атомарная финализация.
-6. **[10 — Resume/cache](../prompts/stages/10-resume-cache.md):** совместимые ключи, инвалидирование и безопасное
+5. **[10 — Resume/cache](../prompts/stages/10-resume-cache.md):** совместимые ключи, инвалидирование и безопасное
    возобновление. Этот этап завершает целевой MVP.
 
 ## Позже — целевой v1, этапы 11–16

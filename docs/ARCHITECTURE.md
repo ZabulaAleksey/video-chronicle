@@ -12,7 +12,9 @@
 - `pyproject.toml` — metadata пакета, runtime/dev зависимости и console/GUI
   entry points.
 - `src/video_chronicle/domain.py` — Qt-free модели принятого медиа и запроса
-  экспорта.
+  экспорта, включая выбранное date decision.
+- `src/video_chronicle/metadata.py` — Qt-free DATE-001 engine: metadata и
+  filename candidates, provenance, raw values, timezone и conflicts.
 - `src/video_chronicle/ports.py` — типизированные границы inspection,
   normalization, concatenation, publication и source discovery.
 - `src/video_chronicle/application.py` — orchestration одного экспорта и
@@ -41,7 +43,8 @@
    `PipelinePorts`.
 4. Source adapter находит поддерживаемые медиафайлы во входном каталоге.
 5. FFprobe adapter возвращает метаданные и сведения о потоках.
-6. Дата выбирается из метаданных или имени файла.
+6. DATE-001 engine собирает кандидатов, выбирает дату из метаданных или имени
+   файла и сохраняет provenance/conflicts без timezone conversion.
 7. FFmpeg adapter приводит каждый элемент к 1600×900, 60 FPS, H.264 и AAC и
    добавляет дату.
 8. Подготовленные клипы объединяются без повторного кодирования.

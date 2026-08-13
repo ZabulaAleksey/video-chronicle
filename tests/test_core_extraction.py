@@ -136,7 +136,7 @@ def test_plan_and_execution_use_injected_workspace_and_process_ports(
     )
 
     plan = plan_export(request, ports)
-    assert plan.source_paths == (source,)
+    assert tuple(item.path for item in plan.items) == (source,)
     assert execute_plan(plan, logging.getLogger("test.injected"), ports) == 0
     assert output.read_bytes() == b"movie"
     assert calls == [

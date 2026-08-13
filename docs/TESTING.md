@@ -36,6 +36,7 @@
 | Ранняя и поздняя коллизии, no-replace и разрешённый overwrite | characterization | `test_existing_output_*`, `test_publish_output_*` | `SYS-AC-003`, `AC-008` |
 | Неизменность valid/corrupt/skipped источников | characterization + integration | `test_corrupt_input_*`, `test_partial_encoding_success_*`, synthetic smoke | `SYS-AC-005` |
 | Реальный mixed photo/video экспорт и проверка A/V streams | integration smoke | `test_synthetic_photo_video_cli_smoke_preserves_sources` | `SYS-AC-001`, `SYS-AC-005`, `AC-008`, `AC-010` |
+| DATE-001 priority, raw provenance, timezone и conflicts | unit/table | `tests/test_metadata_date_engine.py` | `DATE-AC-001–003`, `AC-002` |
 
 Synthetic smoke создаёт короткие BMP и MP4 во временном каталоге с пробелом,
 апострофом и Unicode, запускает CLI list-argv без shell, проверяет итоговые

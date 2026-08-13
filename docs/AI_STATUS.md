@@ -2,12 +2,12 @@
 
 ## Текущий этап
 
-Этапы 00–03 завершены. Текущий этап — 04, metadata/date engine. По прямому запросу
+Этапы 00–04 завершены. Текущий этап — 05, project/queue model. По прямому запросу
 пользователя вне очереди реализован ограниченный GUI-срез GUI-001: PySide6
 оболочка запускает совместимый legacy CLI через `QProcess`. Устанавливаемый
 package, entry points и application service готовы; очередь и кэш ещё не реализованы.
 
-Текущий ограниченный срез этапа 04 хранится в `docs/AI_PLAN.md`. Этапы 01–17
+Текущий ограниченный срез этапа 05 хранится в `docs/AI_PLAN.md`. Этапы 01–17
 разделены на самостоятельные project prompts в `prompts/stages/`; они
 загружаются по одному и не заменяют SPEC или текущий план.
 
@@ -15,6 +15,8 @@ package, entry points и application service готовы; очередь и к�
 
 - `src/video_chronicle/` содержит единственный production path:
   `domain → ports → application → pipeline adapters`;
+- `src/video_chronicle/metadata.py` реализует утверждённую DATE-001 policy и
+  отдаёт typed provenance/conflict/timezone result;
 - `join_media.py` — тонкий compatibility shim и direct-source entry point;
 - доступны прямой CLI и переходная GUI-оболочка без сервера и базы данных;
 - `gui_contract.py` строит argv, а `video_chronicle_gui.py` управляет формой и
@@ -44,7 +46,7 @@ package, entry points и application service готовы; очередь и к�
 - синтетический mixed photo/video smoke на FFmpeg/FFprobe 9.0.1;
 - устанавливаемый пакет версии 0.2.0 с console/GUI entry points и группой
   зависимостей `dev`;
-- 65 успешно пройденных unit/contract/GUI/integration тестов, включая реальный
+- 77 успешно пройденных unit/contract/GUI/integration тестов, включая реальный
   FFmpeg smoke;
 - один symlink-specific тест корректно пропущен в текущем Windows-окружении,
   где создание symbolic link недоступно без дополнительных прав;
@@ -71,7 +73,7 @@ package, entry points и application service готовы; очередь и к�
 
 ## Следующая задача
 
-Выполнить этап 04: формализовать обратно совместимую date policy, выделить
-детерминированный metadata/date engine с provenance, timezone и conflict
-diagnostics, сохранив overlay и порядок legacy-наборов. Исполняемые границы
-находятся в `docs/AI_PLAN.md` и `prompts/stages/04-metadata-date-engine.md`.
+Выполнить этап 05: утвердить Qt-free project/timeline/job contracts и storage
+decision, затем реализовать stable IDs/order, state transitions, versioned
+serialization и in-memory repository без FFmpeg/GUI side effects. Исполняемые
+границы находятся в `docs/AI_PLAN.md` и `prompts/stages/05-project-queue-model.md`.

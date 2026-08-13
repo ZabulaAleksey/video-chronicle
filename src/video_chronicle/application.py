@@ -29,9 +29,11 @@ def default_ports() -> PipelinePorts:
 
 
 def plan_export(
-    request: ExportRequest, ports: PipelinePorts | None = None
+    request: ExportRequest,
+    ports: PipelinePorts | None = None,
+    logger: logging.Logger | None = None,
 ) -> ExportPlan:
-    """Create a deterministic, immutable source snapshot before media work."""
+    """Inspect sources into an immutable accepted timeline before encoding."""
 
     adapters = ports or default_ports()
     source_paths = tuple(
@@ -43,7 +45,42 @@ def plan_export(
         raise RuntimeError(
             f"no supported videos or photos found in {request.input_dir}"
         )
-    return ExportPlan(request=request, source_paths=source_paths)
+    if logger is not None:
+        logger.info("Inspecting %d source files...", len(source_paths))
+    items: list[MediaItem] = []
+    failures: list[tuple[Path, str]] = []
+    for path in source_paths:
+        try:
+            adapters.validate_source(request.input_dir, path)
+            items.append(
+                adapters.inspect_item(
+                    path,
+                    request.ffprobe,
+                    adapters.probe_media,
+                    adapters.command_runner,
+                )
+            )
+        except Exception as exc:
+            failures.append((path, str(exc)))
+            if logger is not None:
+                logger.warning("SKIPPED during inspection | %s | %s", path, exc)
+    items.sort(key=lambda item: (item.taken_at, item.path.name.casefold()))
+    if not items:
+        raise RuntimeError(
+            f"none of the {len(source_paths)} files could be inspected"
+        )
+    if logger is not None:
+        logger.info(
+            "Ready: %d files, from %s to %s.",
+            len(items),
+            items[0].taken_at.strftime("%d.%m.%Y %H:%M:%S"),
+            items[-1].taken_at.strftime("%d.%m.%Y %H:%M:%S"),
+        )
+    return ExportPlan(
+        request=request,
+        items=tuple(items),
+        inspection_failures=tuple(failures),
+    )
 
 
 def execute_export(
@@ -54,7 +91,7 @@ def execute_export(
     """Execute one validated export while preserving legacy partial-success rules."""
 
     adapters = ports or default_ports()
-    return execute_plan(plan_export(request, adapters), logger, adapters)
+    return execute_plan(plan_export(request, adapters, logger), logger, adapters)
 
 
 def execute_plan(
@@ -65,38 +102,8 @@ def execute_plan(
     """Execute an already planned export through explicit external ports."""
 
     request = plan.request
-    source_paths = plan.source_paths
-
-    logger.info("Inspecting %d source files...", len(source_paths))
-    items: list[MediaItem] = []
-    failed_count = 0
-    for path in source_paths:
-        try:
-            ports.validate_source(request.input_dir, path)
-            items.append(
-                ports.inspect_item(
-                    path,
-                    request.ffprobe,
-                    ports.probe_media,
-                    ports.command_runner,
-                )
-            )
-        except Exception as exc:
-            failed_count += 1
-            logger.warning("SKIPPED during inspection | %s | %s", path, exc)
-
-    items.sort(key=lambda item: (item.taken_at, item.path.name.casefold()))
-    if not items:
-        raise RuntimeError(
-            f"none of the {len(source_paths)} files could be inspected"
-        )
-
-    logger.info(
-        "Ready: %d files, from %s to %s.",
-        len(items),
-        items[0].taken_at.strftime("%d.%m.%Y %H:%M:%S"),
-        items[-1].taken_at.strftime("%d.%m.%Y %H:%M:%S"),
-    )
+    items = plan.items
+    failed_count = len(plan.inspection_failures)
 
     work_dir_path = ports.create_workspace(request.output.parent)
     temporary_output = work_dir_path / "output.building.mp4"

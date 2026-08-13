@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 import shutil
 import stat
 import subprocess
@@ -13,9 +12,18 @@ import tempfile
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from .domain import MediaError, MediaItem
+from .metadata import (
+    DATE_TAGS,
+    FILENAME_PATTERNS,
+    decide_date,
+    datetime_from_filename,
+    datetime_from_metadata,
+    iter_tag_pairs,
+    parse_datetime_text,
+)
 from .ports import CommandRunner, ProbeMedia
 
 
@@ -43,18 +51,6 @@ PHOTO_EXTENSIONS = {
     ".webp",
 }
 MEDIA_EXTENSIONS = VIDEO_EXTENSIONS | PHOTO_EXTENSIONS
-
-DATE_TAGS = (
-    "creation_time",
-    "com.apple.quicktime.creationdate",
-    "date_time_original",
-    "datetimeoriginal",
-    "media_create_date",
-    "create_date",
-    "encoded_date",
-    "date",
-)
-
 
 def _is_symlink_or_reparse(path: Path) -> bool:
     if path.is_symlink():
@@ -260,102 +256,6 @@ def probe_media(
         raise MediaError(f"ffprobe returned invalid JSON for {path}: {exc}") from exc
 
 
-def iter_tag_pairs(probe: dict[str, Any]) -> Iterable[tuple[str, Any]]:
-    format_tags = probe.get("format", {}).get("tags", {})
-    if isinstance(format_tags, dict):
-        yield from format_tags.items()
-    for stream in probe.get("streams", []):
-        tags = stream.get("tags", {})
-        if isinstance(tags, dict):
-            yield from tags.items()
-
-
-def parse_datetime_text(value: Any) -> datetime | None:
-    if not isinstance(value, str):
-        return None
-    text = value.strip().replace("UTC ", "")
-    if not text:
-        return None
-
-    # ISO 8601, including FFmpeg's common trailing Z form.  We deliberately
-    # retain the recorded wall-clock fields: the requested overlay should show
-    # the timestamp stored by the camera, without silently changing time zones.
-    iso_candidate = text[:-1] + "+00:00" if text.endswith("Z") else text
-    try:
-        parsed = datetime.fromisoformat(iso_candidate)
-        return parsed.replace(tzinfo=None)
-    except ValueError:
-        pass
-
-    formats = (
-        "%Y:%m:%d %H:%M:%S",
-        "%Y-%m-%d %H:%M:%S",
-        "%Y/%m/%d %H:%M:%S",
-        "%Y%m%d_%H%M%S",
-        "%Y%m%d-%H%M%S",
-        "%d.%m.%Y %H:%M:%S",
-        "%d.%m.%Y %H:%M",
-    )
-    for date_format in formats:
-        try:
-            return datetime.strptime(text, date_format)
-        except ValueError:
-            continue
-    return None
-
-
-def datetime_from_metadata(probe: dict[str, Any]) -> tuple[datetime, str] | None:
-    values: dict[str, Any] = {}
-    for key, value in iter_tag_pairs(probe):
-        values.setdefault(str(key).casefold(), value)
-    for wanted_key in DATE_TAGS:
-        actual_value = values.get(wanted_key.casefold())
-        parsed = parse_datetime_text(actual_value)
-        if parsed is not None:
-            return parsed, f"metadata:{wanted_key}"
-    return None
-
-
-FILENAME_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
-    (re.compile(r"(?<!\d)(\d{8}[_-]\d{6})(?!\d)"), "%Y%m%d_%H%M%S"),
-    (re.compile(r"(?<!\d)(\d{14})(?!\d)"), "%Y%m%d%H%M%S"),
-    (
-        re.compile(r"(?<!\d)(\d{4}[-.]\d{2}[-.]\d{2}[ _-]\d{2}[-.]\d{2}[-.]\d{2})(?!\d)"),
-        "flexible",
-    ),
-    (
-        re.compile(r"(?<!\d)(\d{2}[.]\d{2}[.]\d{4}[ _-]\d{2}[-.]\d{2}(?:[-.]\d{2})?)(?!\d)"),
-        "day-first",
-    ),
-)
-
-
-def datetime_from_filename(path: Path) -> tuple[datetime, str] | None:
-    stem = path.stem
-    for pattern, date_format in FILENAME_PATTERNS:
-        match = pattern.search(stem)
-        if not match:
-            continue
-        value = match.group(1)
-        try:
-            if date_format == "%Y%m%d_%H%M%S":
-                normalized = value.replace("-", "_")
-                parsed = datetime.strptime(normalized, date_format)
-            elif date_format == "flexible":
-                digits = re.sub(r"\D", "", value)
-                parsed = datetime.strptime(digits, "%Y%m%d%H%M%S")
-            elif date_format == "day-first":
-                digits = re.sub(r"\D", "", value)
-                fmt = "%d%m%Y%H%M%S" if len(digits) == 14 else "%d%m%Y%H%M"
-                parsed = datetime.strptime(digits, fmt)
-            else:
-                parsed = datetime.strptime(value, date_format)
-            return parsed, "filename"
-        except ValueError:
-            continue
-    return None
-
-
 def inspect_item(
     path: Path,
     ffprobe: str,
@@ -370,18 +270,19 @@ def inspect_item(
     if not has_video:
         raise MediaError(f"no video/image stream found in {path}")
 
-    date_result = datetime_from_metadata(probe) or datetime_from_filename(path)
-    if date_result is None:
+    date_decision = decide_date(probe, path)
+    if date_decision is None:
         raise MediaError(
             f"no supported creation date in metadata or filename: {path.name}"
         )
-    taken_at, source = date_result
+    selected = date_decision.selected
     return MediaItem(
         path=path,
-        taken_at=taken_at,
+        taken_at=selected.wall_time,
         is_photo=path.suffix.casefold() in PHOTO_EXTENSIONS,
         has_audio=any(stream.get("codec_type") == "audio" for stream in streams),
-        date_source=source,
+        date_source=selected.source,
+        date_decision=date_decision,
     )
 
 
