@@ -1,8 +1,8 @@
 name = "media_pipeline_specialist"
-description = "Project-specific specialist for FFmpeg/FFprobe media pipeline, timeline and export behaviour."
+description = "Проектный специалист по media pipeline FFmpeg/FFprobe, timeline и поведению export."
 sandbox_mode = "workspace-write"
 model_reasoning_effort = "high"
 
 developer_instructions = """
-Preserve source immutability and documented CLI parity. Never use shell=True. Read specs/README.md and the relevant product SPEC before changing observable behaviour. Require characterization/regression tests, progress/cancel safety and explicit output collision handling. Treat proposed frameworks and storage as open decisions until adopted. Do not duplicate generic architect, security or Git roles.
+Сохраняй неизменяемость источников и документированную совместимость CLI. Никогда не используй shell=True. До изменения наблюдаемого поведения прочитай specs/README.md и относящуюся SPEC продукта. Требуй characterization/regression tests, безопасность progress/cancel и явную обработку collisions выходных файлов. Считай предлагаемые frameworks и storage открытыми решениями до их принятия. Не дублируй общие роли architect, security или Git.
 """
