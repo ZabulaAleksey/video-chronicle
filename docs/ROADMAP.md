@@ -17,6 +17,8 @@
 
 ## Текущий этап — 01. Discovery и baseline
 
+Самостоятельный prompt: [`01-discovery-baseline.md`](../prompts/stages/01-discovery-baseline.md).
+
 - описать наблюдаемое поведение `join_media.py`: входы, даты, сортировку,
   фильтры, временные файлы, ошибки и финализацию;
 - добавить characterization- и unit-тесты разбора дат и сортировки;
@@ -29,38 +31,41 @@
 Этапы выполняются последовательно и только после критериев завершения
 предыдущего этапа.
 
-1. **02 — Package foundation:** структура Python-пакета, конфигурация,
+1. **[02 — Package foundation](../prompts/stages/02-package-foundation.md):** структура Python-пакета, конфигурация,
    логирование и тестовый layout при сохранении рабочего legacy CLI.
-2. **03 — Core extraction:** постепенное извлечение чистой логики за
+2. **[03 — Core extraction](../prompts/stages/03-core-extraction.md):** постепенное извлечение чистой логики за
    интерфейсы с проверкой CLI parity.
-3. **04 — Metadata/date engine:** объяснимая политика дат, происхождение
+3. **[04 — Metadata/date engine](../prompts/stages/04-metadata-date-engine.md):** объяснимая политика дат, происхождение
    значений, timezone и адаптеры метаданных.
-4. **05 — Project/queue model:** независимые от UI timeline и состояние
+4. **[05 — Project/queue model](../prompts/stages/05-project-queue-model.md):** независимые от UI timeline и состояние
    долгих заданий; конкретное хранилище выбирается отдельным решением.
-5. **06 — GUI baseline:** заменить переходный CLI-адаптер на application
+5. **[06 — GUI baseline](../prompts/stages/06-gui-application-services.md):** заменить переходный CLI-адаптер на application
    services, добавить проверку состава/порядка и сохранить отсутствие
    медиаработы в UI-потоке.
-6. **07 — Overlay editor:** единая конфигурация подписи даты и предпросмотр.
-7. **08 — Join/Chronicle modes:** понятные режимы без дублирования
+6. **[07 — Overlay editor](../prompts/stages/07-overlay-editor.md):** единая конфигурация подписи даты и предпросмотр.
+7. **[08 — Join/Chronicle modes](../prompts/stages/08-join-chronicle-modes.md):** понятные режимы без дублирования
    медиаконвейера и с сохранением legacy join.
-8. **09 — Export/progress/cancel:** план экспорта, прогресс, безопасная отмена,
+8. **[09 — Export/progress/cancel](../prompts/stages/09-export-progress-cancel.md):** план экспорта, прогресс, безопасная отмена,
    проверка коллизий и атомарная финализация.
-9. **10 — Resume/cache:** совместимые ключи, инвалидирование и безопасное
+9. **[10 — Resume/cache](../prompts/stages/10-resume-cache.md):** совместимые ключи, инвалидирование и безопасное
    возобновление. Этот этап завершает целевой MVP.
 
 ## Позже — целевой v1, этапы 11–16
 
-- **11:** неразрушающее изменение порядка, trim, grouping и presets;
-- **12:** optional timeline interchange и анализ сцен за интерфейсами;
-- **13:** optional локальная транскрипция с provenance модели;
-- **14:** проверка возможностей оборудования, метрики качества и обязательный
+- **[11](../prompts/stages/11-nondestructive-editing.md):** неразрушающее изменение порядка, trim, grouping и presets;
+- **[12](../prompts/stages/12-timeline-interchange-scene.md):** optional timeline interchange и анализ сцен за интерфейсами;
+- **[13](../prompts/stages/13-local-transcription.md):** optional локальная транскрипция с provenance модели;
+- **[14](../prompts/stages/14-hardware-quality.md):** проверка возможностей оборудования, метрики качества и обязательный
   software fallback;
-- **15:** аудит недоверенных медиа, subprocess, путей, кэша и зависимостей;
-- **16:** Windows-пакетирование с явной стратегией FFmpeg/metadata tools,
+- **[15](../prompts/stages/15-security-hardening.md):** аудит недоверенных медиа, subprocess, путей, кэша и зависимостей;
+- **[16](../prompts/stages/16-windows-packaging.md):** Windows-пакетирование с явной стратегией FFmpeg/metadata tools,
   лицензиями и smoke-тестом на чистой машине.
 
 ## Экспериментально / optional — этап 17
 
-- дополнительные ML/scene/timeline-адаптеры и автоматизация качества;
+- **[17 — Experimental adapters](../prompts/stages/17-experimental-adapters.md):**
+  дополнительные ML/scene/timeline-адаптеры и автоматизация качества;
 - каждое направление требует цели, feature flag, fallback, тестов, benchmark
   и ADR, если меняются архитектурные границы.
+
+Компактный индекс фаз и правила запуска находятся в `prompts/README.md`.
