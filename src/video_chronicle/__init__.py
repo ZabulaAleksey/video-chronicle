@@ -13,4 +13,3 @@ except PackageNotFoundError:
 
 
 __all__ = ["__version__"]
-

@@ -39,4 +39,3 @@ class InMemoryProjectRepository:
 
     def list_project_ids(self) -> tuple[str, ...]:
         return tuple(sorted(self._projects))
-

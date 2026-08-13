@@ -8,4 +8,3 @@ def main() -> int:
     from video_chronicle_gui import main as legacy_main
 
     return legacy_main()
-
