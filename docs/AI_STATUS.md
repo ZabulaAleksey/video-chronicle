@@ -44,7 +44,7 @@ package и entry points готовы; очередь, кэш и application serv
 - синтетический mixed photo/video smoke на FFmpeg/FFprobe 9.0.1;
 - устанавливаемый пакет версии 0.2.0 с console/GUI entry points и группой
   зависимостей `dev`;
-- 57 успешно пройденных unit/contract/GUI/integration тестов, включая реальный
+- 58 успешно пройденных unit/contract/GUI/integration тестов, включая реальный
   FFmpeg smoke;
 - атомарная no-replace финализация закрывает коллизию, возникшую уже во время
   длительного рендера.

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-import importlib.metadata
+import os
+import shutil
 import subprocess
 import sys
 import tomllib
+import venv
 from pathlib import Path
 
 import pytest
@@ -67,19 +69,89 @@ def test_gui_wrapper_delegates_lazily(monkeypatch: pytest.MonkeyPatch) -> None:
     assert gui.main() == 23
 
 
-def test_installed_distribution_exposes_both_entry_points() -> None:
-    try:
-        distribution = importlib.metadata.distribution("video-chronicle")
-    except importlib.metadata.PackageNotFoundError:
-        pytest.skip("run after editable or wheel installation")
+def test_current_checkout_wheel_installs_and_launchers_run(tmp_path: Path) -> None:
+    source_tree = tmp_path / "source"
+    source_tree.mkdir()
+    for filename in (
+        "README.md",
+        "pyproject.toml",
+        "join_media.py",
+        "gui_contract.py",
+        "video_chronicle_gui.py",
+    ):
+        shutil.copy2(PROJECT_ROOT / filename, source_tree / filename)
+    shutil.copytree(PROJECT_ROOT / "src", source_tree / "src")
 
-    entry_points = {
-        (entry_point.group, entry_point.name): entry_point.value
-        for entry_point in distribution.entry_points
-    }
-    assert entry_points[("console_scripts", "video-chronicle")] == (
-        "video_chronicle.cli:main"
+    wheel_dir = tmp_path / "wheel"
+    wheel_dir.mkdir()
+    build = subprocess.run(
+        [
+            sys._base_executable,
+            "-m",
+            "pip",
+            "wheel",
+            "--no-deps",
+            "--no-build-isolation",
+            "--no-cache-dir",
+            "--wheel-dir",
+            str(wheel_dir),
+            ".",
+        ],
+        cwd=source_tree,
+        check=False,
+        capture_output=True,
+        text=True,
     )
-    assert entry_points[("gui_scripts", "video-chronicle-gui")] == (
-        "video_chronicle.gui:main"
+    assert build.returncode == 0, build.stdout + build.stderr
+    wheel = next(wheel_dir.glob("video_chronicle-*.whl"))
+
+    install_dir = tmp_path / "installed"
+    venv.EnvBuilder(with_pip=True).create(install_dir)
+    scripts_dir = install_dir / ("Scripts" if os.name == "nt" else "bin")
+    python = scripts_dir / ("python.exe" if os.name == "nt" else "python")
+    install = subprocess.run(
+        [
+            str(python),
+            "-m",
+            "pip",
+            "install",
+            "--no-deps",
+            "--no-index",
+            str(wheel),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
     )
+    assert install.returncode == 0, install.stdout + install.stderr
+
+    suffix = ".exe" if os.name == "nt" else ""
+    cli = scripts_dir / f"video-chronicle{suffix}"
+    cli_result = subprocess.run(
+        [str(cli), "--help"],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert cli_result.returncode == 0, cli_result.stderr
+    assert "--input-dir" in cli_result.stdout
+
+    gui_stub = tmp_path / "gui-stub"
+    gui_stub.mkdir()
+    (gui_stub / "video_chronicle_gui.py").write_text(
+        "def main():\n    return 0\n",
+        encoding="utf-8",
+    )
+    gui_env = os.environ.copy()
+    gui_env["PYTHONPATH"] = str(gui_stub)
+    gui = scripts_dir / f"video-chronicle-gui{suffix}"
+    gui_result = subprocess.run(
+        [str(gui)],
+        env=gui_env,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert gui_result.returncode == 0, gui_result.stderr
