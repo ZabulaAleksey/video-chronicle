@@ -68,11 +68,11 @@ Video Chronicle — локальное приложение для анализ�
 
 | Критерий | Проверка | Состояние |
 | --- | --- | --- |
-| SYS-AC-001 | `tests/test_cli_characterization.py` | Частично; завершается на этапе 01 |
+| SYS-AC-001 | `tests/test_cli_characterization.py`, `tests/test_ffmpeg_smoke.py` | Автоматизировано |
 | SYS-AC-002 | `tests/test_gui_contract.py`, `tests/test_gui.py` | Автоматизировано |
 | SYS-AC-003 | `tests/test_cli_characterization.py`, `tests/test_gui.py` | Автоматизировано |
 | SYS-AC-004 | `tests/test_gui.py` | Автоматизировано |
-| SYS-AC-005 | синтетический FFmpeg/FFprobe smoke-test | Запланировано на этапе 01 |
+| SYS-AC-005 | `tests/test_ffmpeg_smoke.py` | Автоматизировано на FFmpeg/FFprobe 9.0.1 |
 
 ## 6. Открытые вопросы
 

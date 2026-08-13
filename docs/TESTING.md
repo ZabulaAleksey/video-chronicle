@@ -14,11 +14,48 @@
 Эти тесты описывают baseline, но не объявляют все особенности старого скрипта
 вечными требованиями. Обязательная совместимость определяется FR-011 в SPEC.
 
-На текущий момент автоматизированы параметры CLI, основные форматы и приоритет
-дат, сортировка, фильтрация исходников, сохранение существующего результата без
-`--overwrite`, построение GUI argv, реальный `QProcess` и основные состояния
-окна. Полный baseline граничных случаев и FFmpeg smoke-test остаётся задачей
-этапа 01.
+На текущий момент автоматизированы параметры CLI, форматы и граничные случаи
+дат, все поддерживаемые filename patterns, приоритет метаданных, сортировка,
+фильтрация исходников, FFmpeg normalize/concat argv, пустой и повреждённый
+входы, частичный успех, коллизии результата, неизменность источников,
+построение GUI argv, реальный `QProcess` и основные состояния окна.
+
+## Матрица baseline этапа 01
+
+| Сценарий | Уровень | Автоматическая проверка | Связь с SPEC |
+| --- | --- | --- | --- |
+| CLI-аргументы, Unicode и пробелы | characterization | `test_parse_args_preserves_legacy_cli_contract` | `SYS-AC-001`, `AC-008`, `AC-010` |
+| Форматы, високосная дата, timezone-aware wall time, некорректные границы | unit | `test_parse_datetime_text_characterizes_*` | `SYS-AC-001`, `AC-008` |
+| Filename patterns и границы числового совпадения | unit | `test_datetime_from_filename_characterizes_patterns` | `SYS-AC-001`, `AC-008` |
+| Приоритет metadata tags и fallback после некорректного значения | unit | `test_metadata_priority_*`, `test_invalid_higher_priority_*` | `SYS-AC-001`, `AC-008` |
+| Сортировка по дате и casefolded имени при равной дате | characterization | `test_main_orders_items_by_date_then_casefolded_name` | `SYS-AC-001`, `AC-008` |
+| Фильтрация расширений и исключение output/error log | unit | `test_collect_source_paths_is_sorted_and_excludes_outputs` | `SYS-AC-001` |
+| Photo, video with audio, video without audio normalize argv | contract | `test_normalize_item_builds_list_argv_for_each_media_shape` | `SYS-AC-001`, `AC-010` |
+| Экранирование concat list и concat argv | contract | `test_concatenate_writes_escaped_list_and_list_argv` | `SYS-AC-001`, `AC-010` |
+| Пустой, повреждённый и частично успешный набор | characterization | `test_empty_input_*`, `test_corrupt_input_*`, `test_partial_encoding_success_*` | `SYS-AC-001`, `SYS-FR-004`, `AC-008` |
+| Ранняя и поздняя коллизии, no-replace и разрешённый overwrite | characterization | `test_existing_output_*`, `test_publish_output_*` | `SYS-AC-003`, `AC-008` |
+| Неизменность valid/corrupt/skipped источников | characterization + integration | `test_corrupt_input_*`, `test_partial_encoding_success_*`, synthetic smoke | `SYS-AC-005` |
+| Реальный mixed photo/video экспорт и проверка A/V streams | integration smoke | `test_synthetic_photo_video_cli_smoke_preserves_sources` | `SYS-AC-001`, `SYS-AC-005`, `AC-008`, `AC-010` |
+
+Synthetic smoke создаёт короткие BMP и MP4 во временном каталоге с пробелом,
+апострофом и Unicode, запускает CLI list-argv без shell, проверяет итоговые
+video/audio streams и сравнивает SHA-256, размер и `mtime_ns` источников до и
+после обработки. Инструменты ищутся сначала через
+`VIDEO_CHRONICLE_FFMPEG` / `VIDEO_CHRONICLE_FFPROBE`, затем в `PATH`.
+
+Минимальная подтверждённая версия smoke-контракта: **FFmpeg и FFprobe 9.0.1**.
+Этап 01 не объявляет более старые версии поддерживаемыми без отдельного
+воспроизводимого прогона. Проверенная Windows release essentials сборка:
+
+```text
+ffmpeg version 9.0.1-essentials_build-www.gyan.dev
+ffprobe version 9.0.1-essentials_build-www.gyan.dev
+```
+
+Архив был загружен только во временную папку, его SHA-256
+`fec81ae03971d9dd4be3ebe02e263bd2ec1d789483f931bdba5f5715e65da2e9`
+совпал с опубликованным хешем. Синтетический mixed photo/video smoke прошёл;
+бинарники не входят в репозиторий.
 
 ## Уровни проверок
 
@@ -64,3 +101,16 @@ python -m venv .venv
 $env:QT_QPA_PLATFORM = "offscreen"
 .venv/Scripts/python -m pytest -q
 ```
+
+Только CLI-characterization и synthetic smoke:
+
+```powershell
+.venv/Scripts/python -m pytest -q tests/test_cli_characterization.py
+$env:VIDEO_CHRONICLE_FFMPEG = "C:/tools/ffmpeg/bin/ffmpeg.exe"
+$env:VIDEO_CHRONICLE_FFPROBE = "C:/tools/ffmpeg/bin/ffprobe.exe"
+.venv/Scripts/python -m pytest -q -rs tests/test_ffmpeg_smoke.py
+```
+
+Если переменные не заданы и инструменты отсутствуют в `PATH`, smoke-test
+намеренно завершается как `SKIPPED`, а не создаёт ложный зелёный integration
+результат.

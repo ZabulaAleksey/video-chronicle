@@ -15,7 +15,7 @@
   legacy CLI через `QProcess`, показывает журнал и сохраняет явную семантику
   перезаписи. Срез не заменяет этапы 01–05.
 
-## Текущий этап — 01. Discovery и baseline
+## Выполненный этап — 01. Discovery и baseline
 
 Самостоятельный prompt: [`01-discovery-baseline.md`](../prompts/stages/01-discovery-baseline.md).
 
@@ -26,28 +26,33 @@
   медиа;
 - документировать проверенную минимальную версию FFmpeg/FFprobe.
 
-## Запланированный MVP — этапы 02–10
+Этап завершён: characterization baseline и synthetic smoke подтверждены на
+FFmpeg/FFprobe 9.0.1.
+
+## Текущий этап — 02. Package foundation
+
+Самостоятельный prompt: [`02-package-foundation.md`](../prompts/stages/02-package-foundation.md).
+
+## Запланированный MVP — этапы 03–10
 
 Этапы выполняются последовательно и только после критериев завершения
 предыдущего этапа.
 
-1. **[02 — Package foundation](../prompts/stages/02-package-foundation.md):** структура Python-пакета, конфигурация,
-   логирование и тестовый layout при сохранении рабочего legacy CLI.
-2. **[03 — Core extraction](../prompts/stages/03-core-extraction.md):** постепенное извлечение чистой логики за
+1. **[03 — Core extraction](../prompts/stages/03-core-extraction.md):** постепенное извлечение чистой логики за
    интерфейсы с проверкой CLI parity.
-3. **[04 — Metadata/date engine](../prompts/stages/04-metadata-date-engine.md):** объяснимая политика дат, происхождение
+2. **[04 — Metadata/date engine](../prompts/stages/04-metadata-date-engine.md):** объяснимая политика дат, происхождение
    значений, timezone и адаптеры метаданных.
-4. **[05 — Project/queue model](../prompts/stages/05-project-queue-model.md):** независимые от UI timeline и состояние
+3. **[05 — Project/queue model](../prompts/stages/05-project-queue-model.md):** независимые от UI timeline и состояние
    долгих заданий; конкретное хранилище выбирается отдельным решением.
-5. **[06 — GUI baseline](../prompts/stages/06-gui-application-services.md):** заменить переходный CLI-адаптер на application
+4. **[06 — GUI baseline](../prompts/stages/06-gui-application-services.md):** заменить переходный CLI-адаптер на application
    services, добавить проверку состава/порядка и сохранить отсутствие
    медиаработы в UI-потоке.
-6. **[07 — Overlay editor](../prompts/stages/07-overlay-editor.md):** единая конфигурация подписи даты и предпросмотр.
-7. **[08 — Join/Chronicle modes](../prompts/stages/08-join-chronicle-modes.md):** понятные режимы без дублирования
+5. **[07 — Overlay editor](../prompts/stages/07-overlay-editor.md):** единая конфигурация подписи даты и предпросмотр.
+6. **[08 — Join/Chronicle modes](../prompts/stages/08-join-chronicle-modes.md):** понятные режимы без дублирования
    медиаконвейера и с сохранением legacy join.
-8. **[09 — Export/progress/cancel](../prompts/stages/09-export-progress-cancel.md):** план экспорта, прогресс, безопасная отмена,
+7. **[09 — Export/progress/cancel](../prompts/stages/09-export-progress-cancel.md):** план экспорта, прогресс, безопасная отмена,
    проверка коллизий и атомарная финализация.
-9. **[10 — Resume/cache](../prompts/stages/10-resume-cache.md):** совместимые ключи, инвалидирование и безопасное
+8. **[10 — Resume/cache](../prompts/stages/10-resume-cache.md):** совместимые ключи, инвалидирование и безопасное
    возобновление. Этот этап завершает целевой MVP.
 
 ## Позже — целевой v1, этапы 11–16
