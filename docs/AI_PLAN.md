@@ -2,59 +2,53 @@
 
 ## Срез
 
-- Этап: **05 — Project/queue model**
-- Статус: выполняется по прямой команде пользователя
-- Prompt: `prompts/stages/05-project-queue-model.md`
-- Зависимости: этапы 01–04 завершены; metadata/date result DATE-001 стабилен
-- Требования: `FR-004`, `FR-005`, `FR-009`, `FR-010`
-- Критерии: `AC-002`, подготовительные части `AC-006/007`, `NFR-001`
+- Этап: **06 — GUI поверх application services**
+- Статус: подготовлен, не начат
+- Prompt: `prompts/stages/06-gui-application-services.md`
+- Зависимости: этапы 01–05 завершены; DATE-001 и MODEL-001 стабильны
+- Требования: `FR-001`, `FR-004`, `FR-005`, `FR-012`, `NFR-003/004`
+- Критерии: `AC-001`, `AC-002`, `AC-009`, `AC-010`
 
 ## Цель
 
-Создать Qt-free модели timeline, неизменяемого export snapshot и жизненного
-цикла долгого задания, пригодные для будущих GUI/progress/cancel/resume, но не
-запускающие FFmpeg и не выдающие незавершённый результат за готовый.
+Заменить переходный запуск whole CLI на application-service boundary и показать
+пользователю принятые/пропущенные элементы, выбранные даты и порядок до
+экспорта, сохранив отзывчивость PySide6 UI и единый production path.
 
-## Предварительный decision gate
+## Decision gate
 
-До production-кода закрепить в feature SPEC:
+До реализации утвердить в feature SPEC минимальное preview-поведение:
 
-- стабильный идентификатор timeline item и tie-breaker порядка;
-- immutable project/export snapshot;
-- состояния и допустимые transitions задания;
-- versioned JSON-compatible serialization contract;
-- `InMemoryProjectRepository` как reference adapter этапа 05.
+- какие поля accepted/skipped/error item видит пользователь;
+- loading/empty/error/populated состояния;
+- подтверждение export snapshot и overwrite;
+- worker/close lifecycle без имитации безопасной отмены.
 
-SQLite и файловое persistence не утверждаются: они сравниваются позже, когда
-появятся требования к resume/cache и миграциям.
+## Scope
 
-## Последовательность
-
-1. Записать MODEL-001 и storage decision в SPEC/DECISIONS.
-2. Добавить Qt-free timeline/project/job models и transition validation.
-3. Добавить repository port и in-memory reference adapter.
-4. Добавить versioned serialization round-trip и отказ на corrupt/unknown state.
-5. Подтвердить отсутствие Qt/subprocess side effects и весь regression baseline.
+- асинхронный анализ папки через application services;
+- preview состава, порядка, date provenance и export summary;
+- presenters/view models и worker lifecycle вне UI thread;
+- сохранение legacy CLI parity и fallback GUI-001 на adapter boundary.
 
 ## Non-goals
 
-- GUI/widgets, FFmpeg execution, progress transport и process-tree cancel;
-- SQLite/file persistence, migrations, resume или cache;
-- server queue, network и multi-user semantics;
-- пользовательское изменение порядка/trim/grouping.
+- ручной reorder/trim/grouping;
+- overlay editor, Join/Chronicle modes;
+- progress/cancel, resume/cache или durable persistence;
+- FFmpeg orchestration внутри widgets.
 
 ## Quality gates и DoD
 
-- stable IDs/order повторяемы для одного source/date snapshot;
-- planned/running/cancel-requested/succeeded/failed различимы, invalid transition
-  отвергается;
-- success требует зафиксированный final output, incomplete job не становится success;
-- versioned serialization принимает только утверждённую схему;
-- domain tests не импортируют Qt и не запускают внешние процессы;
-- full tests, compileall и `git diff --check` зелёные;
-- после commit `AI_STATUS` и `AI_PLAN` переключены на этап 06.
+- GUI показывает состав и порядок до export;
+- анализ/экспорт не блокируют UI thread;
+- GUI и CLI используют один application path;
+- loading/empty/error/populated, Unicode paths, repeat-run и cleanup покрыты;
+- Windows visual/keyboard/focus QA выполнен;
+- full regression, compileall и `git diff --check` зелёные;
+- после acceptance `AI_PLAN` переключён на этап 07.
 
 ## Откат
 
-Reference repository хранит только in-memory snapshots. Stage commit можно
-откатить без изменения исходных медиа и готовых результатов.
+Переходный GUI-001 остаётся adapter fallback до завершения acceptance этапа 06;
+второй core или второй медиаконвейер не создаётся.

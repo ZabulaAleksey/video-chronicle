@@ -15,6 +15,12 @@
   экспорта, включая выбранное date decision.
 - `src/video_chronicle/metadata.py` — Qt-free DATE-001 engine: metadata и
   filename candidates, provenance, raw values, timezone и conflicts.
+- `src/video_chronicle/project.py` — immutable MODEL-001 timeline, export
+  snapshot, job lifecycle и project state.
+- `src/video_chronicle/repository.py` — `ProjectRepository` port и process-local
+  `InMemoryProjectRepository` reference adapter.
+- `src/video_chronicle/serialization.py` — строгий JSON-compatible schema v1
+  mapping без файлового I/O и выполнения команд.
 - `src/video_chronicle/ports.py` — типизированные границы inspection,
   normalization, concatenation, publication и source discovery.
 - `src/video_chronicle/application.py` — orchestration одного экспорта и
@@ -59,8 +65,9 @@
 
 Проект использует `src` layout и один production path через package application
 service. Root-level CLI только экспортирует канонические функции для обратной
-совместимости. Проект не содержит сервера, базы данных или очереди заданий. GUI
-не дублирует сортировку, анализ дат, FFmpeg-команды или финализацию.
+совместимости. MODEL-001 предоставляет состояния будущих заданий, но проект не
+содержит сервера, базы данных, durable storage или runtime-очереди. GUI не
+дублирует сортировку, анализ дат, FFmpeg-команды или финализацию.
 Безопасная отмена пока отсутствует: окно нельзя закрыть во время активного
 процесса. Каталоги `ffmpeg/` и `ffmpeg1/` являются локальными сторонними
 зависимостями и не входят в историю основного репозитория.

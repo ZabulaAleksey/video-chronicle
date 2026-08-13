@@ -124,3 +124,17 @@
 - Последствия: overlay и порядок существующих корректных наборов не меняются,
   но consumers получают объяснимый typed result. ExifTool, исправление даты и
   timezone conversion требуют отдельного решения.
+
+## 2026-08-14 — MODEL-001 и in-memory reference repository
+
+- Решение: определить immutable timeline/export/job/project contracts,
+  JSON-compatible schema `video-chronicle-project` версии 1 и repository port;
+  на этапе 05 реализовать только `InMemoryProjectRepository`.
+- Причина: GUI, progress/cancel и resume требуют стабильных моделей раньше,
+  чем становится понятна нагрузка, concurrent access и migration policy
+  durable storage.
+- Рассмотрены: только in-memory без serialization; JSON-файл как production
+  storage; SQLite; Pydantic-модели.
+- Последствия: domain API и тестовый round-trip стабилизируются без зависимости
+  от Qt/FFmpeg/БД. Сериализуемый state не содержит tool commands. Выбор
+  file/SQLite, транзакций и миграций остаётся отдельным решением этапа 10.

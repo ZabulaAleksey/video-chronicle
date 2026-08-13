@@ -2,12 +2,14 @@
 
 ## Текущий этап
 
-Этапы 00–04 завершены. Текущий этап — 05, project/queue model. По прямому запросу
+Этапы 00–05 завершены. Следующий этап — 06, GUI поверх application services; он
+подготовлен, но ещё не начат. По прямому запросу
 пользователя вне очереди реализован ограниченный GUI-срез GUI-001: PySide6
 оболочка запускает совместимый legacy CLI через `QProcess`. Устанавливаемый
-package, entry points и application service готовы; очередь и кэш ещё не реализованы.
+package, entry points и application service готовы; MODEL-001 описывает
+состояния будущих заданий, но runtime-очередь, durable storage и кэш отсутствуют.
 
-Текущий ограниченный срез этапа 05 хранится в `docs/AI_PLAN.md`. Этапы 01–17
+Подготовленный ограниченный срез этапа 06 хранится в `docs/AI_PLAN.md`. Этапы 01–17
 разделены на самостоятельные project prompts в `prompts/stages/`; они
 загружаются по одному и не заменяют SPEC или текущий план.
 
@@ -17,6 +19,9 @@ package, entry points и application service готовы; очередь и к�
   `domain → ports → application → pipeline adapters`;
 - `src/video_chronicle/metadata.py` реализует утверждённую DATE-001 policy и
   отдаёт typed provenance/conflict/timezone result;
+- `src/video_chronicle/project.py`, `repository.py` и `serialization.py`
+  реализуют MODEL-001: stable timeline IDs/order, immutable export snapshot,
+  job transitions, strict schema v1 и in-memory repository;
 - `join_media.py` — тонкий compatibility shim и direct-source entry point;
 - доступны прямой CLI и переходная GUI-оболочка без сервера и базы данных;
 - `gui_contract.py` строит argv, а `video_chronicle_gui.py` управляет формой и
@@ -46,7 +51,7 @@ package, entry points и application service готовы; очередь и к�
 - синтетический mixed photo/video smoke на FFmpeg/FFprobe 9.0.1;
 - устанавливаемый пакет версии 0.2.0 с console/GUI entry points и группой
   зависимостей `dev`;
-- 77 успешно пройденных unit/contract/GUI/integration тестов, включая реальный
+- 115 успешно пройденных unit/contract/GUI/integration тестов, включая реальный
   FFmpeg smoke;
 - один symlink-specific тест корректно пропущен в текущем Windows-окружении,
   где создание symbolic link недоступно без дополнительных прав;
@@ -73,7 +78,7 @@ package, entry points и application service готовы; очередь и к�
 
 ## Следующая задача
 
-Выполнить этап 05: утвердить Qt-free project/timeline/job contracts и storage
-decision, затем реализовать stable IDs/order, state transitions, versioned
-serialization и in-memory repository без FFmpeg/GUI side effects. Исполняемые
-границы находятся в `docs/AI_PLAN.md` и `prompts/stages/05-project-queue-model.md`.
+После отдельной команды начать этап 06: утвердить preview contract и перевести
+PySide6 GUI с whole-CLI subprocess adapter на application services, сохранив
+анализ/экспорт вне UI thread и legacy CLI parity. Подготовленный срез находится
+в `docs/AI_PLAN.md` и `prompts/stages/06-gui-application-services.md`.

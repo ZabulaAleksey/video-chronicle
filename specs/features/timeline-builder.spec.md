@@ -92,6 +92,57 @@ SPEC сохраняет статус черновика. Срез начинае
 - пользовательское исправление даты или timezone conversion;
 - включение missing item в export plan с искусственной датой.
 
+## Утверждённый срез MODEL-001 — project/queue contracts
+
+Этот раздел утверждён в рамках прямой команды пользователя от 2026-08-14
+последовательно выполнить этапы 01–05. Он определяет UI-независимую reference
+модель, но не утверждает durable persistence или resume.
+
+- **MODEL-001 — Timeline item.** Принятый `MediaItem` преобразуется в immutable
+  `TimelineItem` с локально стабильным ID, source path, выбранной wall-clock
+  датой и date provenance. ID версии 1 вычисляется детерминированно из
+  нормализованного абсолютного source path; перенос проекта в другой каталог
+  считается новой identity до отдельного content-identity решения.
+- **MODEL-002 — Timeline order.** `Timeline` хранит уникальные item IDs и
+  строится в порядке `(taken_at, path.name.casefold(), stable_id)`. Ручное
+  изменение порядка относится к этапу 11.
+- **MODEL-003 — Export snapshot.** Immutable `ExportPlanSnapshot` фиксирует
+  ordered item IDs, output MP4, CRF, preset и overwrite policy. `plan_id`
+  детерминирован содержимым snapshot. Пути инструментов и команды не входят в
+  сериализуемый snapshot.
+- **MODEL-004 — Job lifecycle.** Поддерживаются `planned`, `running`,
+  `cancel-requested`, `succeeded`, `failed`, `cancelled`. Разрешены переходы
+  `planned → running`, `running → cancel-requested|succeeded|failed` и
+  `cancel-requested → cancelled|failed`; terminal state не меняется. `succeeded`
+  требует явно зафиксированный final output, совпадающий с plan output.
+- **MODEL-005 — Project state.** Immutable `ProjectState` связывает project ID,
+  timeline, optional current export snapshot и jobs; jobs могут ссылаться
+  только на известный current plan, IDs уникальны.
+- **MODEL-006 — Serialization.** Утверждён только JSON-compatible schema
+  `video-chronicle-project` версии `1`. Неизвестная версия, лишние/отсутствующие
+  поля, invalid path/date/state/transition или рассогласованные IDs отвергаются.
+  Десериализация создаёт данные и никогда не запускает команды/процессы.
+- **MODEL-007 — Repository port.** Domain зависит от `ProjectRepository` port.
+  Этап 05 предоставляет только `InMemoryProjectRepository`, сохраняющий
+  immutable snapshots. File/SQLite adapters, migrations и concurrent writers
+  не входят в срез.
+
+### Критерии приёмки среза
+
+- **MODEL-AC-001 (MODEL-001–003, FR-004/005, NFR-001).** Один набор принятых
+  media и settings дважды даёт те же IDs, порядок и `plan_id`.
+- **MODEL-AC-002 (MODEL-004, FR-009).** Таблица допустимых переходов отвергает
+  invalid/terminal изменения; incomplete job не становится `succeeded`.
+- **MODEL-AC-003 (MODEL-005–007, FR-010, SEC-005).** State проходит точный
+  version-1 round-trip через JSON-compatible mapping; corrupt/unknown state
+  отвергается; in-memory adapter можно заменить через port без Qt/subprocess.
+
+### Не входит в срез
+
+- durable save/load, SQLite/file migrations, resume и cache;
+- progress events и реальная process-tree cancellation;
+- network/server queue, locks и multi-user semantics.
+
 ## Цель продукта
 
 Пользователь выбирает локальные медиафайлы, проверяет их порядок и параметры,
@@ -231,7 +282,7 @@ SPEC сохраняет статус черновика. Срез начинае
 - Набор режимов экспорта и поддерживаемые форматы входа/выхода.
 - Семантика процента прогресса и предельное время отмены.
 - Граница совместимости текущего CLI и политика устаревания параметров.
-- Выбор хранилища проекта, модели домена и библиотек валидации. SQLite,
-  Pydantic, ExifTool и OTIO остаются кандидатами, а не утверждёнными или уже
-  реализованными компонентами. PySide6 выбран для GUI-оболочки GUI-001.
+- Выбор durable хранилища проекта и библиотек валидации после MODEL-001.
+  SQLite, Pydantic, ExifTool и OTIO остаются кандидатами, а не утверждёнными или
+  уже реализованными компонентами. PySide6 выбран для GUI-оболочки GUI-001.
 - Формат и доверительная модель кэша/состояния возобновления.

@@ -52,24 +52,29 @@ groups, console/GUI entry points и временные compatibility modules б�
 Этап завершён: DATE-001 engine детерминированно выбирает metadata/filename date,
 сохраняет raw provenance, timezone и conflicts и не меняет legacy overlay.
 
-## Текущий этап — 05. Project/queue model
+## Выполненный этап — 05. Project/queue model
 
 Самостоятельный prompt: [`05-project-queue-model.md`](../prompts/stages/05-project-queue-model.md).
 
-## Запланированный MVP — этапы 06–10
+Этап завершён: MODEL-001 определяет stable timeline/order, immutable export
+snapshot, job transitions, strict schema v1 и заменяемый repository port с
+in-memory reference adapter.
+
+## Следующий этап — 06. GUI поверх application services
+
+Самостоятельный prompt: [`06-gui-application-services.md`](../prompts/stages/06-gui-application-services.md).
+
+## Запланированный MVP — этапы 07–10
 
 Этапы выполняются последовательно и только после критериев завершения
 предыдущего этапа.
 
-1. **[06 — GUI baseline](../prompts/stages/06-gui-application-services.md):** заменить переходный CLI-адаптер на application
-   services, добавить проверку состава/порядка и сохранить отсутствие
-   медиаработы в UI-потоке.
-2. **[07 — Overlay editor](../prompts/stages/07-overlay-editor.md):** единая конфигурация подписи даты и предпросмотр.
-3. **[08 — Join/Chronicle modes](../prompts/stages/08-join-chronicle-modes.md):** понятные режимы без дублирования
+1. **[07 — Overlay editor](../prompts/stages/07-overlay-editor.md):** единая конфигурация подписи даты и предпросмотр.
+2. **[08 — Join/Chronicle modes](../prompts/stages/08-join-chronicle-modes.md):** понятные режимы без дублирования
    медиаконвейера и с сохранением legacy join.
-4. **[09 — Export/progress/cancel](../prompts/stages/09-export-progress-cancel.md):** план экспорта, прогресс, безопасная отмена,
+3. **[09 — Export/progress/cancel](../prompts/stages/09-export-progress-cancel.md):** план экспорта, прогресс, безопасная отмена,
    проверка коллизий и атомарная финализация.
-5. **[10 — Resume/cache](../prompts/stages/10-resume-cache.md):** совместимые ключи, инвалидирование и безопасное
+4. **[10 — Resume/cache](../prompts/stages/10-resume-cache.md):** совместимые ключи, инвалидирование и безопасное
    возобновление. Этот этап завершает целевой MVP.
 
 ## Позже — целевой v1, этапы 11–16
