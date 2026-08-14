@@ -48,6 +48,50 @@ SPEC сохраняет статус черновика. Срез начинае
 - безопасная отмена и процент выполнения;
 - пакетирование приложения.
 
+## Утверждённый срез GUI-APP-001 — preview через application services
+
+Этот срез утверждён прямой командой пользователя от 2026-08-14 последовательно
+выполнить оставшиеся этапы дорожной карты. Он заменяет default whole-CLI GUI
+execution path, но сохраняет GUI-001 как временный диагностический fallback до
+приёмки этапа 06.
+
+- **GUI-APP-001 — Асинхронный анализ.** Пользователь явно запускает анализ
+  выбранной папки. `plan_export` выполняется вне UI thread, а интерфейс различает
+  loading, empty, error и populated состояния.
+- **GUI-APP-002 — Состав и порядок.** Для accepted item отображаются номер в
+  плане, имя/путь, выбранная wall-clock дата, date provenance, timezone и признак
+  конфликта. Для skipped item отображаются путь и диагностическая причина.
+- **GUI-APP-003 — Актуальный snapshot.** Preview содержит входную папку,
+  выходной MP4, число accepted/skipped, CRF, preset и overwrite policy. Изменение
+  любого поля формы инвалидирует preview; экспорт доступен только для актуального
+  непустого плана.
+- **GUI-APP-004 — Единый application path.** GUI вызывает `plan_export` и
+  `execute_plan` через worker boundary; widgets не выполняют FFprobe/FFmpeg и не
+  повторяют date/order/publish policy. CLI продолжает использовать те же
+  application services.
+- **GUI-APP-005 — Lifecycle до safe cancel.** Повторный анализ/экспорт и закрытие
+  окна блокируются, пока worker активен. Этот срез не имитирует process-tree
+  cancellation; безопасная отмена относится к этапу 09.
+
+### Критерии приёмки среза
+
+- **GUI-APP-AC-001 (GUI-APP-001/002, FR-001/004, AC-001/002).** Набор accepted,
+  повреждённых и undated файлов дважды даёт одинаковый видимый порядок,
+  provenance и причины пропуска, не изменяя источники.
+- **GUI-APP-AC-002 (GUI-APP-003, FR-005, NFR-003).** Unicode/space paths
+  сохраняются как `Path`, изменение формы инвалидирует plan, а overwrite не
+  включается без отдельного подтверждения непосредственно перед экспортом.
+- **GUI-APP-AC-003 (GUI-APP-004/005, FR-012, NFR-004).** Анализ и экспорт идут
+  вне UI thread, повторный запуск и закрытие во время работы запрещены, worker и
+  thread освобождаются после успеха и ошибки; legacy CLI characterization остаётся
+  зелёной.
+
+### Не входит в срез
+
+- ручной reorder/trim/grouping и overlay editor;
+- структурированный progress и безопасная process-tree cancellation;
+- cache, resume и durable persistence.
+
 ## Утверждённый срез DATE-001 — metadata/date engine
 
 Этот раздел утверждён в рамках прямой команды пользователя от 2026-08-14

@@ -3,7 +3,7 @@
 ## Срез
 
 - Этап: **06 — GUI поверх application services**
-- Статус: подготовлен, не начат
+- Статус: в работе; preview contract `GUI-APP-001` утверждён
 - Prompt: `prompts/stages/06-gui-application-services.md`
 - Зависимости: этапы 01–05 завершены; DATE-001 и MODEL-001 стабильны
 - Требования: `FR-001`, `FR-004`, `FR-005`, `FR-012`, `NFR-003/004`
@@ -15,14 +15,15 @@
 пользователю принятые/пропущенные элементы, выбранные даты и порядок до
 экспорта, сохранив отзывчивость PySide6 UI и единый production path.
 
-## Decision gate
+## Утверждённый контракт
 
-До реализации утвердить в feature SPEC минимальное preview-поведение:
-
-- какие поля accepted/skipped/error item видит пользователь;
-- loading/empty/error/populated состояния;
-- подтверждение export snapshot и overwrite;
-- worker/close lifecycle без имитации безопасной отмены.
+- accepted item: порядок, имя/путь, выбранная wall-clock дата, provenance,
+  timezone и признак конфликта;
+- skipped item: путь и диагностическая причина;
+- loading/empty/error/populated — явные состояния;
+- изменение формы инвалидирует preview, export требует актуального непустого plan;
+- overwrite подтверждается отдельно непосредственно перед export;
+- worker/close lifecycle не имитирует безопасную отмену до этапа 09.
 
 ## Scope
 
