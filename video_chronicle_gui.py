@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import codecs
+import os
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -26,8 +27,12 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QSpinBox,
+    QSplitter,
+    QTreeWidget,
+    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -38,6 +43,8 @@ from gui_contract import (
     build_cli_arguments,
     create_run_request,
 )
+from video_chronicle.domain import ExportPlan
+from video_chronicle.gui_services import ApplicationServiceAdapter
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -158,23 +165,54 @@ class CliProcessAdapter(QObject):
 
 
 class ChronicleWindow(QMainWindow):
-    """One-window baseline UI for configuring and observing an export."""
+    """One-window preview and export UI over canonical application services.
 
-    def __init__(self, adapter: CliProcessAdapter | None = None) -> None:
+    Passing ``adapter`` explicitly selects the temporary whole-CLI fallback.
+    Production uses :class:`ApplicationServiceAdapter` by default.
+    """
+
+    def __init__(
+        self,
+        adapter: CliProcessAdapter | None = None,
+        *,
+        application_adapter: ApplicationServiceAdapter | None = None,
+    ) -> None:
         super().__init__()
         self.setWindowTitle("Video Chronicle")
         self.setMinimumSize(820, 660)
-        self.resize(940, 760)
+        self.resize(1060, 860)
 
-        self._adapter = adapter or CliProcessAdapter(self)
-        self._adapter.started.connect(self._on_started)
-        self._adapter.output_received.connect(self._append_output)
-        self._adapter.completed.connect(self._on_completed)
+        self._legacy_mode = adapter is not None
+        self._adapter: CliProcessAdapter | ApplicationServiceAdapter
+        if adapter is not None:
+            self._adapter = adapter
+            adapter.started.connect(self._on_started)
+            adapter.output_received.connect(self._append_output)
+            adapter.completed.connect(self._on_completed)
+        else:
+            app_adapter = application_adapter or ApplicationServiceAdapter(self)
+            self._adapter = app_adapter
+            app_adapter.started.connect(self._on_application_started)
+            app_adapter.output_received.connect(self._append_output)
+            app_adapter.plan_ready.connect(self._on_plan_ready)
+            app_adapter.completed.connect(self._on_application_completed)
         self._active_request: GuiRunRequest | None = None
+        self._plan: ExportPlan | None = None
+        self._building_ui = True
 
         default_input = Path.home() / "Input"
         self._suggested_output = default_input / "output.mp4"
         self._build_ui(default_input)
+        self._building_ui = False
+        self._connect_invalidation_signals()
+        if self._legacy_mode:
+            self.analyze_button.hide()
+            self.run_button.setEnabled(True)
+            self.preview_state_label.setText(
+                "Диагностический режим: preview отключён, запускается legacy CLI."
+            )
+        else:
+            self.run_button.setEnabled(False)
 
     def _build_ui(self, default_input: Path) -> None:
         central = QWidget(self)
@@ -188,8 +226,8 @@ class ChronicleWindow(QMainWindow):
         title = QLabel("Video Chronicle")
         title.setObjectName("title")
         subtitle = QLabel(
-            "Выберите папку с фото и видео. Существующий медиаконвейер "
-            "выполнит обработку в отдельном процессе."
+            "Выберите папку с фото и видео, проверьте состав и порядок, "
+            "затем запустите экспорт. Анализ и медиаконвейер работают вне UI thread."
         )
         subtitle.setObjectName("subtitle")
         subtitle.setWordWrap(True)
@@ -222,6 +260,9 @@ class ChronicleWindow(QMainWindow):
         card_layout.addLayout(paths)
 
         advanced = QGroupBox("Параметры кодирования")
+        # The preview and log panes both request vertical stretch.  Preserve the
+        # form's minimum layout height so those panes cannot collapse its rows.
+        advanced.setMinimumHeight(190)
         advanced_layout = QGridLayout(advanced)
         advanced_layout.setHorizontalSpacing(12)
         advanced_layout.setVerticalSpacing(10)
@@ -279,13 +320,17 @@ class ChronicleWindow(QMainWindow):
         root.addWidget(settings_card)
 
         action_row = QHBoxLayout()
-        self.status_label = QLabel("Готово к настройке")
+        self.status_label = QLabel("Настройте параметры и запустите анализ")
         self.status_label.setObjectName("status")
-        self.run_button = QPushButton("Собрать хронологию")
+        self.analyze_button = QPushButton("Анализировать")
+        self.analyze_button.setMinimumHeight(42)
+        self.analyze_button.clicked.connect(self._start_analysis)
+        self.run_button = QPushButton("Экспортировать")
         self.run_button.setObjectName("primary")
         self.run_button.setMinimumHeight(42)
         self.run_button.clicked.connect(self._start_export)
         action_row.addWidget(self.status_label, 1)
+        action_row.addWidget(self.analyze_button)
         action_row.addWidget(self.run_button)
         root.addLayout(action_row)
 
@@ -295,8 +340,52 @@ class ChronicleWindow(QMainWindow):
         self.progress.setTextVisible(False)
         root.addWidget(self.progress)
 
+        workspace = QSplitter(Qt.Orientation.Horizontal)
+        workspace.setChildrenCollapsible(False)
+
+        preview_panel = QFrame()
+        preview_layout = QVBoxLayout(preview_panel)
+        preview_layout.setContentsMargins(0, 0, 8, 0)
+        preview_layout.setSpacing(10)
+        preview_header = QHBoxLayout()
+        preview_title = QLabel("План хронологии")
+        preview_title.setObjectName("sectionTitle")
+        self.preview_state_label = QLabel("План ещё не построен")
+        self.preview_state_label.setObjectName("previewState")
+        self.preview_state_label.setAccessibleName("Состояние анализа")
+        preview_header.addWidget(preview_title)
+        preview_header.addStretch(1)
+        preview_header.addWidget(self.preview_state_label)
+        preview_layout.addLayout(preview_header)
+
+        self.plan_summary_label = QLabel(
+            "Изменение любого параметра потребует повторного анализа."
+        )
+        self.plan_summary_label.setObjectName("summary")
+        self.plan_summary_label.setWordWrap(True)
+        self.plan_summary_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        preview_layout.addWidget(self.plan_summary_label)
+
+        self.preview_tree = QTreeWidget()
+        self.preview_tree.setObjectName("previewTree")
+        self.preview_tree.setAccessibleName("Состав и порядок хронологии")
+        self.preview_tree.setHeaderLabels(
+            ["№", "Статус", "Файл", "Дата", "Источник", "Timezone", "Конфликт / причина"]
+        )
+        self.preview_tree.setRootIsDecorated(False)
+        self.preview_tree.setAlternatingRowColors(True)
+        self.preview_tree.setUniformRowHeights(True)
+        self.preview_tree.setMinimumHeight(165)
+        preview_layout.addWidget(self.preview_tree, 1)
+
+        log_panel = QFrame()
+        log_layout = QVBoxLayout(log_panel)
+        log_layout.setContentsMargins(8, 0, 0, 0)
+        log_layout.setSpacing(10)
         log_header = QHBoxLayout()
-        log_title = QLabel("Журнал выполнения")
+        log_title = QLabel("Журнал анализа и экспорта")
         log_title.setObjectName("sectionTitle")
         self.result_label = QLabel("")
         self.result_label.setObjectName("result")
@@ -304,17 +393,30 @@ class ChronicleWindow(QMainWindow):
         log_header.addWidget(log_title)
         log_header.addStretch(1)
         log_header.addWidget(self.result_label)
-        root.addLayout(log_header)
+        log_layout.addLayout(log_header)
 
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
-        self.log_view.setPlaceholderText("Здесь появятся сообщения join_media.py")
+        self.log_view.setPlaceholderText("Здесь появятся сообщения application services")
         self.log_view.document().setMaximumBlockCount(5_000)
+        self.log_view.setMinimumHeight(110)
         self.log_view.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
-        root.addWidget(self.log_view, 1)
-        self.setCentralWidget(central)
+        log_layout.addWidget(self.log_view, 1)
+        workspace.addWidget(preview_panel)
+        workspace.addWidget(log_panel)
+        workspace.setStretchFactor(0, 3)
+        workspace.setStretchFactor(1, 2)
+        workspace.setSizes([620, 400])
+        root.addWidget(workspace, 1)
+
+        scroll = QScrollArea(self)
+        scroll.setObjectName("mainScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidget(central)
+        self.setCentralWidget(scroll)
 
         self._editable_widgets = [
             self.input_edit,
@@ -328,6 +430,17 @@ class ChronicleWindow(QMainWindow):
             self.crf_spin,
             self.preset_combo,
         ]
+
+    def _connect_invalidation_signals(self) -> None:
+        for edit in (
+            self.input_edit,
+            self.output_edit,
+            self.ffmpeg_edit,
+            self.ffprobe_edit,
+        ):
+            edit.textChanged.connect(self._invalidate_plan)
+        self.crf_spin.valueChanged.connect(self._invalidate_plan)
+        self.preset_combo.currentTextChanged.connect(self._invalidate_plan)
 
     @staticmethod
     def _path_row(line_edit: QLineEdit, button: QPushButton) -> QWidget:
@@ -373,17 +486,169 @@ class ChronicleWindow(QMainWindow):
         if selected:
             target.setText(selected)
 
+    def _form_request(self) -> GuiRunRequest:
+        return create_run_request(
+            input_dir_text=self.input_edit.text(),
+            output_text=self.output_edit.text(),
+            ffmpeg_text=self.ffmpeg_edit.text(),
+            ffprobe_text=self.ffprobe_edit.text(),
+            crf=self.crf_spin.value(),
+            preset_text=self.preset_combo.currentText(),
+        )
+
+    @Slot()
+    def _invalidate_plan(self, *_args: object) -> None:
+        if self._building_ui or self._legacy_mode:
+            return
+        self._plan = None
+        self._active_request = None
+        self.preview_tree.clear()
+        self.preview_state_label.setText("План устарел — повторите анализ")
+        self.plan_summary_label.setText(
+            "Параметры изменены. Экспорт недоступен до повторного анализа."
+        )
+        if not self._adapter.is_running:
+            self.run_button.setEnabled(False)
+            self.status_label.setText("Требуется повторный анализ")
+
+    @Slot()
+    def _start_analysis(self) -> None:
+        if self._legacy_mode or self._adapter.is_running:
+            return
+        try:
+            request = self._form_request()
+        except RequestValidationError as exc:
+            QMessageBox.warning(self, "Проверьте параметры", str(exc))
+            self.status_label.setText("Нужна корректировка параметров")
+            self.preview_state_label.setText("Ошибка параметров")
+            return
+
+        self._plan = None
+        self._active_request = request
+        self.preview_tree.clear()
+        self.log_view.clear()
+        self.result_label.clear()
+        self.preview_state_label.setText("Анализ выполняется…")
+        self.plan_summary_label.setText(f"Проверка: {request.input_dir}")
+        self._set_running(True)
+        try:
+            assert isinstance(self._adapter, ApplicationServiceAdapter)
+            self._adapter.start_analysis(request)
+        except RuntimeError as exc:
+            self._on_application_completed("analysis", False, str(exc))
+
+    @Slot(str)
+    def _on_application_started(self, operation: str) -> None:
+        if operation == "analysis":
+            self.status_label.setText("Анализ медиафайлов…")
+        else:
+            self.status_label.setText("Медиаконвейер выполняется…")
+
+    @Slot(object)
+    def _on_plan_ready(self, plan: object) -> None:
+        active = self._active_request
+        if not isinstance(plan, ExportPlan) or active is None:
+            return
+        if (
+            plan.request.input_dir != active.input_dir
+            or plan.request.output != active.output
+            or plan.request.crf != active.crf
+            or plan.request.preset != active.preset
+        ):
+            return
+        self._plan = plan
+        self._populate_preview(plan)
+
+    def _populate_preview(self, plan: ExportPlan) -> None:
+        self.preview_tree.clear()
+        for index, item in enumerate(plan.items, start=1):
+            selected = item.date_decision.selected if item.date_decision else None
+            provenance = selected.source if selected else item.date_source
+            timezone = selected.timezone if selected and selected.timezone else "—"
+            conflicts = (
+                str(len(item.date_decision.conflicts))
+                if item.date_decision and item.date_decision.conflicts
+                else "—"
+            )
+            row = QTreeWidgetItem(
+                [
+                    str(index),
+                    "Принят",
+                    str(item.path),
+                    item.taken_at.strftime("%d.%m.%Y %H:%M:%S"),
+                    provenance,
+                    timezone,
+                    conflicts,
+                ]
+            )
+            row.setToolTip(2, str(item.path))
+            if selected is not None:
+                row.setToolTip(
+                    4,
+                    f"raw={selected.raw_value}; location={selected.location}",
+                )
+            self.preview_tree.addTopLevelItem(row)
+        for path, reason in plan.inspection_failures:
+            row = QTreeWidgetItem(
+                ["—", "Пропущен", str(path), "—", "—", "—", reason]
+            )
+            row.setToolTip(2, str(path))
+            row.setToolTip(6, reason)
+            self.preview_tree.addTopLevelItem(row)
+
+        self.preview_tree.resizeColumnToContents(0)
+        self.preview_tree.resizeColumnToContents(1)
+        self.preview_tree.resizeColumnToContents(3)
+        self.preview_tree.resizeColumnToContents(4)
+        self.preview_tree.resizeColumnToContents(5)
+        request = plan.request
+        self.preview_state_label.setText("План готов")
+        self.plan_summary_label.setText(
+            f"Вход: {request.input_dir} | Выход: {request.output} | "
+            f"принято: {len(plan.items)}, пропущено: {len(plan.inspection_failures)} | "
+            f"CRF {request.crf}, preset {request.preset} | "
+            "overwrite: только после отдельного подтверждения"
+        )
+
+    @Slot(str, bool, str)
+    def _on_application_completed(
+        self, operation: str, success: bool, message: str
+    ) -> None:
+        self._set_running(False)
+        self.result_label.setText(message)
+        self._append_output(f"\n{message}\n")
+        if operation == "analysis":
+            if success and self._plan is not None:
+                self.status_label.setText("План готов к экспорту")
+                self.run_button.setEnabled(True)
+                self.progress.setValue(1)
+                return
+            self._plan = None
+            self.run_button.setEnabled(False)
+            self.progress.setValue(0)
+            if "no supported videos or photos found" in message:
+                self.preview_state_label.setText("Поддерживаемые медиафайлы не найдены")
+                self.plan_summary_label.setText(
+                    "Папка пуста или не содержит поддерживаемых фото и видео."
+                )
+                self.status_label.setText("Анализ завершён: пустой набор")
+            else:
+                self.preview_state_label.setText("Ошибка анализа")
+                self.plan_summary_label.setText(message)
+                self.status_label.setText("Анализ не выполнен")
+            return
+
+        self.status_label.setText("Экспорт завершён" if success else "Экспорт не выполнен")
+        self.progress.setValue(1 if success else 0)
+        self.run_button.setEnabled(self._plan is not None)
+
     @Slot()
     def _start_export(self) -> None:
+        if not self._legacy_mode:
+            self._start_application_export()
+            return
         try:
-            request = create_run_request(
-                input_dir_text=self.input_edit.text(),
-                output_text=self.output_edit.text(),
-                ffmpeg_text=self.ffmpeg_edit.text(),
-                ffprobe_text=self.ffprobe_edit.text(),
-                crf=self.crf_spin.value(),
-                preset_text=self.preset_combo.currentText(),
-            )
+            request = self._form_request()
         except RequestValidationError as exc:
             QMessageBox.warning(self, "Проверьте параметры", str(exc))
             self.status_label.setText("Нужна корректировка параметров")
@@ -411,6 +676,36 @@ class ChronicleWindow(QMainWindow):
             self._adapter.start(request)
         except RuntimeError as exc:
             self._on_completed(False, str(exc))
+
+    def _start_application_export(self) -> None:
+        if self._adapter.is_running or self._plan is None:
+            return
+        overwrite = False
+        output = self._plan.request.output
+        if output.exists():
+            answer = QMessageBox.question(
+                self,
+                "Заменить существующий файл?",
+                f"Файл уже существует:\n{output}\n\nЗаменить его после успешной обработки?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                self.status_label.setText(
+                    "Экспорт отменён — существующий файл сохранён"
+                )
+                return
+            overwrite = True
+
+        self.log_view.clear()
+        self.result_label.clear()
+        self._set_running(True)
+        self._append_output("Запуск previewed export plan…\n")
+        try:
+            assert isinstance(self._adapter, ApplicationServiceAdapter)
+            self._adapter.start_export(self._plan, overwrite=overwrite)
+        except RuntimeError as exc:
+            self._on_application_completed("export", False, str(exc))
 
     @Slot()
     def _on_started(self) -> None:
@@ -444,9 +739,12 @@ class ChronicleWindow(QMainWindow):
     def _set_running(self, running: bool) -> None:
         for widget in self._editable_widgets:
             widget.setEnabled(not running)
-        self.run_button.setEnabled(not running)
+        self.analyze_button.setEnabled(not running)
+        if self._legacy_mode:
+            self.run_button.setEnabled(not running)
+        else:
+            self.run_button.setEnabled(not running and self._plan is not None)
         if running:
-            self.status_label.setText("Запуск медиаконвейера…")
             self.progress.setRange(0, 0)
         else:
             self.progress.setRange(0, 1)
@@ -473,6 +771,8 @@ QLabel#sectionTitle { color: #233b3f; font-size: 14px; font-weight: 700; }
 QLabel#status { color: #40575b; font-weight: 600; }
 QLabel#result { color: #0d716d; }
 QLabel#hint { color: #6f5a2e; font-size: 12px; }
+QLabel#previewState { color: #0d716d; font-weight: 600; }
+QLabel#summary { color: #52666a; font-size: 12px; }
 QFrame#card, QGroupBox {
     background: #ffffff;
     color: #233b3f;
@@ -481,7 +781,7 @@ QFrame#card, QGroupBox {
 }
 QGroupBox { margin-top: 12px; padding: 14px 12px 10px; font-weight: 600; }
 QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 5px; }
-QLineEdit, QComboBox, QSpinBox, QPlainTextEdit {
+QLineEdit, QComboBox, QSpinBox, QPlainTextEdit, QTreeWidget {
     background: #ffffff;
     color: #182528;
     border: 1px solid #cbd9da;
@@ -489,7 +789,7 @@ QLineEdit, QComboBox, QSpinBox, QPlainTextEdit {
     padding: 7px 9px;
     selection-background-color: #2f918d;
 }
-QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QPlainTextEdit:focus {
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QPlainTextEdit:focus, QTreeWidget:focus {
     border: 1px solid #278b87;
 }
 QPushButton {
@@ -504,7 +804,10 @@ QPushButton:hover { background: #dce9e9; }
 QPushButton:disabled { color: #8d9b9d; background: #edf1f1; }
 QPushButton#primary { background: #176f6b; border-color: #176f6b; color: white; padding: 9px 20px; }
 QPushButton#primary:hover { background: #0f5f5b; }
+QPushButton#primary:disabled { color: #8d9b9d; background: #edf1f1; border-color: #d2dddd; }
 QComboBox QAbstractItemView { background: #ffffff; color: #182528; selection-background-color: #2f918d; }
+QTreeWidget { alternate-background-color: #f5f9f9; }
+QHeaderView::section { background: #e7efef; color: #233b3f; padding: 6px; border: 0; border-right: 1px solid #d3dfdf; }
 QProgressBar { border: 0; background: #dfe9e9; border-radius: 3px; height: 6px; }
 QProgressBar::chunk { background: #2b918c; border-radius: 3px; }
 QPlainTextEdit { font-family: Consolas, "Cascadia Mono", monospace; font-size: 12px; }
@@ -517,7 +820,9 @@ def main() -> int:
     app.setOrganizationName("Video Chronicle")
     app.setStyle("Fusion")
     app.setStyleSheet(STYLE_SHEET)
-    window = ChronicleWindow()
+    mode = os.environ.get("VIDEO_CHRONICLE_GUI_ADAPTER", "application").casefold()
+    legacy_adapter = CliProcessAdapter() if mode == "legacy-cli" else None
+    window = ChronicleWindow(adapter=legacy_adapter)
     window.show()
     return app.exec()
 

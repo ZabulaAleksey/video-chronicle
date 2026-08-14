@@ -1,0 +1,272 @@
+"""Qt worker boundary for the canonical application services.
+
+This module contains no widgets.  It translates the validated GUI form into the
+existing application request and owns the lifetime of one worker thread at a
+time.  The media pipeline itself remains in :mod:`video_chronicle.application`.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import Callable
+from dataclasses import replace
+from pathlib import Path
+from typing import Any
+
+from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot
+
+from gui_contract import GuiRunRequest
+
+from .domain import ExportPlan, ExportRequest
+from .ports import PipelinePorts
+
+
+def build_application_request(request: GuiRunRequest) -> ExportRequest:
+    """Resolve a GUI form into the canonical request without doing media work.
+
+    Existing output is intentionally allowed during planning.  The GUI asks for
+    overwrite consent immediately before execution and the publication adapter
+    still performs the final collision check.
+    """
+
+    from . import pipeline
+
+    input_dir = request.input_dir.expanduser().resolve()
+    output = request.output.expanduser().resolve()
+    error_log = output.parent / "errors.log"
+    pipeline.validate_error_log_path(input_dir, output, error_log)
+    ffmpeg = pipeline.resolve_executable(request.ffmpeg, "FFmpeg")
+    ffprobe = pipeline.resolve_executable(request.ffprobe, "FFprobe")
+    font_file = pipeline.find_default_font()
+    if font_file is not None and not font_file.is_file():
+        raise RuntimeError(f"font file does not exist: {font_file}")
+    return ExportRequest(
+        input_dir=input_dir,
+        output=output,
+        error_log=error_log,
+        ffmpeg=ffmpeg,
+        ffprobe=ffprobe,
+        font_file=font_file,
+        crf=request.crf,
+        preset=request.preset,
+        overwrite=False,
+        keep_work=False,
+    )
+
+
+class _SignalLogHandler(logging.Handler):
+    """Forward formatted application logs through a thread-safe Qt signal."""
+
+    def __init__(self, emit_text: Callable[[str], None]) -> None:
+        super().__init__(logging.INFO)
+        self._emit_text = emit_text
+        self.setFormatter(logging.Formatter("%(message)s"))
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            self._emit_text(self.format(record) + "\n")
+        except Exception:
+            self.handleError(record)
+
+
+class _TaskWorker(QObject):
+    """Run one Python callable after being moved to a dedicated ``QThread``."""
+
+    outcome = Signal(object, object)
+    finished = Signal()
+
+    def __init__(self, task: Callable[[], object]) -> None:
+        super().__init__()
+        self._task = task
+
+    @Slot()
+    def run(self) -> None:
+        try:
+            result = self._task()
+        except Exception as exc:  # application errors become user-visible state
+            self.outcome.emit(None, exc)
+        else:
+            self.outcome.emit(result, None)
+        finally:
+            self.finished.emit()
+
+
+PlanService = Callable[[ExportRequest, PipelinePorts, logging.Logger | None], ExportPlan]
+ExecuteService = Callable[[ExportPlan, logging.Logger, PipelinePorts], int]
+
+
+class ApplicationServiceAdapter(QObject):
+    """Asynchronous GUI boundary around ``plan_export`` and ``execute_plan``."""
+
+    started = Signal(str)
+    output_received = Signal(str)
+    plan_ready = Signal(object)
+    completed = Signal(str, bool, str)
+
+    def __init__(
+        self,
+        parent: QObject | None = None,
+        *,
+        plan_service: PlanService | None = None,
+        execute_service: ExecuteService | None = None,
+        ports_factory: Callable[[], PipelinePorts] | None = None,
+        request_factory: Callable[[GuiRunRequest], ExportRequest] = build_application_request,
+    ) -> None:
+        super().__init__(parent)
+        from . import application
+
+        self._plan_service = plan_service or application.plan_export
+        self._execute_service = execute_service or application.execute_plan
+        self._ports_factory = ports_factory or application.default_ports
+        self._request_factory = request_factory
+        self._thread: QThread | None = None
+        self._worker: _TaskWorker | None = None
+        self._operation: str | None = None
+        self._outcome: tuple[object | None, BaseException | None] = (None, None)
+        self._output_path: Path | None = None
+        self._output_before: tuple[int, int, int, int] | None = None
+
+    @property
+    def is_running(self) -> bool:
+        """Return true through worker teardown, not merely task completion."""
+
+        return self._thread is not None
+
+    def start_analysis(self, request: GuiRunRequest) -> None:
+        """Resolve tools and create an immutable export plan off the UI thread."""
+
+        def task() -> ExportPlan:
+            canonical = self._request_factory(request)
+            ports = self._ports_factory()
+            logger = self._memory_logger("analysis")
+            try:
+                return self._plan_service(canonical, ports, logger)
+            finally:
+                self._close_logger(logger)
+
+        self._start("analysis", task)
+
+    def start_export(self, plan: ExportPlan, *, overwrite: bool) -> None:
+        """Execute the exact previewed plan with an explicit overwrite decision."""
+
+        if self.is_running:
+            raise RuntimeError("Другая операция уже выполняется.")
+        executable_plan = replace(
+            plan,
+            request=replace(plan.request, overwrite=overwrite),
+        )
+        self._output_path = executable_plan.request.output
+        self._output_before = _file_identity(self._output_path)
+
+        def task() -> int:
+            from . import pipeline
+
+            pipeline.validate_error_log_path(
+                executable_plan.request.input_dir,
+                executable_plan.request.output,
+                executable_plan.request.error_log,
+            )
+            logger = pipeline.configure_logging(executable_plan.request.error_log)
+            handler = _SignalLogHandler(self.output_received.emit)
+            logger.addHandler(handler)
+            try:
+                return self._execute_service(
+                    executable_plan,
+                    logger,
+                    self._ports_factory(),
+                )
+            finally:
+                logger.removeHandler(handler)
+                handler.close()
+
+        self._start("export", task)
+
+    def _memory_logger(self, suffix: str) -> logging.Logger:
+        logger = logging.getLogger(f"video_chronicle.gui.{suffix}.{id(self)}")
+        logger.setLevel(logging.INFO)
+        logger.propagate = False
+        for existing in logger.handlers[:]:
+            logger.removeHandler(existing)
+            existing.close()
+        logger.addHandler(_SignalLogHandler(self.output_received.emit))
+        return logger
+
+    @staticmethod
+    def _close_logger(logger: logging.Logger) -> None:
+        for handler in logger.handlers[:]:
+            logger.removeHandler(handler)
+            handler.close()
+
+    def _start(self, operation: str, task: Callable[[], object]) -> None:
+        if self.is_running:
+            raise RuntimeError("Другая операция уже выполняется.")
+        self._operation = operation
+        self._outcome = (None, None)
+        thread = QThread(self)
+        worker = _TaskWorker(task)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.outcome.connect(
+            self._capture_outcome,
+            Qt.ConnectionType.DirectConnection,
+        )
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        thread.finished.connect(self._finish_task)
+        thread.finished.connect(thread.deleteLater)
+        self._thread = thread
+        self._worker = worker
+        self.started.emit(operation)
+        thread.start()
+
+    @Slot(object, object)
+    def _capture_outcome(
+        self, result: object | None, error: BaseException | None
+    ) -> None:
+        # Direct connection: only immutable references are handed back.  The UI
+        # is notified later from ``_finish_task`` on its owning thread.
+        self._outcome = (result, error)
+
+    @Slot()
+    def _finish_task(self) -> None:
+        operation = self._operation or "operation"
+        result, error = self._outcome
+        self._thread = None
+        self._worker = None
+        self._operation = None
+
+        if error is not None:
+            self.completed.emit(operation, False, str(error))
+            return
+        if operation == "analysis":
+            if not isinstance(result, ExportPlan):
+                self.completed.emit(operation, False, "Анализ не вернул export plan.")
+                return
+            self.plan_ready.emit(result)
+            self.completed.emit(operation, True, "План анализа готов.")
+            return
+
+        output_after = (
+            _file_identity(self._output_path)
+            if self._output_path is not None
+            else None
+        )
+        published = output_after is not None and output_after != self._output_before
+        if result == 0 and published:
+            self.completed.emit(operation, True, f"Готово: {self._output_path}")
+        elif result == 0:
+            self.completed.emit(
+                operation,
+                False,
+                "Экспорт завершился без ошибки, но новый итоговый файл не подтверждён.",
+            )
+        else:
+            self.completed.emit(operation, False, f"Экспорт завершился с кодом {result}.")
+
+
+def _file_identity(path: Path) -> tuple[int, int, int, int] | None:
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns)

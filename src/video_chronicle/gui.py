@@ -1,10 +1,10 @@
-"""GUI entry point delegating to the existing PySide6 application."""
+"""Lazy GUI entry point for the PySide6 application-service client."""
 
 from __future__ import annotations
 
 
 def main() -> int:
     """Run the canonical desktop application."""
-    from video_chronicle_gui import main as legacy_main
+    from video_chronicle_gui import main as gui_main
 
-    return legacy_main()
+    return gui_main()
