@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
 from typing import Callable
@@ -14,7 +15,7 @@ from .execution import (
     ProgressEvent,
     bind_execution_context,
 )
-from .ports import PipelinePorts
+from .ports import NormalizedClipCachePort, PipelinePorts
 from .overlay import require_resolved_overlay_font
 from .process_control import ProcessSafetyError
 
@@ -131,6 +132,7 @@ def execute_export(
     *,
     execution: ExecutionContext | None = None,
     progress: Callable[[ProgressEvent], None] | None = None,
+    cache: NormalizedClipCachePort | None = None,
 ) -> int:
     """Execute one validated export while preserving legacy partial-success rules."""
 
@@ -143,6 +145,7 @@ def execute_export(
         adapters,
         execution=execution,
         progress=progress,
+        cache=cache,
     )
 
 
@@ -153,6 +156,7 @@ def execute_plan(
     *,
     execution: ExecutionContext | None = None,
     progress: Callable[[ProgressEvent], None] | None = None,
+    cache: NormalizedClipCachePort | None = None,
 ) -> int:
     """Execute an already planned export through explicit external ports."""
 
@@ -166,7 +170,9 @@ def execute_plan(
     work_dir_path: Path | None = None
     context.start()
     try:
-        with bind_execution_context(context):
+        with bind_execution_context(context), (
+            cache.operation() if cache is not None else nullcontext()
+        ):
             context.emit(ProgressEvent("export", "preflight", 0, total_units))
             context.checkpoint()
             _preflight_plan(plan, ports)
@@ -187,19 +193,54 @@ def execute_plan(
                     item.path.name,
                 )
                 outcome = "completed"
+                cache_hit: bool | None = None
                 try:
                     ports.validate_source(request.input_dir, item.path)
                     _require_source_fingerprint(item)
                     require_resolved_overlay_font(request.overlay)
-                    ports.normalize_item(
-                        item,
-                        destination,
-                        request.ffmpeg,
-                        request.overlay,
-                        request.crf,
-                        request.preset,
-                        ports.command_runner,
-                    )
+                    if cache is not None:
+                        try:
+                            cache_hit = cache.restore(
+                                item, request, destination, ports.command_runner
+                            )
+                        except (ExportCancelled, ProcessSafetyError):
+                            raise
+                        except Exception as exc:
+                            cache_hit = False
+                            logger.warning(
+                                "Cache lookup failed; normalizing cleanly | %s | %s",
+                                item.path,
+                                exc,
+                            )
+                    if not cache_hit:
+                        # A failed lookup may have hashed a large untrusted
+                        # source. Revalidate the accepted identity immediately
+                        # before handing it to FFmpeg.
+                        if cache is not None:
+                            ports.validate_source(request.input_dir, item.path)
+                            _require_source_fingerprint(item)
+                        ports.normalize_item(
+                            item,
+                            destination,
+                            request.ffmpeg,
+                            request.overlay,
+                            request.crf,
+                            request.preset,
+                            ports.command_runner,
+                        )
+                        if cache is not None:
+                            try:
+                                cache.store(
+                                    item, request, destination, ports.command_runner
+                                )
+                            except (ExportCancelled, ProcessSafetyError):
+                                raise
+                            except Exception as exc:
+                                logger.warning(
+                                    "Cache store failed; export continues cleanly | %s | %s",
+                                    item.path,
+                                    exc,
+                                )
                     successful_clips.append(destination)
                 except ExportCancelled:
                     raise
@@ -229,6 +270,7 @@ def execute_plan(
                         item_index=index,
                         item_path=item.path,
                         outcome=outcome,
+                        cache_hit=cache_hit,
                     )
                 )
 
@@ -273,6 +315,13 @@ def execute_plan(
             logger.info("Done: %s", request.output)
             logger.info("Files skipped with errors: %d", failed_count)
             logger.info("Error log: %s", request.error_log)
+            if cache is not None:
+                try:
+                    removed = cache.prune()
+                    if removed:
+                        logger.info("Cache pruned: %d entries.", removed)
+                except Exception as exc:
+                    logger.warning("Cache prune failed after successful export | %s", exc)
     except ExportCancelled:
         try:
             _cleanup_workspace(work_dir_path, request.keep_work, ports, logger)

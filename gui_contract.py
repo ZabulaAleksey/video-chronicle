@@ -26,6 +26,8 @@ class GuiRunRequest:
     overwrite: bool = False
     overlay: OverlayConfig = DEFAULT_OVERLAY_CONFIG
     mode: ExportMode = ExportMode.CHRONICLE
+    cache_enabled: bool = False
+    cache_dir: Path | None = None
 
 
 def create_run_request(
@@ -39,6 +41,8 @@ def create_run_request(
     overwrite: bool = False,
     overlay: OverlayConfig = DEFAULT_OVERLAY_CONFIG,
     mode: ExportMode = ExportMode.CHRONICLE,
+    cache_enabled: bool = False,
+    cache_dir_text: str = "",
 ) -> GuiRunRequest:
     """Validate editable form values without invoking Qt or the media pipeline."""
 
@@ -73,6 +77,12 @@ def create_run_request(
     if mode is ExportMode.JOIN and overlay.enabled:
         raise RequestValidationError("В режиме Join подпись даты должна быть выключена.")
 
+    cache_dir = (
+        Path(cache_dir_text.strip()).expanduser()
+        if cache_enabled and cache_dir_text.strip()
+        else None
+    )
+
     return GuiRunRequest(
         input_dir=input_dir.resolve(),
         output=output.resolve(),
@@ -83,6 +93,8 @@ def create_run_request(
         overwrite=overwrite,
         overlay=overlay,
         mode=mode,
+        cache_enabled=cache_enabled,
+        cache_dir=cache_dir,
     )
 
 
@@ -108,4 +120,8 @@ def build_cli_arguments(request: GuiRunRequest, cli_script: Path) -> list[str]:
         arguments.append("--overwrite")
     if request.mode is ExportMode.JOIN:
         arguments.extend(["--mode", "join"])
+    if request.cache_enabled:
+        arguments.append("--cache")
+        if request.cache_dir is not None:
+            arguments.extend(["--cache-dir", str(request.cache_dir)])
     return arguments

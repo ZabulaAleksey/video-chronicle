@@ -2,14 +2,14 @@
 
 ## Текущий этап
 
-Этапы 00–09 завершены. Текущий этап — 10, совместимые resume и cache;
-identity/key schema и storage policy ещё проходят decision gate. Default PySide6 GUI
+Этапы 00–10 завершены; целевой MVP принят. Текущий этап — 11,
+specification gate неразрушающего редактирования timeline. Default PySide6 GUI
 строит plan и representative overlay preview через application services и
 запускает тот же immutable plan вне UI thread. Whole-CLI `QProcess` сохранён
-только как явный диагностический fallback. Runtime-очередь, durable storage и
-кэш отсутствуют.
+только как явный диагностический fallback. Runtime-очередь и durable project
+storage отсутствуют; normalized-clip cache доступен только как opt-in.
 
-Текущий ограниченный срез этапа 10 хранится в `docs/AI_PLAN.md`. Этапы 01–17
+Текущий specification-срез этапа 11 хранится в `docs/AI_PLAN.md`. Этапы 01–17
 разделены на самостоятельные project prompts в `prompts/stages/`; они
 загружаются по одному и не заменяют SPEC или текущий план.
 
@@ -36,6 +36,9 @@ identity/key schema и storage policy ещё проходят decision gate. Def
   Windows Job Object или POSIX process group;
 - canonical plan фиксирует source fingerprint до/после inspection и проверяет
   его перед каждым export tool boundary;
+- `src/video_chronicle/cache.py` реализует CACHE-001: canonical clip identity,
+  strict path-free manifest, validated restore, private platform storage и
+  interprocess mutation lock;
 - `docs/ARCHITECTURE.md` и `docs/DESIGN.md` описывают только реализованное;
 - целевое развитие Timeline Builder описано отдельно в
   `specs/features/timeline-builder.spec.md` и не считается готовой функцией;
@@ -77,12 +80,14 @@ identity/key schema и storage policy ещё проходят decision gate. Def
 - синтетический mixed photo/video smoke на FFmpeg/FFprobe 9.0.1;
 - устанавливаемый пакет версии 0.2.0 с console/GUI entry points и группой
   зависимостей `dev`;
-- 197 успешно пройденных unit/contract/GUI/integration тестов, включая реальный
-  FFmpeg smoke;
-- два symlink/reparse-specific теста корректно пропущены в текущем
-  Windows-окружении без права на создание symbolic link;
 - атомарная no-replace финализация закрывает коллизию, возникшую уже во время
-  длительного рендера.
+  длительного рендера;
+- cache выключен по умолчанию; opt-in reuse, custom private root, hit/miss,
+  bounded prune и protected purge доступны в CLI и GUI;
+- clean и resumed mixed photo/video exports дают byte-identical output, а
+  interruption/corruption/identity changes используют безопасный clean fallback;
+- 245 успешно пройденных unit/contract/GUI/integration/security тестов, включая
+  реальный FFmpeg smoke; два symlink-specific теста пропущены из-за WinError 1314.
 
 ## Локальные зависимости
 
@@ -97,13 +102,14 @@ identity/key schema и storage policy ещё проходят decision gate. Def
 - после нового клонирования FFmpeg необходимо установить отдельно;
 - версии FFmpeg/FFprobe старше 9.0.1 могут работать, но не входят в
   подтверждённый baseline;
-- resume/cache и durable storage ещё отсутствуют; повторный экспорт начинает
-  чистую нормализацию всех элементов;
+- cache не является durable project storage и не восстанавливает GUI/timeline
+  edits; same-user process остаётся вне гарантии его аутентичности;
 - SQLite, ExifTool, Pydantic и OTIO остаются неутверждёнными кандидатами;
   PySide6 принят только для GUI.
 
 ## Следующая задача
 
-Начать decision gate этапа 10: утвердить cache identity/key schema, manifest
-versioning/integrity, retention/purge и безопасный clean fallback. Текущий срез
-находится в `docs/AI_PLAN.md` и `prompts/stages/10-resume-cache.md`.
+Создать и утвердить отдельную EDIT-001 feature SPEC для reorder, trim, grouping,
+presets и persistence/migration contract. До прохождения gate production-код
+этапа 11 не писать. Текущий срез находится в `docs/AI_PLAN.md` и
+`prompts/stages/11-nondestructive-editing.md`.

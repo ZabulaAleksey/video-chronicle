@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import logging
+import errno
 import threading
+from contextlib import nullcontext
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -9,12 +12,43 @@ from types import SimpleNamespace
 import pytest
 
 from video_chronicle.application import SourceChangedError, execute_plan, plan_export
-from video_chronicle.domain import ExportPlan, ExportRequest, MediaItem
+from video_chronicle.domain import ExportPlan, ExportRequest, MediaItem, SourceFingerprint
 from video_chronicle.execution import ExecutionContext, ExportCancelled, ProgressEvent
 from video_chronicle.overlay import OverlayConfig
 from video_chronicle.ports import PipelinePorts
 from video_chronicle.project import JobState
 from video_chronicle.process_control import ProcessTreeTerminationError
+
+
+class _CacheStub:
+    def __init__(self, restore_result=False, restore_error=None) -> None:
+        self.restore_result = restore_result
+        self.restore_error = restore_error
+        self.hits = 0
+        self.misses = 0
+        self.stores = 0
+        self.prunes = 0
+
+    def operation(self):
+        return nullcontext()
+
+    def restore(self, item, request, destination, runner):
+        if self.restore_error is not None:
+            if callable(self.restore_error):
+                self.restore_error()
+            else:
+                raise self.restore_error
+        if self.restore_result:
+            destination.write_bytes(b"cached")
+        return self.restore_result
+
+    def store(self, item, request, artifact, runner):
+        self.stores += 1
+        return True
+
+    def prune(self):
+        self.prunes += 1
+        return 0
 
 
 def _plan(tmp_path: Path, *, count: int = 1, keep_work: bool = False) -> ExportPlan:
@@ -107,6 +141,198 @@ def test_success_progress_uses_items_plus_concat_and_publication(tmp_path: Path)
     assert events[-1].phase == "publication"
     assert plan.request.output.read_bytes() == b"movie"
     assert not workspace.exists()
+
+
+def test_cache_hit_skips_normalization_and_reports_hit(tmp_path: Path) -> None:
+    plan = _plan(tmp_path)
+    normalized = 0
+
+    def normalize(*args):
+        nonlocal normalized
+        normalized += 1
+
+    ports, _ = _ports(tmp_path, normalize=normalize)
+    cache = _CacheStub(restore_result=True)
+    events: list[ProgressEvent] = []
+    assert execute_plan(plan, logging.getLogger(__name__), ports, progress=events.append, cache=cache) == 0
+    assert normalized == 0
+    assert next(event for event in events if event.phase == "normalize").cache_hit is True
+    assert cache.stores == 0
+    assert cache.prunes == 1
+
+
+def test_cache_miss_normalizes_stores_and_reports_miss(tmp_path: Path) -> None:
+    plan = _plan(tmp_path)
+    ports, _ = _ports(tmp_path)
+    cache = _CacheStub()
+    events: list[ProgressEvent] = []
+    assert execute_plan(plan, logging.getLogger(__name__), ports, progress=events.append, cache=cache) == 0
+    assert next(event for event in events if event.phase == "normalize").cache_hit is False
+    assert cache.stores == 1
+    assert cache.prunes == 1
+
+
+def test_cache_rejection_and_store_permission_error_warn_but_export_succeeds(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    from video_chronicle.cache import CacheEntryRejected
+
+    plan = _plan(tmp_path)
+    ports, _ = _ports(tmp_path)
+
+    class FailingCache(_CacheStub):
+        def restore(self, *args):
+            raise CacheEntryRejected("tampered manifest")
+
+        def store(self, *args):
+            raise PermissionError("disk denied")
+
+    with caplog.at_level(logging.WARNING):
+        assert execute_plan(
+            plan, logging.getLogger(__name__), ports, cache=FailingCache()
+        ) == 0
+    assert plan.request.output.is_file()
+    assert "tampered manifest" in caplog.text
+    assert "disk denied" in caplog.text
+
+
+def test_cache_enospc_store_failure_is_clean_success(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    plan = _plan(tmp_path)
+    ports, _ = _ports(tmp_path)
+
+    class FullCache(_CacheStub):
+        def store(self, *args):
+            raise OSError(errno.ENOSPC, "cache disk full")
+
+    with caplog.at_level(logging.WARNING):
+        assert execute_plan(
+            plan, logging.getLogger(__name__), ports, cache=FullCache()
+        ) == 0
+    assert plan.request.output.is_file()
+    assert "cache disk full" in caplog.text
+
+
+def test_cache_lookup_does_not_swallow_process_safety(tmp_path: Path) -> None:
+    plan = _plan(tmp_path)
+    ports, workspace = _ports(tmp_path)
+    cache = _CacheStub(restore_error=ProcessTreeTerminationError("unsafe"))
+    with pytest.raises(RuntimeError, match="safe ownership"):
+        execute_plan(plan, logging.getLogger(__name__), ports, cache=cache)
+    assert not workspace.exists()
+
+
+def test_cache_lookup_propagates_confirmed_cancellation(tmp_path: Path) -> None:
+    plan = _plan(tmp_path)
+    ports, workspace = _ports(tmp_path)
+    context = ExecutionContext()
+
+    def cancel() -> None:
+        assert context.request_cancel()
+        raise ExportCancelled("cancelled")
+
+    with pytest.raises(ExportCancelled):
+        execute_plan(
+            plan,
+            logging.getLogger(__name__),
+            ports,
+            cache=_CacheStub(restore_error=cancel),
+            execution=context,
+        )
+    assert context.state is JobState.CANCELLED
+    assert not workspace.exists()
+
+
+def test_source_changed_during_cache_lookup_is_rejected_before_normalize(tmp_path: Path) -> None:
+    plan = _plan(tmp_path)
+    item = replace(plan.items[0], source_fingerprint=SourceFingerprint.capture(plan.items[0].path))
+    plan = replace(plan, items=(item,))
+    normalized = False
+
+    def mutate_source() -> None:
+        item.path.write_bytes(b"changed-after-cache-lookup")
+        raise OSError("lookup failed")
+
+    def normalize(*args):
+        nonlocal normalized
+        normalized = True
+
+    ports, workspace = _ports(tmp_path, normalize=normalize)
+    with pytest.raises(SourceChangedError):
+        execute_plan(
+            plan,
+            logging.getLogger(__name__),
+            ports,
+            cache=_CacheStub(restore_error=mutate_source),
+        )
+    assert normalized is False
+    assert not workspace.exists()
+
+
+def test_interrupted_export_resumes_completed_clip_from_filesystem_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import video_chronicle.cache as cache_module
+    from video_chronicle.cache import NormalizedClipCache
+
+    monkeypatch.setattr(cache_module, "_validate_normalized_stream", lambda *args: None)
+    plan = _plan(tmp_path, count=2)
+    ffmpeg = tmp_path / "ffmpeg.exe"
+    ffprobe = tmp_path / "ffprobe.exe"
+    ffmpeg.write_bytes(b"ffmpeg")
+    ffprobe.write_bytes(b"ffprobe")
+    plan = replace(
+        plan,
+        request=replace(plan.request, ffmpeg=str(ffmpeg), ffprobe=str(ffprobe)),
+    )
+    before = {item.path: item.path.read_bytes() for item in plan.items}
+    context = ExecutionContext()
+    calls = 0
+
+    def interrupted_normalize(item, destination, *args):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            assert context.request_cancel()
+            raise ExportCancelled("cancelled during second clip")
+        destination.write_bytes(b"clip-one")
+
+    first_ports, first_workspace = _ports(tmp_path, normalize=interrupted_normalize)
+    cache = NormalizedClipCache(tmp_path / "cache")
+    with pytest.raises(ExportCancelled):
+        execute_plan(
+            plan,
+            logging.getLogger(__name__),
+            first_ports,
+            execution=context,
+            cache=cache,
+        )
+    assert not plan.request.output.exists()
+    assert not first_workspace.exists()
+    assert len(list(cache.root.glob("clip-v1-*"))) == 1
+
+    normalized: list[Path] = []
+
+    def resumed_normalize(item, destination, *args):
+        normalized.append(item.path)
+        destination.write_bytes(b"clip-two")
+
+    second_ports, second_workspace = _ports(tmp_path, normalize=resumed_normalize)
+    events: list[ProgressEvent] = []
+    assert execute_plan(
+        plan,
+        logging.getLogger(__name__),
+        second_ports,
+        progress=events.append,
+        cache=cache,
+    ) == 0
+    normalize_events = [event for event in events if event.phase == "normalize"]
+    assert [event.cache_hit for event in normalize_events] == [True, False]
+    assert normalized == [plan.items[1].path]
+    assert plan.request.output.is_file()
+    assert not second_workspace.exists()
+    assert {item.path: item.path.read_bytes() for item in plan.items} == before
 
 
 def test_skipped_item_progress_is_monotonic_and_failure_is_not_100_percent(

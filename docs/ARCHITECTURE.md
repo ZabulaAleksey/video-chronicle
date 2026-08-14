@@ -31,6 +31,9 @@
   `ProgressEvent`, cancellation token и atomic publication commit point.
 - `src/video_chronicle/process_control.py` — platform-owned subprocess tree:
   Windows Job Object либо POSIX process group с bounded terminate/reap.
+- `src/video_chronicle/cache.py` — opt-in immutable normalized-clip cache:
+  canonical `clip-v1` identity, строгий path-free manifest, bounded validation,
+  private platform root и межпроцессная сериализация мутаций.
 - `src/video_chronicle/pipeline.py` — production adapters FFprobe/FFmpeg и
   атомарной публикации.
 - `src/video_chronicle/cli.py` — парсинг/валидация CLI и mapping в application
@@ -72,14 +75,20 @@
    1600×900, 60 FPS, H.264 и AAC и
    применяет единый typed date overlay ко всем элементам либо полностью
    исключает `drawtext`, если подпись выключена.
-10. Подготовленные клипы объединяются без повторного кодирования.
-11. Каждый subprocess принадлежит Windows Job Object или POSIX process group;
+10. При включённом cache каждый accepted item получает content/tool/settings
+   identity. Подтверждённый hit копируется в active workspace; miss проходит
+   обычную normalization и атомарно сохраняется. Повреждение даёт warning и
+   clean fallback, но никогда не подменяет plan или output path.
+11. Подготовленные клипы объединяются без повторного кодирования.
+12. Каждый subprocess принадлежит Windows Job Object или POSIX process group;
    cancel, timeout и output-limit завершают и подтверждают остановку всего дерева.
-12. Без разрешения overwrite временный результат публикуется атомарным
+13. Без разрешения overwrite временный результат публикуется атомарным
    no-replace rename на Windows или create-if-absent hard link на POSIX;
    подтверждённая замена использует `os.replace`. Рабочий каталог удаляется,
    если не указан `--keep-work`.
-13. GUI получает log-сообщения через Qt signal и принимает успех только при
+14. После успешной публикации cache pruning применяет лимиты 10 GiB/30 дней;
+   explicit purge работает только внутри подтверждённого private cache root.
+15. GUI получает log-сообщения через Qt signal и принимает успех только при
    результате 0 и подтверждённой новой identity итогового файла.
 
 ## Границы
@@ -87,7 +96,9 @@
 Проект использует `src` layout и один production path через package application
 service. Root-level CLI только экспортирует канонические функции для обратной
 совместимости. MODEL-001 предоставляет состояния будущих заданий, но проект не
-содержит сервера, базы данных, durable storage или runtime-очереди. GUI не
+содержит сервера, базы данных, durable project storage или runtime-очереди.
+Единственное persistent storage — отключаемый файловый cache нормализованных
+клипов; он не является источником истины проекта. GUI не
 дублирует сортировку, анализ дат, FFmpeg-команды или финализацию.
 Join и Chronicle являются policy-данными одного `ExportRequest`: inspection,
 normalization, concat и publication adapters у них общие.

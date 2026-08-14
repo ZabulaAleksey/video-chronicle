@@ -7,6 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QMessageBox
@@ -22,6 +24,7 @@ from video_chronicle.domain import (
     MediaItem,
 )
 from video_chronicle.gui_services import ApplicationServiceAdapter
+from video_chronicle.execution import ProgressEvent
 from video_chronicle.overlay import OverlayConfig
 from video_chronicle.ports import PipelinePorts
 from video_chronicle_gui import ChronicleWindow, CliProcessAdapter
@@ -195,6 +198,78 @@ def test_rejected_second_export_does_not_corrupt_active_completion(
     assert completed[0][0:2] == ("export", True)
     assert first_output.read_bytes() == b"published"
     assert second_output.exists() is False
+
+
+def test_application_adapter_passes_opt_in_cache_and_purges_async(
+    qapp, tmp_path: Path
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    output = tmp_path / "output.mp4"
+    cache_dir = tmp_path / "cache root"
+    received: list[object] = []
+
+    def execute_service(plan, logger, ports, *, cache=None):
+        received.append(cache)
+        plan.request.output.write_bytes(b"published")
+        return 0
+
+    adapter = ApplicationServiceAdapter(
+        execute_service=execute_service,
+        ports_factory=lambda: object(),  # type: ignore[arg-type]
+    )
+    completed: list[tuple[str, bool, str]] = []
+    adapter.completed.connect(lambda *args: completed.append(args))
+    adapter.start_export(
+        _preview_plan(_canonical_request(input_dir, output)),
+        overwrite=False,
+        cache_enabled=True,
+        cache_dir=cache_dir,
+    )
+    _wait_until(qapp, lambda: len(completed) == 1)
+    from video_chronicle.cache import NormalizedClipCache
+
+    assert isinstance(received[0], NormalizedClipCache)
+    assert received[0].root == cache_dir.resolve()
+
+    adapter.start_cache_purge(cache_dir)
+    _wait_until(qapp, lambda: len(completed) == 2)
+    assert completed[-1][0:2] == ("cache-purge", True)
+
+
+def test_cache_purge_is_rejected_while_export_is_active(qapp, tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    release = threading.Event()
+
+    def execute_service(plan, logger, ports):
+        release.wait(timeout=2)
+        plan.request.output.write_bytes(b"published")
+        return 0
+
+    adapter = ApplicationServiceAdapter(
+        execute_service=execute_service,
+        ports_factory=lambda: object(),  # type: ignore[arg-type]
+    )
+    plan = _preview_plan(_canonical_request(input_dir, tmp_path / "output.mp4"))
+    adapter.start_export(plan, overwrite=False)
+    with pytest.raises(RuntimeError, match="уже выполняется"):
+        adapter.start_cache_purge(tmp_path / "cache")
+    release.set()
+    _wait_until(qapp, lambda: not adapter.is_running)
+
+
+def test_window_renders_cache_hit_and_miss_progress(qapp, tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    adapter = ApplicationServiceAdapter(
+        ports_factory=lambda: object(),  # type: ignore[arg-type]
+    )
+    window = ChronicleWindow(application_adapter=adapter)
+    window._on_progress_event(ProgressEvent("export", "normalize", 1, 3, cache_hit=True))
+    assert "hit" in window.status_label.text()
+    window._on_progress_event(ProgressEvent("export", "normalize", 2, 3, cache_hit=False))
+    assert "miss" in window.status_label.text()
 
 
 def test_window_renders_plan_and_invalidates_it_on_any_form_change(

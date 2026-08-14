@@ -181,3 +181,38 @@ git diff --check
 3. Дать команду `Начинай этап NN`.
 4. Убедиться, что `docs/AI_PLAN.md` содержит только выбранный срез.
 5. После acceptance проверить обновление `AI_STATUS` и следующего `AI_PLAN`.
+
+## 2026-08-14 — Безопасный resume через normalized-clip cache
+
+### Что изменилось
+
+Этап 10 добавил отключаемый cache не как сохранённый workspace, а как набор
+immutable нормализованных клипов. Ключ связывает content, metadata provenance,
+настройки overlay/font, media profile и версии инструментов. Restore всегда
+копирует подтверждённый артефакт в новый active workspace.
+
+### Почему понадобился OS lock
+
+Обычный `threading.RLock` защищает только один Python-объект. Два процесса могли
+одновременно пройти disk-cap check или принять старый, но ещё записываемый tmp
+за abandoned. Per-root `msvcrt`/`flock` lock сделал последовательность
+`reap → cap check → copy → no-replace commit` атомарной между процессами.
+
+### Команды и проверки
+
+```powershell
+$env:QT_QPA_PLATFORM = "offscreen"
+$env:VIDEO_CHRONICLE_FFMPEG = (Resolve-Path "ffmpeg1/bin/ffmpeg.exe").Path
+$env:VIDEO_CHRONICLE_FFPROBE = (Resolve-Path "ffmpeg1/bin/ffprobe.exe").Path
+.venv/Scripts/python -m pytest -q
+.venv/Scripts/python -m compileall -q src join_media.py gui_contract.py video_chronicle_gui.py
+git diff --check
+```
+
+### Как повторить самостоятельно
+
+1. Запустить экспорт без `--cache` и убедиться, что persistent root не создан.
+2. Повторить с `--cache` и увидеть первый `miss`, затем `hit`.
+3. Изменить source bytes, overlay/font или tool identity и проверить новый miss.
+4. Повредить manifest/clip и убедиться, что экспорт использует clean fallback.
+5. Выполнить `--purge-cache` только для выбранного private root.

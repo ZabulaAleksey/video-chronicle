@@ -194,3 +194,17 @@
 - Последствия: cancel принимается только до atomic publication commit; grace
   2 секунды и force/reap budget 3 секунды; source identity и workspace cleanup
   подтверждаются; unsafe/legacy backend не показывает кнопку отмены.
+
+## 2026-08-14 — CACHE-001: opt-in cache нормализованных клипов
+
+- Решение: сохранять только полностью нормализованный clip в private filesystem
+  cache по canonical `clip-v1` identity; legacy/default export оставлять без
+  persistent cache. Все мутации root сериализовать platform OS lock.
+- Причина: безопасно возобновлять длинный export без признания partial final или
+  workspace источником истины и без ослабления source/output invariants.
+- Альтернативы: кэшировать весь workspace или final MP4; SQLite; path-based key;
+  автоматический cache без opt-in; mtime-only staging cleanup.
+- Последствия: manifest path-free и strict, hit повторно валидируется FFprobe,
+  ошибки дают clean fallback, content/tool/edit identity инвалидирует запись,
+  storage ограничен 10 GiB/30 днями и имеет explicit protected purge. Same-user
+  attacker остаётся вне гарантии аутентичности локального desktop cache.

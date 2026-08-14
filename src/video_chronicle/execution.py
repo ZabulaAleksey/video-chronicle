@@ -27,6 +27,7 @@ class ProgressEvent:
     item_index: int | None = None
     item_path: Path | None = None
     outcome: ProgressOutcome | None = None
+    cache_hit: bool | None = None
 
     def __post_init__(self) -> None:
         if self.operation not in {"analysis", "export"}:
@@ -46,6 +47,8 @@ class ProgressEvent:
             raise TypeError("item_path must be Path or None")
         if self.outcome not in {None, "completed", "skipped"}:
             raise ValueError(f"unsupported progress outcome: {self.outcome}")
+        if self.cache_hit is not None and type(self.cache_hit) is not bool:
+            raise ValueError("cache_hit must be boolean or None")
 
 
 class ExportCancelled(RuntimeError):

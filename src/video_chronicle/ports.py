@@ -5,10 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import subprocess
-from typing import Any, Protocol
+from typing import Any, ContextManager, Protocol, TYPE_CHECKING
 
 from .domain import MediaItem
 from .overlay import OverlayConfig
+
+if TYPE_CHECKING:
+    from .domain import ExportRequest
 
 
 class CommandRunner(Protocol):
@@ -84,6 +87,33 @@ class CleanupWorkspace(Protocol):
 
 class ValidateSource(Protocol):
     def __call__(self, input_dir: Path, source: Path) -> None: ...
+
+
+class NormalizedClipCachePort(Protocol):
+    """Optional optimization boundary used by the canonical export service."""
+
+    hits: int
+    misses: int
+
+    def operation(self) -> ContextManager[None]: ...
+
+    def restore(
+        self,
+        item: MediaItem,
+        request: "ExportRequest",
+        destination: Path,
+        runner: CommandRunner,
+    ) -> bool: ...
+
+    def store(
+        self,
+        item: MediaItem,
+        request: "ExportRequest",
+        artifact: Path,
+        runner: CommandRunner,
+    ) -> bool: ...
+
+    def prune(self) -> int: ...
 
 
 @dataclass(frozen=True)

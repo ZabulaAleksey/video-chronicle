@@ -69,10 +69,30 @@ release gate для будущего пакетирования, но ещё н�
 
 ## Возобновление и кэш
 
-Если эта возможность реализована, запись связывается с идентичностью входов,
-параметрами экспорта и совместимой версией инструментов. Повреждённая,
-неполная или устаревшая запись отвергается. Значения из неё не используются как
-команды и не дают права перезаписывать результат.
+Cache является явной opt-in оптимизацией и хранит только полностью
+нормализованные клипы. Canonical `clip-v1` identity связывает полный content hash
+и fingerprint источника, date provenance/conflicts, media shape, mode/overlay,
+font identity/hash, CRF/preset, normalization profile и версии FFmpeg/FFprobe.
+Output path, порядок, overwrite и workspace не дают права на reuse.
+
+- Manifest ограничен по размеру, имеет строгую path-free schema v1 и не
+  интерпретируется как команда или путь публикации.
+- До reuse проверяются размер/hash артефакта и фактический FFprobe stream
+  contract. Повреждение, несовместимость, ENOSPC и I/O error дают warning и
+  clean fallback; cancel/process-safety не поглощаются.
+- Hash/copy выполняются чанками с cancellation checkpoints и удаляют partial
+  destination при ошибке.
+- UNC/device, symlink/reparse, input/output/home/filesystem roots отвергаются до
+  опасных операций. POSIX root требует owner/mode 0700. Windows root находится
+  на local fixed drive и получает проверенный protected current-user-only DACL.
+- Все мутации одного root сериализованы OS lock (`msvcrt`/`flock`): staging reap,
+  actual-byte cap check, copy/no-replace commit, prune и purge. Crash освобождает
+  lock; ожидание ограничено и остаётся отменяемым.
+- Фактические bytes published/staging/trash входят в лимит 10 GiB; записи старше
+  30 дней удаляются только после успешного экспорта. Purge требует точный marker
+  и не работает во время активной операции.
+- Cache не гарантирует аутентичность против процесса, уже исполняемого под тем же
+  пользователем ОС; такая граница остаётся вне desktop threat model.
 
 ## Проверки перед выпуском
 

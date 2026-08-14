@@ -197,7 +197,14 @@ class ApplicationServiceAdapter(QObject):
 
         self._start("analysis", task)
 
-    def start_export(self, plan: ExportPlan, *, overwrite: bool) -> None:
+    def start_export(
+        self,
+        plan: ExportPlan,
+        *,
+        overwrite: bool,
+        cache_enabled: bool = False,
+        cache_dir: Path | None = None,
+    ) -> None:
         """Execute the exact previewed plan with an explicit overwrite decision."""
 
         if self.is_running:
@@ -218,6 +225,7 @@ class ApplicationServiceAdapter(QObject):
 
         def task() -> int:
             from . import pipeline
+            from .cache import NormalizedClipCache
 
             pipeline.validate_error_log_path(
                 executable_plan.request.input_dir,
@@ -228,21 +236,38 @@ class ApplicationServiceAdapter(QObject):
             handler = _SignalLogHandler(self.output_received.emit)
             logger.addHandler(handler)
             try:
+                kwargs: dict[str, object] = {}
                 if execution is not None:
-                    return self._execute_service(
-                        executable_plan,
-                        logger,
-                        self._ports_factory(),
-                        execution=execution,
-                    )
+                    kwargs["execution"] = execution
+                if cache_enabled and _accepts_keyword(self._execute_service, "cache"):
+                    kwargs["cache"] = NormalizedClipCache(cache_dir)
                 return self._execute_service(
-                    executable_plan, logger, self._ports_factory()
+                    executable_plan, logger, self._ports_factory(), **kwargs
                 )
             finally:
                 logger.removeHandler(handler)
                 handler.close()
 
         self._start("export", task)
+
+    def start_cache_purge(
+        self,
+        cache_dir: Path | None = None,
+        *,
+        protected_input: Path | None = None,
+        protected_output: Path | None = None,
+    ) -> None:
+        """Purge only verified cache entries off the UI thread."""
+
+        def task() -> int:
+            from .cache import NormalizedClipCache
+
+            return NormalizedClipCache(cache_dir).purge(
+                protected_input=protected_input,
+                protected_output=protected_output,
+            )
+
+        self._start("cache-purge", task)
 
     def cancel_export(self) -> bool:
         """Request cancellation of the active application-service export."""
@@ -375,6 +400,11 @@ class ApplicationServiceAdapter(QObject):
             result.unlink(missing_ok=True)
             self._preview_path = None
             self.completed.emit(operation, True, "Предпросмотр обновлён.")
+            return
+        if operation == "cache-purge":
+            self.completed.emit(
+                operation, True, f"Кэш очищен: {int(result or 0)} entries."
+            )
             return
 
         output_after = (

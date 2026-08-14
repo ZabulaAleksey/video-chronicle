@@ -299,7 +299,7 @@ class ChronicleWindow(QMainWindow):
         advanced = QGroupBox("Параметры кодирования")
         # The preview and log panes both request vertical stretch.  Preserve the
         # form's minimum layout height so those panes cannot collapse its rows.
-        advanced.setMinimumHeight(190)
+        advanced.setMinimumHeight(245)
         advanced_layout = QGridLayout(advanced)
         advanced_layout.setHorizontalSpacing(12)
         advanced_layout.setVerticalSpacing(10)
@@ -353,6 +353,21 @@ class ChronicleWindow(QMainWindow):
         tool_warning.setObjectName("hint")
         tool_warning.setWordWrap(True)
         advanced_layout.addWidget(tool_warning, 4, 0, 1, 3)
+
+        self.cache_enabled = QCheckBox("Использовать кэш")
+        self.cache_enabled.setChecked(False)
+        self.cache_enabled.setToolTip("Повторно использовать только проверенные нормализованные клипы")
+        self.cache_dir_edit = QLineEdit("")
+        self.cache_dir_edit.setPlaceholderText("Системная папка кэша")
+        self.cache_dir_button = QPushButton("Папка…")
+        self.cache_dir_button.clicked.connect(self._browse_cache_dir)
+        self.cache_purge_button = QPushButton("Очистить кэш…")
+        self.cache_purge_button.clicked.connect(self._purge_cache)
+        self.cache_purge_button.setVisible(not self._legacy_mode)
+        advanced_layout.addWidget(self.cache_enabled, 5, 0)
+        advanced_layout.addWidget(self.cache_dir_edit, 5, 1)
+        advanced_layout.addWidget(self.cache_dir_button, 5, 2)
+        advanced_layout.addWidget(self.cache_purge_button, 6, 2)
 
         self.overlay_group = QGroupBox("Подпись даты")
         overlay_layout = QGridLayout(self.overlay_group)
@@ -560,6 +575,10 @@ class ChronicleWindow(QMainWindow):
             self.ffprobe_button,
             self.crf_spin,
             self.preset_combo,
+            self.cache_enabled,
+            self.cache_dir_edit,
+            self.cache_dir_button,
+            self.cache_purge_button,
             self.mode_combo,
             self.overlay_group,
         ]
@@ -641,6 +660,42 @@ class ChronicleWindow(QMainWindow):
         if selected:
             target.setText(selected)
 
+    @Slot()
+    def _browse_cache_dir(self) -> None:
+        selected = QFileDialog.getExistingDirectory(
+            self, "Выберите приватную папку кэша", self.cache_dir_edit.text()
+        )
+        if selected:
+            self.cache_dir_edit.setText(selected)
+
+    @Slot()
+    def _purge_cache(self) -> None:
+        if self._legacy_mode or self._adapter.is_running:
+            return
+        answer = QMessageBox.question(
+            self,
+            "Очистить кэш?",
+            "Будут удалены только проверенные промежуточные клипы. Исходники и результат не изменятся.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        raw = self.cache_dir_edit.text().strip()
+        cache_dir = Path(raw).expanduser() if raw else None
+        self._set_running(True)
+        try:
+            assert isinstance(self._adapter, ApplicationServiceAdapter)
+            input_dir = Path(self.input_edit.text().strip()).expanduser().resolve()
+            output = Path(self.output_edit.text().strip()).expanduser().resolve()
+            self._adapter.start_cache_purge(
+                cache_dir,
+                protected_input=input_dir,
+                protected_output=output,
+            )
+        except RuntimeError as exc:
+            self._on_application_completed("cache-purge", False, str(exc))
+
     def _form_request(self) -> GuiRunRequest:
         return create_run_request(
             input_dir_text=self.input_edit.text(),
@@ -651,6 +706,8 @@ class ChronicleWindow(QMainWindow):
             preset_text=self.preset_combo.currentText(),
             overlay=self._form_overlay_config(resolve_fallback=False),
             mode=self._selected_mode(),
+            cache_enabled=self.cache_enabled.isChecked(),
+            cache_dir_text=self.cache_dir_edit.text(),
         )
 
     def _selected_mode(self) -> ExportMode:
@@ -807,7 +864,10 @@ class ChronicleWindow(QMainWindow):
                 "concat": "Объединение клипов…",
                 "publication": "Результат опубликован",
             }
-            self.status_label.setText(phase_names.get(value.phase, value.phase))
+            status = phase_names.get(value.phase, value.phase)
+            if value.phase == "normalize" and value.cache_hit is not None:
+                status += " (кэш: hit)" if value.cache_hit else " (кэш: miss)"
+            self.status_label.setText(status)
 
     @Slot(str)
     def _on_execution_state(self, state: str) -> None:
@@ -957,6 +1017,12 @@ class ChronicleWindow(QMainWindow):
                 self.progress.setValue(0)
             return
 
+        if operation == "cache-purge":
+            self.status_label.setText("Кэш очищен" if success else "Не удалось очистить кэш")
+            self.progress.setRange(0, 1)
+            self.progress.setValue(1 if success else 0)
+            return
+
         terminal_state = (
             self._adapter.last_terminal_state
             if isinstance(self._adapter, ApplicationServiceAdapter)
@@ -1043,7 +1109,18 @@ class ChronicleWindow(QMainWindow):
         self._append_output("Запуск previewed export plan…\n")
         try:
             assert isinstance(self._adapter, ApplicationServiceAdapter)
-            self._adapter.start_export(self._plan, overwrite=overwrite)
+            raw_cache_dir = self.cache_dir_edit.text().strip()
+            cache_enabled = self.cache_enabled.isChecked()
+            self._adapter.start_export(
+                self._plan,
+                overwrite=overwrite,
+                cache_enabled=cache_enabled,
+                cache_dir=(
+                    Path(raw_cache_dir).expanduser()
+                    if cache_enabled and raw_cache_dir
+                    else None
+                ),
+            )
         except RuntimeError as exc:
             self._on_application_completed("export", False, str(exc))
 

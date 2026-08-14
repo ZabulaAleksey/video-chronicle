@@ -55,6 +55,64 @@ def test_join_request_is_explicit_in_cli_arguments(tmp_path: Path) -> None:
     assert arguments[-2:] == ["--mode", "join"]
 
 
+def test_cache_is_opt_in_and_custom_root_is_forwarded_as_one_argv_value(
+    tmp_path: Path,
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    cache_dir = tmp_path / "кэш folder"
+    request = create_run_request(
+        input_dir_text=str(input_dir),
+        output_text=str(tmp_path / "output.mp4"),
+        ffmpeg_text="ffmpeg",
+        ffprobe_text="ffprobe",
+        crf=20,
+        preset_text="medium",
+        cache_enabled=True,
+        cache_dir_text=str(cache_dir),
+    )
+    arguments = build_cli_arguments(request, tmp_path / "join_media.py")
+    assert "--cache" in arguments
+    assert arguments[arguments.index("--cache-dir") + 1] == str(cache_dir.resolve())
+
+    disabled = create_run_request(
+        input_dir_text=str(input_dir),
+        output_text=str(tmp_path / "output.mp4"),
+        ffmpeg_text="ffmpeg",
+        ffprobe_text="ffprobe",
+        crf=20,
+        preset_text="medium",
+    )
+    assert "--cache" not in build_cli_arguments(disabled, tmp_path / "join_media.py")
+
+
+def test_disabled_cache_ignores_unc_text_without_expanding_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    original_expanduser = Path.expanduser
+
+    def guarded_expanduser(path: Path) -> Path:
+        if str(path).replace("/", "\\").startswith("\\\\"):
+            raise AssertionError("disabled cache path was accessed")
+        return original_expanduser(path)
+
+    monkeypatch.setattr(Path, "expanduser", guarded_expanduser)
+    request = create_run_request(
+        input_dir_text=str(input_dir),
+        output_text=str(tmp_path / "output.mp4"),
+        ffmpeg_text="ffmpeg",
+        ffprobe_text="ffprobe",
+        crf=20,
+        preset_text="medium",
+        cache_enabled=False,
+        cache_dir_text="//server/share/cache",
+    )
+    assert request.cache_dir is None
+    assert "--cache-dir" not in build_cli_arguments(request, tmp_path / "join_media.py")
+
+
 @pytest.mark.parametrize(
     ("overrides", "message"),
     [

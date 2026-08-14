@@ -63,6 +63,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="keep normalized clips and concat list after completion",
     )
+    parser.add_argument(
+        "--cache",
+        action="store_true",
+        help="reuse verified normalized clips (disabled by default)",
+    )
+    parser.add_argument(
+        "--cache-dir",
+        type=_expanded_path,
+        default=None,
+        help="private normalized-clip cache directory",
+    )
+    parser.add_argument(
+        "--purge-cache",
+        action="store_true",
+        help="purge verified cache entries and exit",
+    )
     return parser.parse_args(argv)
 
 
@@ -130,6 +146,33 @@ def main(argv: list[str] | None = None) -> int:
     """Run one export and preserve the legacy exit-code/message contract."""
 
     args = parse_args(argv)
+    cache_dir_arg = getattr(args, "cache_dir", None)
+    cache_enabled = bool(getattr(args, "cache", False))
+    purge_cache = bool(getattr(args, "purge_cache", False))
+    if cache_dir_arg is not None and not (cache_enabled or purge_cache):
+        raise SystemExit("--cache-dir requires --cache or --purge-cache")
+    if purge_cache:
+        from .cache import NormalizedClipCache
+
+        cache = NormalizedClipCache(cache_dir_arg)
+        try:
+            purge_input = args.input_dir.expanduser().resolve()
+            purge_output = (
+                args.output.expanduser().resolve()
+                if args.output is not None
+                else purge_input / "output.mp4"
+            )
+            removed = cache.purge(
+                protected_input=purge_input,
+                protected_output=purge_output,
+            )
+        except Exception as exc:
+            import logging
+
+            logging.getLogger("join_media.cache").error("FATAL | %s", exc)
+            return 1
+        print(f"Cache purged: {removed} entries.")
+        return 0
     input_dir = args.input_dir.expanduser().resolve()
     output = (
         args.output.expanduser().resolve()
@@ -146,6 +189,12 @@ def main(argv: list[str] | None = None) -> int:
         pipeline.validate_error_log_path(input_dir, output, error_log)
         logger = pipeline.configure_logging(error_log)
         request = _build_request(args)
+        if cache_enabled:
+            from .cache import NormalizedClipCache
+
+            return execute_export(
+                request, logger, cache=NormalizedClipCache(cache_dir_arg)
+            )
         return execute_export(request, logger)
     except Exception as exc:
         logger = locals().get("logger")

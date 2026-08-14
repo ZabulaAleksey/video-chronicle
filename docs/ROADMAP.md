@@ -92,17 +92,17 @@ legacy overlay semantics, Join явно отключает подпись, а о
 Windows Job Object/POSIX process group обеспечивают bounded whole-tree cancel,
 а source identity, cleanup и atomic publication race подтверждены тестами.
 
-## Текущий MVP — этап 10
+## Выполненный MVP — этап 10
 
-Этапы выполняются последовательно и только после критериев завершения
-предыдущего этапа.
+Самостоятельный prompt: [`10-resume-cache.md`](../prompts/stages/10-resume-cache.md).
 
-1. **Следующий — [10 — Resume/cache](../prompts/stages/10-resume-cache.md):** совместимые ключи, инвалидирование и безопасное
-   возобновление. Этот этап завершает целевой MVP.
+Этап завершён: opt-in normalized-clip cache имеет canonical identity, строгую
+валидацию, clean fallback, private storage, 10 GiB/30-day policy и безопасный
+interprocess lifecycle. Clean и resumed mixed-media exports эквивалентны.
 
-## Позже — целевой v1, этапы 11–16
+## Текущий целевой v1 — этапы 11–16
 
-- **[11](../prompts/stages/11-nondestructive-editing.md):** неразрушающее изменение порядка, trim, grouping и presets;
+- **Следующий — [11](../prompts/stages/11-nondestructive-editing.md):** specification gate и неразрушающее изменение порядка, trim, grouping и presets;
 - **[12](../prompts/stages/12-timeline-interchange-scene.md):** optional timeline interchange и анализ сцен за интерфейсами;
 - **[13](../prompts/stages/13-local-transcription.md):** optional локальная транскрипция с provenance модели;
 - **[14](../prompts/stages/14-hardware-quality.md):** проверка возможностей оборудования, метрики качества и обязательный

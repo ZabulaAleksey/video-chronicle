@@ -159,8 +159,12 @@ def test_synthetic_photo_video_cli_smoke_preserves_sources(
     project_root = Path(__file__).resolve().parents[1]
     env = os.environ.copy()
     env["PYTHONUTF8"] = "1"
-    result = subprocess.run(
-        [
+    cache_args: list[str] = []
+    cache_dir = tmp_path / "normalized-cache"
+    if mode_args == ["--mode", "join"]:
+        cache_dir.mkdir()
+        cache_args = ["--cache", "--cache-dir", str(cache_dir)]
+    command = [
             sys.executable,
             str(project_root / "join_media.py"),
             "--input-dir",
@@ -178,7 +182,10 @@ def test_synthetic_photo_video_cli_smoke_preserves_sources(
             "--preset",
             "ultrafast",
             *mode_args,
-        ],
+            *cache_args,
+        ]
+    result = subprocess.run(
+        command,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -211,3 +218,23 @@ def test_synthetic_photo_video_cli_smoke_preserves_sources(
     streams = json.loads(probe.stdout)["streams"]
     assert any(stream.get("codec_type") == "video" for stream in streams)
     assert any(stream.get("codec_type") == "audio" for stream in streams)
+
+    if cache_args:
+        clean_digest = hashlib.sha256(output.read_bytes()).hexdigest()
+        entries = list(cache_dir.glob("clip-v1-*"))
+        assert len(entries) == 2
+        output.unlink()
+        resumed = subprocess.run(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=180,
+            env=env,
+        )
+        assert resumed.returncode == 0, resumed.stderr
+        assert hashlib.sha256(output.read_bytes()).hexdigest() == clean_digest
+        assert {path: _snapshot(path) for path in (photo, video)} == before
