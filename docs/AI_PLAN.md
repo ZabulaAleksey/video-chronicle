@@ -2,52 +2,56 @@
 
 ## Срез
 
-- Этап: **08 — Join и Chronicle modes**
-- Статус: MODE-001 утверждён; реализация в работе
-- Prompt: `prompts/stages/08-join-chronicle-modes.md`
-- Зависимости: этапы 01–07 завершены; единый `ExportPlan` содержит immutable
-  `OverlayConfig`
-- Требования: `FR-006`, `FR-007`, `FR-011`, system compatibility
-- Критерии: `AC-003`, `AC-004`, `AC-008`
+- Этап: **09 — Export, progress и safe cancel**
+- Статус: подготовка decision gate; реализация не начата
+- Prompt: `prompts/stages/09-export-progress-cancel.md`
+- Зависимости: этапы 01–08 завершены; Join/Chronicle используют один
+  application/pipeline path и immutable plan
+- Требования: `FR-005/006/008/009/012`, `SEC-002/003`
+- Критерии: `AC-003/005/006/009/010`
 
 ## Цель
 
-Утвердить и реализовать два понятных режима поверх одного медиаконвейера:
-обратно совместимый Join и Chronicle с date policy/overlay.
+Ввести structured export lifecycle с наблюдаемым прогрессом, безопасной
+отменой всего принадлежащего заданию process tree и неизменной атомарной
+финализацией.
 
-## Утверждённый contract
+## Decision gate до кода
 
-- оба режима используют один date-sorted accepted plan и один media pipeline;
-- Join всегда отключает overlay; Join+enabled overlay отвергается domain;
-- Chronicle разрешает overlay on/off, default сохраняет legacy overlay;
-- CLI без `--mode` эквивалентен `--mode chronicle`; `--mode join` — opt-in;
-- GUI default Chronicle, mode switch инвалидирует plan и объясняет последствия.
+- определить typed progress events и denominator для inspection, normalization
+  и concat без ложных процентов;
+- утвердить cooperative cancellation token, Windows process-group/job ownership,
+  timeout и escalation terminate→kill;
+- зафиксировать terminal states, bounded cancel time и cleanup workspaces;
+- определить preflight tools/paths/space, насколько проверка надёжна до encode;
+- утвердить feature flag cancel UI и безопасный fallback «дождаться завершения».
 
 ## Scope
 
-- Qt-free mode enum/config и policy на уровне request/plan;
-- единый plan builder и существующий normalize/concat path;
-- GUI selector с объяснением результата до экспорта;
-- совместимое CLI representation и migration tests;
-- matrix tests mode × overlay × media type и mixed-media smoke обоих режимов.
+- Qt-free lifecycle/events/cancellation contracts и application orchestration;
+- subprocess adapter, владеющий дочерним process tree;
+- GUI progress/cancel и CLI-compatible diagnostics;
+- normal/failure/cancel integration tests до/during encode/concat, orphan check,
+  collisions, permissions и Unicode.
 
 ## Non-goals
 
-- второй медиаконвейер или дублирование FFmpeg filters;
-- новые codecs, trim/reorder, progress/cancel, cache/resume;
-- изменение legacy поведения без утверждённой migration policy.
+- resume/cache, durable queue или background service;
+- parallel exports;
+- отмена через kill только Python parent process.
 
 ## Quality gates и DoD
 
-- SPEC утверждает mode contract до production-кода;
-- legacy invocation сохраняет ожидаемый результат;
-- mode хранится как данные immutable plan, а не как ветвление widgets;
-- оба режима проходят один application/pipeline path;
-- focused matrix, CLI characterization, mixed-media smoke, full regression,
-  compileall и `git diff --check` зелёные;
-- после acceptance `AI_STATUS` и `ROADMAP` обновлены, `AI_PLAN` переключён на 09.
+- SPEC утверждает progress/cancel/finalization contract до production-кода;
+- cancel ограничен по времени, не меняет inputs/existing result и не оставляет
+  принадлежащий заданию FFmpeg;
+- final output появляется только после success;
+- GUI event loop остаётся отзывчивым, terminal states различимы;
+- focused/platform integration, security review, full regression, compileall и
+  `git diff --check` зелёные;
+- после acceptance `AI_STATUS`/`ROADMAP` обновлены, `AI_PLAN` переключён на 10.
 
 ## Откат
 
-Mode policy должна быть обратимой: legacy Join остаётся безопасным fallback,
-а mode selector удаляется без изменения normalize/concat/publication adapters.
+Cancel UI управляется feature flag. При недоступном безопасном tree adapter
+fallback только ждёт завершения и не имитирует отмену parent-only kill.

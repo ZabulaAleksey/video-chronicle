@@ -52,6 +52,7 @@ def build_application_request(request: GuiRunRequest) -> ExportRequest:
         overwrite=False,
         keep_work=False,
         overlay=overlay,
+        mode=request.mode,
     )
 
 

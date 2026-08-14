@@ -12,17 +12,18 @@ from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QMessageBox
 from PySide6.QtWidgets import QScrollArea
 
-from gui_contract import GuiRunRequest
+from gui_contract import GuiRunRequest, build_cli_arguments
 from video_chronicle.domain import (
     DateCandidate,
     DateDecision,
     ExportPlan,
+    ExportMode,
     ExportRequest,
     MediaItem,
 )
 from video_chronicle.gui_services import ApplicationServiceAdapter
 from video_chronicle.overlay import OverlayConfig
-from video_chronicle_gui import ChronicleWindow
+from video_chronicle_gui import ChronicleWindow, CliProcessAdapter
 
 
 _PNG_1X1 = base64.b64decode(
@@ -456,4 +457,80 @@ def test_preview_error_is_visible_and_export_stays_disabled(qapp, tmp_path: Path
     assert window.visual_preview_state_label.text() == "Ошибка предпросмотра"
     assert "synthetic diagnostic" in window.visual_preview_label.text()
     assert window.run_button.isEnabled() is False
+    window.close()
+
+
+def test_gui_mode_switch_invalidates_plan_and_join_skips_visual_preview(
+    qapp, tmp_path: Path
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    output = tmp_path / "output.mp4"
+
+    def request_factory(gui):
+        return _canonical_request(input_dir, output).__class__(
+            **{
+                **_canonical_request(input_dir, output).__dict__,
+                "mode": gui.mode,
+                "overlay": gui.overlay,
+            }
+        )
+
+    adapter = ApplicationServiceAdapter(
+        plan_service=lambda request, ports, logger: _preview_plan(request),
+        ports_factory=lambda: object(),  # type: ignore[arg-type]
+        request_factory=request_factory,
+    )
+    window = ChronicleWindow(application_adapter=adapter)
+    window.input_edit.setText(str(input_dir))
+    window.output_edit.setText(str(output))
+    assert window.mode_combo.currentData() == ExportMode.CHRONICLE.value
+    assert "Chronicle" in window.mode_description_label.text()
+    window.overlay_enabled.setChecked(False)
+
+    window.mode_combo.setCurrentIndex(1)
+    qapp.processEvents()
+    assert window.mode_combo.currentData() == ExportMode.JOIN.value
+    assert window.overlay_group.isEnabled() is False
+    assert window.visual_preview_state_label.text() == "Отключён в режиме Join"
+    assert window._plan is None
+
+    window.analyze_button.click()
+    _wait_until(qapp, lambda: not adapter.is_running)
+    assert window._plan.request.mode is ExportMode.JOIN
+    assert window._plan.request.overlay.enabled is False
+    assert "Режим: join" in window.plan_summary_label.text()
+    assert window.overlay_group.isEnabled() is False
+    assert window.preview_button.isEnabled() is False
+    assert window.run_button.isEnabled() is True
+
+    window.mode_combo.setCurrentIndex(0)
+    qapp.processEvents()
+    assert window._plan is None
+    assert window.run_button.isEnabled() is False
+    assert window.overlay_enabled.isChecked() is False
+    window.close()
+
+
+def test_legacy_mode_round_trip_preserves_chronicle_default_and_cli_parity(
+    qapp, tmp_path: Path
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    adapter = CliProcessAdapter(cli_script=tmp_path / "join_media.py")
+    window = ChronicleWindow(adapter=adapter)
+    window.input_edit.setText(str(input_dir))
+    window.output_edit.setText(str(tmp_path / "output.mp4"))
+
+    assert window.overlay_enabled.isChecked() is True
+    window.mode_combo.setCurrentIndex(1)
+    window.mode_combo.setCurrentIndex(0)
+    qapp.processEvents()
+
+    request = window._form_request()
+    arguments = build_cli_arguments(request, tmp_path / "join_media.py")
+    assert request.mode is ExportMode.CHRONICLE
+    assert request.overlay.enabled is True
+    assert window.mode_combo.currentText() == "Chronicle"
+    assert "--mode" not in arguments
     window.close()

@@ -43,6 +43,7 @@ export и реальными FFmpeg preview/normalize с включённой и
 | MODEL-001 IDs/order, job transitions, schema v1 и repository | unit/table | `tests/test_project_queue_model.py` | `MODEL-AC-001–003` |
 | GUI application preview, async lifecycle, Unicode, stale plan и overwrite | GUI/contract | `tests/test_gui_application.py` | `GUI-APP-AC-001–003`, `AC-001/002/010` |
 | Единый overlay config, escaping шрифта, preview и multi-item export | unit/GUI/integration | `tests/test_overlay.py` | `OVERLAY-AC-001–003`, `AC-004/010` |
+| Join/Chronicle invariant, CLI parity, GUI round-trip и оба real exports | matrix/GUI/integration | `tests/test_modes.py`, `tests/test_gui_application.py`, `tests/test_ffmpeg_smoke.py` | `MODE-AC-001–003`, `AC-003/004/008` |
 
 Synthetic smoke создаёт короткие BMP и MP4 во временном каталоге с пробелом,
 апострофом и Unicode, запускает CLI list-argv без shell, проверяет итоговые

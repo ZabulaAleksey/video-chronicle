@@ -168,3 +168,16 @@
   перепроверяется у tool boundary; FFmpeg escaping сосредоточен в adapter;
   overlay-only change сохраняет inspection plan, но требует нового visual
   preview. Video playback, keyframes и arbitrary expressions остаются вне scope.
+
+## 2026-08-14 — Join и Chronicle как policy одного плана
+
+- Решение: хранить `ExportMode` в immutable `ExportRequest`; Join использует
+  тот же date-sorted plan и media pipeline, но требует disabled overlay,
+  Chronicle разрешает OVERLAY-001 on/off.
+- Причина: пользователю нужен понятный экспорт без надписи и режим хроники,
+  при этом legacy `join_media.py` уже сортирует по дате и добавляет overlay.
+- Альтернативы: отдельный Join pipeline; filename-order/undated Join; сменить
+  legacy default на Join; скрыто переключать mode внутри widgets.
+- Последствия: CLI без `--mode` и `--mode chronicle` сохраняют прежний результат;
+  `--mode join` — новый opt-in. GUI default Chronicle объясняет различие и
+  инвалидирует plan при переключении, не изменяя сохранённый overlay checkbox.

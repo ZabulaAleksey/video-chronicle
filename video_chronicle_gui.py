@@ -45,7 +45,7 @@ from gui_contract import (
     build_cli_arguments,
     create_run_request,
 )
-from video_chronicle.domain import ExportPlan
+from video_chronicle.domain import ExportMode, ExportPlan
 from video_chronicle.gui_services import ApplicationServiceAdapter
 from video_chronicle.gui_services import replace_plan_overlay
 from video_chronicle.overlay import (
@@ -253,6 +253,21 @@ class ChronicleWindow(QMainWindow):
         card_layout = QVBoxLayout(settings_card)
         card_layout.setContentsMargins(20, 20, 20, 20)
         card_layout.setSpacing(14)
+
+        mode_row = QHBoxLayout()
+        mode_row.addWidget(QLabel("Режим"))
+        self.mode_combo = QComboBox()
+        self.mode_combo.setAccessibleName("Режим экспорта")
+        self.mode_combo.addItem("Chronicle", ExportMode.CHRONICLE.value)
+        self.mode_combo.addItem("Join", ExportMode.JOIN.value)
+        mode_row.addWidget(self.mode_combo)
+        self.mode_description_label = QLabel(
+            "Chronicle создаёт хронологический MP4 и разрешает подпись даты."
+        )
+        self.mode_description_label.setObjectName("hint")
+        self.mode_description_label.setWordWrap(True)
+        mode_row.addWidget(self.mode_description_label, 1)
+        card_layout.addLayout(mode_row)
 
         paths = QFormLayout()
         paths.setHorizontalSpacing(18)
@@ -531,6 +546,7 @@ class ChronicleWindow(QMainWindow):
             self.ffprobe_button,
             self.crf_spin,
             self.preset_combo,
+            self.mode_combo,
             self.overlay_group,
         ]
 
@@ -544,6 +560,7 @@ class ChronicleWindow(QMainWindow):
             edit.textChanged.connect(self._invalidate_plan)
         self.crf_spin.valueChanged.connect(self._invalidate_plan)
         self.preset_combo.currentTextChanged.connect(self._invalidate_plan)
+        self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         self.overlay_enabled.toggled.connect(self._invalidate_overlay)
         self.overlay_format_combo.currentTextChanged.connect(self._invalidate_overlay)
         self.overlay_position_combo.currentTextChanged.connect(self._invalidate_overlay)
@@ -619,13 +636,24 @@ class ChronicleWindow(QMainWindow):
             crf=self.crf_spin.value(),
             preset_text=self.preset_combo.currentText(),
             overlay=self._form_overlay_config(resolve_fallback=False),
+            mode=self._selected_mode(),
         )
+
+    def _selected_mode(self) -> ExportMode:
+        mode = self.mode_combo.currentData()
+        try:
+            return ExportMode(mode)
+        except (TypeError, ValueError):
+            return ExportMode.CHRONICLE
 
     def _form_overlay_config(self, *, resolve_fallback: bool) -> OverlayConfig:
         raw_font = self.overlay_font_edit.text().strip()
         try:
             config = OverlayConfig(
-                enabled=self.overlay_enabled.isChecked(),
+                enabled=(
+                    self.overlay_enabled.isChecked()
+                    and self._selected_mode() is ExportMode.CHRONICLE
+                ),
                 format=self.overlay_format_combo.currentText(),  # type: ignore[arg-type]
                 position=self.overlay_position_combo.currentText(),  # type: ignore[arg-type]
                 horizontal_margin=self.overlay_horizontal_margin.value(),
@@ -643,6 +671,25 @@ class ChronicleWindow(QMainWindow):
             return config
         except (ValueError, RuntimeError) as exc:
             raise RequestValidationError(str(exc)) from exc
+
+    @Slot(int)
+    def _on_mode_changed(self, _index: int) -> None:
+        mode = self._selected_mode()
+        is_join = mode is ExportMode.JOIN
+        self.overlay_group.setEnabled(not is_join and not self._legacy_mode)
+        if is_join:
+            self.mode_description_label.setText(
+                "Join создаёт хронологический MP4 без подписи даты."
+            )
+        else:
+            self.mode_description_label.setText(
+                "Chronicle создаёт хронологический MP4 и разрешает подпись даты."
+            )
+        self._invalidate_plan()
+        if is_join:
+            self.visual_preview_state_label.setText("Отключён в режиме Join")
+            self.visual_preview_label.setText("Join не добавляет подпись даты")
+            self.preview_button.setEnabled(False)
 
     @Slot()
     def _invalidate_plan(self, *_args: object) -> None:
@@ -737,6 +784,7 @@ class ChronicleWindow(QMainWindow):
             or plan.request.output != active.output
             or plan.request.crf != active.crf
             or plan.request.preset != active.preset
+            or plan.request.mode is not active.mode
         ):
             return
         self._plan = plan
@@ -787,11 +835,17 @@ class ChronicleWindow(QMainWindow):
         self.preview_tree.resizeColumnToContents(5)
         request = plan.request
         self.preview_state_label.setText("План готов")
-        self.visual_preview_state_label.setText("Требуется предпросмотр")
-        self.visual_preview_label.setText("Обновите кадр перед экспортом")
-        self.preview_button.setEnabled(True)
+        if request.mode is ExportMode.JOIN:
+            self._visual_preview_current = True
+            self.visual_preview_state_label.setText("Отключён в режиме Join")
+            self.visual_preview_label.setText("Join не добавляет подпись даты")
+            self.preview_button.setEnabled(False)
+        else:
+            self.visual_preview_state_label.setText("Требуется предпросмотр")
+            self.visual_preview_label.setText("Обновите кадр перед экспортом")
+            self.preview_button.setEnabled(True)
         self.plan_summary_label.setText(
-            f"Вход: {request.input_dir} | Выход: {request.output} | "
+            f"Режим: {request.mode.value} | Вход: {request.input_dir} | Выход: {request.output} | "
             f"принято: {len(plan.items)}, пропущено: {len(plan.inspection_failures)} | "
             f"CRF {request.crf}, preset {request.preset} | "
             "overwrite: только после отдельного подтверждения"
@@ -806,9 +860,14 @@ class ChronicleWindow(QMainWindow):
         self._append_output(f"\n{message}\n")
         if operation == "analysis":
             if success and self._plan is not None:
-                self.status_label.setText("План готов — обновите предпросмотр")
-                self.run_button.setEnabled(False)
-                self.preview_button.setEnabled(True)
+                if self._plan.request.mode is ExportMode.JOIN:
+                    self.status_label.setText("План Join готов к экспорту")
+                    self.run_button.setEnabled(True)
+                    self.preview_button.setEnabled(False)
+                else:
+                    self.status_label.setText("План готов — обновите предпросмотр")
+                    self.run_button.setEnabled(False)
+                    self.preview_button.setEnabled(True)
                 self.progress.setValue(1)
                 return
             self._plan = None
@@ -993,9 +1052,16 @@ class ChronicleWindow(QMainWindow):
     def _set_running(self, running: bool) -> None:
         for widget in self._editable_widgets:
             widget.setEnabled(not running)
+        is_join = self._selected_mode() is ExportMode.JOIN
+        self.overlay_group.setEnabled(
+            not running and not self._legacy_mode and not is_join
+        )
         self.analyze_button.setEnabled(not running)
         self.preview_button.setEnabled(
-            not running and not self._legacy_mode and self._plan is not None
+            not running
+            and not self._legacy_mode
+            and not is_join
+            and self._plan is not None
         )
         if self._legacy_mode:
             self.run_button.setEnabled(not running)

@@ -12,7 +12,7 @@
 - `pyproject.toml` — metadata пакета, runtime/dev зависимости и console/GUI
   entry points.
 - `src/video_chronicle/domain.py` — Qt-free модели принятого медиа и запроса
-  экспорта, включая выбранное date decision.
+  экспорта, включая выбранное date decision и typed `ExportMode`.
 - `src/video_chronicle/metadata.py` — Qt-free DATE-001 engine: metadata и
   filename candidates, provenance, raw values, timezone и conflicts.
 - `src/video_chronicle/overlay.py` — immutable `OverlayConfig`, проверка
@@ -49,6 +49,7 @@
    совместимый `join_media.py` либо заполняет GUI-форму.
 2. GUI валидирует форму и вне UI thread создаёт `ExportRequest`, разрешает
    инструменты и вызывает `plan_export` с явным набором `PipelinePorts`.
+   Chronicle разрешает OVERLAY-001 on/off; Join канонически отключает overlay.
 3. Immutable `ExportPlan` возвращается в GUI: accepted/skipped элементы,
    date provenance и порядок показываются до экспорта. Изменение формы
    инвалидирует plan; overwrite подтверждается непосредственно перед запуском.
@@ -79,6 +80,8 @@ service. Root-level CLI только экспортирует каноничес
 совместимости. MODEL-001 предоставляет состояния будущих заданий, но проект не
 содержит сервера, базы данных, durable storage или runtime-очереди. GUI не
 дублирует сортировку, анализ дат, FFmpeg-команды или финализацию.
+Join и Chronicle являются policy-данными одного `ExportRequest`: inspection,
+normalization, concat и publication adapters у них общие.
 Legacy whole-CLI `QProcess` остаётся только явным adapter fallback и может быть
 удалён без изменения core. Безопасная отмена пока отсутствует: окно нельзя
 закрыть во время активного worker. Каталоги `ffmpeg/` и `ffmpeg1/` являются локальными сторонними

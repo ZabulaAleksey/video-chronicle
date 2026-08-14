@@ -75,7 +75,13 @@ def _snapshot(path: Path) -> tuple[str, int, int]:
     return digest, stat.st_size, stat.st_mtime_ns
 
 
-def test_synthetic_photo_video_cli_smoke_preserves_sources(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "mode_args",
+    [pytest.param([], id="implicit-chronicle"), pytest.param(["--mode", "join"], id="join")],
+)
+def test_synthetic_photo_video_cli_smoke_preserves_sources(
+    tmp_path: Path, mode_args: list[str]
+) -> None:
     ffmpeg = _resolve_tool("VIDEO_CHRONICLE_FFMPEG", "ffmpeg")
     ffprobe = _resolve_tool("VIDEO_CHRONICLE_FFPROBE", "ffprobe")
     missing = [
@@ -171,6 +177,7 @@ def test_synthetic_photo_video_cli_smoke_preserves_sources(tmp_path: Path) -> No
             "35",
             "--preset",
             "ultrafast",
+            *mode_args,
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

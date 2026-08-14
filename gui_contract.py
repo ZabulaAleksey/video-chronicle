@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from video_chronicle.domain import ExportMode
 from video_chronicle.overlay import DEFAULT_OVERLAY_CONFIG, OverlayConfig
 
 
@@ -24,6 +25,7 @@ class GuiRunRequest:
     preset: str = "medium"
     overwrite: bool = False
     overlay: OverlayConfig = DEFAULT_OVERLAY_CONFIG
+    mode: ExportMode = ExportMode.CHRONICLE
 
 
 def create_run_request(
@@ -36,6 +38,7 @@ def create_run_request(
     preset_text: str,
     overwrite: bool = False,
     overlay: OverlayConfig = DEFAULT_OVERLAY_CONFIG,
+    mode: ExportMode = ExportMode.CHRONICLE,
 ) -> GuiRunRequest:
     """Validate editable form values without invoking Qt or the media pipeline."""
 
@@ -65,6 +68,10 @@ def create_run_request(
         raise RequestValidationError("CRF должен быть в диапазоне от 0 до 51.")
     if not preset:
         raise RequestValidationError("Укажите preset кодировщика.")
+    if not isinstance(mode, ExportMode):
+        raise RequestValidationError("Неизвестный режим экспорта.")
+    if mode is ExportMode.JOIN and overlay.enabled:
+        raise RequestValidationError("В режиме Join подпись даты должна быть выключена.")
 
     return GuiRunRequest(
         input_dir=input_dir.resolve(),
@@ -75,6 +82,7 @@ def create_run_request(
         preset=preset,
         overwrite=overwrite,
         overlay=overlay,
+        mode=mode,
     )
 
 
@@ -98,4 +106,6 @@ def build_cli_arguments(request: GuiRunRequest, cli_script: Path) -> list[str]:
     ]
     if request.overwrite:
         arguments.append("--overwrite")
+    if request.mode is ExportMode.JOIN:
+        arguments.extend(["--mode", "join"])
     return arguments

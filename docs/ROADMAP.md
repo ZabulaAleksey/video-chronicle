@@ -76,16 +76,22 @@ Whole-CLI `QProcess` сохранён только как явный диагн�
 и всеми элементами экспорта; GUI предоставляет ограниченные presets, а adapter
 безопасно обрабатывает Unicode/апострофы, literal photo paths и font identity.
 
-## Запланированный MVP — этапы 08–10
+## Выполненный этап — 08. Join/Chronicle modes
+
+Самостоятельный prompt: [`08-join-chronicle-modes.md`](../prompts/stages/08-join-chronicle-modes.md).
+
+Этап завершён: mode является typed policy immutable plan; Chronicle сохраняет
+legacy overlay semantics, Join явно отключает подпись, а оба режима используют
+одни application/pipeline adapters и проходят mixed-media smoke.
+
+## Запланированный MVP — этапы 09–10
 
 Этапы выполняются последовательно и только после критериев завершения
 предыдущего этапа.
 
-1. **Следующий — [08 — Join/Chronicle modes](../prompts/stages/08-join-chronicle-modes.md):** понятные режимы без дублирования
-   медиаконвейера и с сохранением legacy join.
-2. **[09 — Export/progress/cancel](../prompts/stages/09-export-progress-cancel.md):** план экспорта, прогресс, безопасная отмена,
+1. **Следующий — [09 — Export/progress/cancel](../prompts/stages/09-export-progress-cancel.md):** план экспорта, прогресс, безопасная отмена,
    проверка коллизий и атомарная финализация.
-3. **[10 — Resume/cache](../prompts/stages/10-resume-cache.md):** совместимые ключи, инвалидирование и безопасное
+2. **[10 — Resume/cache](../prompts/stages/10-resume-cache.md):** совместимые ключи, инвалидирование и безопасное
    возобновление. Этот этап завершает целевой MVP.
 
 ## Позже — целевой v1, этапы 11–16

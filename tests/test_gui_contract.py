@@ -9,6 +9,8 @@ from gui_contract import (
     build_cli_arguments,
     create_run_request,
 )
+from video_chronicle.domain import ExportMode
+from video_chronicle.overlay import OverlayConfig
 
 
 def test_build_cli_arguments_keeps_unicode_paths_as_single_values(tmp_path: Path) -> None:
@@ -34,6 +36,23 @@ def test_build_cli_arguments_keeps_unicode_paths_as_single_values(tmp_path: Path
     )
     assert arguments[-1] == "--overwrite"
     assert '"' not in arguments[arguments.index("--input-dir") + 1]
+
+
+def test_join_request_is_explicit_in_cli_arguments(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    request = create_run_request(
+        input_dir_text=str(input_dir),
+        output_text=str(tmp_path / "output.mp4"),
+        ffmpeg_text="ffmpeg",
+        ffprobe_text="ffprobe",
+        crf=20,
+        preset_text="medium",
+        mode=ExportMode.JOIN,
+        overlay=OverlayConfig(enabled=False),
+    )
+    arguments = build_cli_arguments(request, tmp_path / "join_media.py")
+    assert arguments[-2:] == ["--mode", "join"]
 
 
 @pytest.mark.parametrize(

@@ -2,13 +2,14 @@
 
 ## Текущий этап
 
-Этапы 00–07 завершены. Текущий этап — 08, явные Join/Chronicle modes;
-MODE-001 утверждён, production-реализация ещё не начата. Default PySide6 GUI строит plan и
-representative overlay preview через application services и запускает тот же
-immutable plan вне UI thread. Whole-CLI `QProcess` сохранён только как явный
-диагностический fallback. Runtime-очередь, durable storage и кэш отсутствуют.
+Этапы 00–08 завершены. Следующий этап — 09, structured export progress и safe
+process-tree cancel; его decision gate ещё не утверждён. Default PySide6 GUI
+строит plan и representative overlay preview через application services и
+запускает тот же immutable plan вне UI thread. Whole-CLI `QProcess` сохранён
+только как явный диагностический fallback. Runtime-очередь, durable storage и
+кэш отсутствуют.
 
-Подготовленный ограниченный срез этапа 08 хранится в `docs/AI_PLAN.md`. Этапы 01–17
+Подготовленный ограниченный срез этапа 09 хранится в `docs/AI_PLAN.md`. Этапы 01–17
 разделены на самостоятельные project prompts в `prompts/stages/`; они
 загружаются по одному и не заменяют SPEC или текущий план.
 
@@ -20,6 +21,8 @@ immutable plan вне UI thread. Whole-CLI `QProcess` сохранён толь�
   отдаёт typed provenance/conflict/timezone result;
 - `src/video_chronicle/overlay.py` реализует immutable OVERLAY-001 config,
   font identity policy и approved formats/positions/ranges;
+- `ExportMode` входит в immutable request/plan: Join требует disabled overlay,
+  Chronicle сохраняет configurable OVERLAY-001;
 - `src/video_chronicle/project.py`, `repository.py` и `serialization.py`
   реализуют MODEL-001: stable timeline IDs/order, immutable export snapshot,
   job transitions, strict schema v1 и in-memory repository;
@@ -56,12 +59,16 @@ immutable plan вне UI thread. Whole-CLI `QProcess` сохранён толь�
   config для preview и всех accepted items экспорта;
 - overlay on/off и пути шрифтов с Unicode/пробелами/апострофами подтверждены
   реальным FFmpeg 9.0.1; literal `%03d` photo path не расширяется в sequence;
+- GUI объясняет Chronicle/Join до анализа, сохраняет overlay preference при
+  переключении и показывает mode в plan summary;
+- CLI без `--mode` эквивалентен legacy Chronicle; новый `--mode join` проходит
+  тот же mixed photo/video production path без `drawtext`;
 - завершённый characterization baseline дат, сортировки, FFmpeg argv, ошибок,
   partial success, коллизий и неизменности исходников;
 - синтетический mixed photo/video smoke на FFmpeg/FFprobe 9.0.1;
 - устанавливаемый пакет версии 0.2.0 с console/GUI entry points и группой
   зависимостей `dev`;
-- 157 успешно пройденных unit/contract/GUI/integration тестов, включая реальный
+- 173 успешно пройденных unit/contract/GUI/integration теста, включая реальный
   FFmpeg smoke;
 - два symlink/reparse-specific теста корректно пропущены в текущем
   Windows-окружении без права на создание symbolic link;
@@ -88,7 +95,7 @@ immutable plan вне UI thread. Whole-CLI `QProcess` сохранён толь�
 
 ## Следующая задача
 
-Начать этап 08: сначала утвердить в feature SPEC различия Join/Chronicle,
-defaults, CLI migration и допустимую матрицу mode × overlay × media type; затем
-ввести mode как данные плана без второго медиаконвейера. Подготовленный срез
-находится в `docs/AI_PLAN.md` и `prompts/stages/08-join-chronicle-modes.md`.
+Начать этап 09: до кода утвердить progress denominator/events, bounded
+cancel timeout/escalation, Windows process-tree ownership, terminal states и
+cleanup/finalization semantics. Подготовленный срез находится в
+`docs/AI_PLAN.md` и `prompts/stages/09-export-progress-cancel.md`.

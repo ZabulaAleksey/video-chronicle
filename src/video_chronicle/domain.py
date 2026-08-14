@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Literal
 
@@ -11,6 +12,13 @@ from .overlay import DEFAULT_OVERLAY_CONFIG, OverlayConfig
 
 
 DateOrigin = Literal["metadata", "filename"]
+
+
+class ExportMode(str, Enum):
+    """User-visible policy applied at the request/overlay boundary."""
+
+    JOIN = "join"
+    CHRONICLE = "chronicle"
 
 
 @dataclass(frozen=True)
@@ -99,6 +107,13 @@ class ExportRequest:
     overwrite: bool
     keep_work: bool
     overlay: OverlayConfig = DEFAULT_OVERLAY_CONFIG
+    mode: ExportMode = ExportMode.CHRONICLE
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.mode, ExportMode):
+            raise TypeError("mode must be ExportMode")
+        if self.mode is ExportMode.JOIN and self.overlay.enabled:
+            raise ValueError("Join mode requires a disabled overlay")
 
 
 @dataclass(frozen=True)

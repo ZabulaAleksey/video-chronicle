@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 
 from .application import execute_export
-from .domain import ExportRequest
+from .domain import ExportMode, ExportRequest
 from .overlay import OverlayConfig, resolve_overlay_font
 from . import pipeline
 
@@ -46,6 +46,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=_expanded_path,
         default=None,
         help="optional TrueType/OpenType font used for the timestamp",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=tuple(mode.value for mode in ExportMode),
+        default=ExportMode.CHRONICLE.value,
+        help="export mode: chronicle with optional date overlay, or join without it",
     )
     parser.add_argument("--ffmpeg", default="ffmpeg", help="ffmpeg executable name or full path")
     parser.add_argument("--ffprobe", default="ffprobe", help="ffprobe executable name or full path")
@@ -88,16 +94,22 @@ def _build_request(args: argparse.Namespace) -> ExportRequest:
 
     ffmpeg = pipeline.resolve_executable(args.ffmpeg, "FFmpeg")
     ffprobe = pipeline.resolve_executable(args.ffprobe, "FFprobe")
-    font_file = (
-        args.font_file.expanduser().resolve()
-        if args.font_file
-        else pipeline.find_default_font()
-    )
-    if font_file is not None and not font_file.is_file():
-        raise RuntimeError(f"font file does not exist: {font_file}")
-    overlay = resolve_overlay_font(
-        OverlayConfig(font_file=font_file), pipeline.find_default_font()
-    )
+    mode = ExportMode(args.mode)
+    if mode is ExportMode.JOIN and args.font_file is not None:
+        raise RuntimeError("--font-file cannot be used with --mode join")
+    if mode is ExportMode.JOIN:
+        overlay = OverlayConfig(enabled=False)
+    else:
+        font_file = (
+            args.font_file.expanduser().resolve()
+            if args.font_file
+            else pipeline.find_default_font()
+        )
+        if font_file is not None and not font_file.is_file():
+            raise RuntimeError(f"font file does not exist: {font_file}")
+        overlay = resolve_overlay_font(
+            OverlayConfig(font_file=font_file), pipeline.find_default_font()
+        )
 
     return ExportRequest(
         input_dir=input_dir,
@@ -110,6 +122,7 @@ def _build_request(args: argparse.Namespace) -> ExportRequest:
         overwrite=args.overwrite,
         keep_work=args.keep_work,
         overlay=overlay,
+        mode=mode,
     )
 
 
