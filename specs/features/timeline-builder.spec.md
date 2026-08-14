@@ -92,6 +92,53 @@ execution path, но сохраняет GUI-001 как временный диа
 - структурированный progress и безопасная process-tree cancellation;
 - cache, resume и durable persistence.
 
+## Утверждённый срез OVERLAY-001 — единая подпись и preview
+
+Этот срез утверждён прямой командой пользователя от 2026-08-14 последовательно
+выполнить оставшиеся этапы дорожной карты. Он формализует существующую подпись
+даты и не разрешает arbitrary FFmpeg expressions.
+
+- **OVERLAY-001 — Typed config.** Immutable Qt-free config содержит `enabled`,
+  format preset, position, horizontal/vertical margins, font size, text/outline
+  colors, outline width и optional explicit font path. Config целиком передаётся
+  preview и каждому normalizing export item.
+- **OVERLAY-002 — Formats.** Разрешены только `dd.MM.yy ddd` (default legacy с
+  русским сокращением дня недели), `dd.MM.yyyy` и `dd.MM.yyyy HH:mm`.
+- **OVERLAY-003 — Position и ranges.** Разрешены `top-left`, `top-right`,
+  `bottom-left` (default legacy) и `bottom-right`; margins — `0..300`, font size —
+  `12..200`, outline width — `0..20`, colors — `#RRGGBB`.
+- **OVERLAY-004 — Font policy.** Существующий explicit `.ttf`/`.otf` используется
+  как единый font path. Отсутствующий/неподдерживаемый explicit path отвергается
+  до preview/export. Без explicit path используется проверенный системный
+  fallback; если он не найден, операция получает явную диагностику.
+- **OVERLAY-005 — Representative preview.** Для первого accepted item worker
+  вне UI thread извлекает кадр в PNG 640×360 и применяет тот же filter adapter.
+  Для видео используется начало media, для фото — исходный кадр. Loading, error,
+  ready и disabled-overlay состояния различимы; временный preview удаляется после
+  загрузки в GUI.
+- **OVERLAY-006 — Plan update.** Изменение только overlay controls не повторяет
+  FFprobe: GUI создаёт новый immutable request внутри текущего plan, инвалидирует
+  старый visual preview и требует обновить его перед export. Изменение input,
+  output, tools или encoding settings по-прежнему требует полного анализа.
+
+### Критерии приёмки среза
+
+- **OVERLAY-AC-001 (OVERLAY-001–003, FR-007, AC-004).** Golden unit-набор для
+  всех форматов/позиций даёт детерминированный escaped filter; enabled config
+  добавляет одну подпись ко всем clips, disabled config не добавляет `drawtext`.
+- **OVERLAY-AC-002 (OVERLAY-004/005, NFR-003/004).** Unicode font path и
+  representative media дают preview без shell; missing font и FFmpeg error
+  отображаются, UI остаётся отзывчивым, временный PNG очищается.
+- **OVERLAY-AC-003 (OVERLAY-006, FR-005/007).** Preview и export используют
+  один и тот же config object; overlay-only change сохраняет accepted order, но
+  export недоступен до обновления visual preview.
+
+### Не входит в срез
+
+- произвольный текст/FFmpeg expression, animation/keyframes и templates;
+- полноценное воспроизведение видео или timeline editor;
+- аппаратный preview acceleration, cache и persistence.
+
 ## Утверждённый срез DATE-001 — metadata/date engine
 
 Этот раздел утверждён в рамках прямой команды пользователя от 2026-08-14

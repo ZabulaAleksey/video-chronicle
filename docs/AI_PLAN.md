@@ -3,7 +3,7 @@
 ## Срез
 
 - Этап: **07 — Overlay editor**
-- Статус: подготовлен, не начат
+- Статус: в работе; overlay contract `OVERLAY-001` утверждён
 - Prompt: `prompts/stages/07-overlay-editor.md`
 - Зависимости: этапы 01–06 завершены; preview использует immutable `ExportPlan`
 - Требования: `FR-002`, `FR-007`, `NFR-003/004`
@@ -14,15 +14,15 @@
 Ввести один typed overlay config для настройки подписи даты, быстрого
 representative-frame preview и финального FFmpeg export path.
 
-## Decision gate
+## Утверждённый контракт
 
-До production-кода утвердить в feature SPEC:
-
-- формат подписи и default enabled policy;
-- допустимые позиции, margins, font size и color values;
-- font fallback и поведение при отсутствующем explicit font;
-- representative-frame preview, loading/error/disabled states;
-- правила escaping Unicode text/font paths только в adapter boundary.
+- default: enabled, `dd.MM.yy ddd`, `bottom-left`, margins 20, font size 72,
+  black text, white outline width 4;
+- только три format preset и четыре corner position; numeric/hex ranges строгие;
+- explicit `.ttf`/`.otf` обязан существовать; иначе проверенный system fallback;
+- preview первого accepted item — PNG 640×360 через тот же filter adapter;
+- overlay-only change не повторяет FFprobe, но инвалидирует visual preview;
+- text/font paths экранируются только в pipeline adapter, argv остаётся list.
 
 ## Scope
 
