@@ -2,14 +2,14 @@
 
 ## Текущий этап
 
-Этапы 00–10 завершены; целевой MVP принят. Текущий этап — 11,
-specification gate неразрушающего редактирования timeline. Default PySide6 GUI
+Этапы 00–11 завершены; целевой MVP и non-destructive editor приняты. Текущий
+этап — 12, experiment gate timeline interchange/scene analysis. Default PySide6 GUI
 строит plan и representative overlay preview через application services и
 запускает тот же immutable plan вне UI thread. Whole-CLI `QProcess` сохранён
-только как явный диагностический fallback. Runtime-очередь и durable project
-storage отсутствуют; normalized-clip cache доступен только как opt-in.
+только как явный диагностический fallback. Runtime-очередь отсутствует; durable
+project schema v2 и opt-in normalized-clip cache являются разными storage boundaries.
 
-Текущий specification-срез этапа 11 хранится в `docs/AI_PLAN.md`. Этапы 01–17
+Текущий experiment-срез этапа 12 хранится в `docs/AI_PLAN.md`. Этапы 01–17
 разделены на самостоятельные project prompts в `prompts/stages/`; они
 загружаются по одному и не заменяют SPEC или текущий план.
 
@@ -39,6 +39,11 @@ storage отсутствуют; normalized-clip cache доступен толь�
 - `src/video_chronicle/cache.py` реализует CACHE-001: canonical clip identity,
   strict path-free manifest, validated restore, private platform storage и
   interprocess mutation lock;
+- `project.py`/`serialization.py`/`repository.py` реализуют EDIT-001: immutable
+  layout/trim/groups/presets, strict schema v2, v1 migration и durable atomic
+  JSON repository с revision/backup/rollback;
+- `application.apply_project_state` связывает сохранённые edits со свежим
+  analysis и создаёт один `plan-v2` для preview, export и cache identity;
 - `docs/ARCHITECTURE.md` и `docs/DESIGN.md` описывают только реализованное;
 - целевое развитие Timeline Builder описано отдельно в
   `specs/features/timeline-builder.spec.md` и не считается готовой функцией;
@@ -86,8 +91,12 @@ storage отсутствуют; normalized-clip cache доступен толь�
   bounded prune и protected purge доступны в CLI и GUI;
 - clean и resumed mixed photo/video exports дают byte-identical output, а
   interruption/corruption/identity changes используют безопасный clean fallback;
-- 245 успешно пройденных unit/contract/GUI/integration/security тестов, включая
-  реальный FFmpeg smoke; два symlink-specific теста пропущены из-за WinError 1314.
+- GUI поддерживает stable reorder, integer-µs trim через ms controls,
+  contiguous groups, versioned presets и async Open/Save project;
+- video/audio trim и representative preview используют один resolved snapshot;
+  real FFmpeg test подтверждает длительность с допуском один target frame;
+- 264 теста проходят, включая editing migration/fault/cache/GUI/FFmpeg; два
+  Windows symlink/reparse теста пропущены из-за WinError 1314.
 
 ## Локальные зависимости
 
@@ -102,14 +111,16 @@ storage отсутствуют; normalized-clip cache доступен толь�
 - после нового клонирования FFmpeg необходимо установить отдельно;
 - версии FFmpeg/FFprobe старше 9.0.1 могут работать, но не входят в
   подтверждённый baseline;
-- cache не является durable project storage и не восстанавливает GUI/timeline
-  edits; same-user process остаётся вне гарантии его аутентичности;
+- drag-and-drop, undo/redo, playback, multi-track, transitions и nested groups
+  не входят в EDIT-001;
+- same-user process остаётся вне гарантии аутентичности cache/project files;
 - SQLite, ExifTool, Pydantic и OTIO остаются неутверждёнными кандидатами;
   PySide6 принят только для GUI.
 
 ## Следующая задача
 
-Создать и утвердить отдельную EDIT-001 feature SPEC для reorder, trim, grouping,
-presets и persistence/migration contract. До прохождения gate production-код
-этапа 11 не писать. Текущий срез находится в `docs/AI_PLAN.md` и
-`prompts/stages/11-nondestructive-editing.md`.
+Провести experiment gate этапа 12: выбрать один interchange format, определить
+bounded parser/golden fixtures и scene benchmark/метрики, проверить license и
+clean fallback. До утверждения отдельной SPEC adapter-код не писать. Текущий
+срез находится в `docs/AI_PLAN.md` и
+`prompts/stages/12-timeline-interchange-scene.md`.

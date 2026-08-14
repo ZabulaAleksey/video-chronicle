@@ -94,6 +94,23 @@ Output path, порядок, overwrite и workspace не дают права н�
 - Cache не гарантирует аутентичность против процесса, уже исполняемого под тем же
   пользователем ОС; такая граница остаётся вне desktop threat model.
 
+## Project files и non-destructive edits
+
+- Schema v2 имеет exact fields, digest/ID/revision invariants и pure v1
+  migration; payload создаёт только данные и не запускает commands/executables.
+- Layout обязан быть точной permutation известных IDs; trim/kind/duration,
+  groups и presets повторно валидируются при binding к свежему analysis до
+  workspace и FFmpeg.
+- Durable repository принимает безопасный project ID, отклоняет UNC/device,
+  symlink/reparse и несоответствие filename↔payload ID. Existing root только
+  проверяется; GUI создаёт отдельный private `.video-chronicle-projects` child.
+- Save/backup/rollback выполняются под bounded per-project OS lock через private
+  temporary regular file, strict re-read, fsync и atomic replace. Revision
+  монотонна, stale writer не перезаписывает save или rollback.
+- Backup restore публикуется как новая revision; source paths из project не
+  становятся целями записи. Content identity/fingerprint повторно проверяется
+  у runtime tool boundary.
+
 ## Проверки перед выпуском
 
 Обязательны отрицательные сценарии из `docs/TESTING.md`, в особенности странные

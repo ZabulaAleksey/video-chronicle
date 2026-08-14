@@ -102,8 +102,8 @@ interprocess lifecycle. Clean и resumed mixed-media exports эквивален�
 
 ## Текущий целевой v1 — этапы 11–16
 
-- **Следующий — [11](../prompts/stages/11-nondestructive-editing.md):** specification gate и неразрушающее изменение порядка, trim, grouping и presets;
-- **[12](../prompts/stages/12-timeline-interchange-scene.md):** optional timeline interchange и анализ сцен за интерфейсами;
+- **[11 — завершён](../prompts/stages/11-nondestructive-editing.md):** schema v2, durable project, неразрушающие reorder/trim/groups и versioned presets;
+- **Следующий — [12](../prompts/stages/12-timeline-interchange-scene.md):** experiment gate optional timeline interchange и анализа сцен за интерфейсами;
 - **[13](../prompts/stages/13-local-transcription.md):** optional локальная транскрипция с provenance модели;
 - **[14](../prompts/stages/14-hardware-quality.md):** проверка возможностей оборудования, метрики качества и обязательный
   software fallback;

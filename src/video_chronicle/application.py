@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import Callable
 
 from .domain import ExportPlan, ExportRequest, MediaItem, SourceFingerprint
+from .project import (
+    EditingClipSnapshot,
+    EditingExportSnapshot,
+    ProjectState,
+    TimelineItem,
+)
 from .execution import (
     ExecutionContext,
     ExportCancelled,
@@ -147,6 +153,72 @@ def execute_export(
         progress=progress,
         cache=cache,
     )
+
+
+def apply_project_state(analyzed_plan: ExportPlan, project_state: ProjectState) -> ExportPlan:
+    """Bind persisted EDIT-001 IDs/edits to a fresh inspection result."""
+
+    if not isinstance(project_state, ProjectState):
+        raise TypeError("project_state must be ProjectState")
+    layout = project_state.layout
+    if layout is None:
+        raise ValueError("project layout is missing")
+    layout.validate_for(project_state.timeline)
+    inspected_by_id = {
+        TimelineItem.from_media_item(item).stable_id: item for item in analyzed_plan.items
+    }
+    timeline_by_id = {item.stable_id: item for item in project_state.timeline.items}
+    effective: list[MediaItem] = []
+    clips: list[EditingClipSnapshot] = []
+    failures = list(analyzed_plan.inspection_failures)
+    for entry in layout.entries:
+        inspected = inspected_by_id.get(entry.item_id)
+        if inspected is None:
+            failures.append((timeline_by_id[entry.item_id].source_path, "known project source is missing or failed inspection"))
+            continue
+        rebound = replace(
+            timeline_by_id[entry.item_id],
+            media_kind="photo" if inspected.is_photo else "video",
+            source_duration_us=inspected.source_duration_us,
+        )
+        resolved = entry.trim.resolve(rebound)
+        effective.append(
+            replace(
+                inspected,
+                trim_in_us=resolved.in_us,
+                trim_out_us=resolved.out_us,
+                trim_applied=not entry.trim.is_full_source,
+            )
+        )
+        clips.append(EditingClipSnapshot(entry.item_id, resolved, entry.group_id))
+    known_ids = set(timeline_by_id)
+    for item_id, inspected in inspected_by_id.items():
+        if item_id not in known_ids:
+            failures.append(
+                (inspected.path, "new source is not part of the saved project")
+            )
+    if not effective:
+        raise ValueError("project contains no currently usable media")
+    preset = project_state.resolve_active_preset()
+    settings = preset.settings
+    request = replace(
+        analyzed_plan.request,
+        mode=settings.mode,
+        overlay=settings.overlay,
+        crf=settings.crf,
+        preset=settings.encoder_preset,
+    )
+    snapshot = EditingExportSnapshot.create(
+        project_id=project_state.project_id,
+        project_revision=project_state.revision,
+        clips=tuple(clips),
+        groups=layout.groups,
+        preset_ref=preset.ref,
+        settings=settings,
+        output_path=request.output,
+        overwrite=request.overwrite,
+    )
+    return ExportPlan(request, tuple(effective), tuple(failures), snapshot)
 
 
 def execute_plan(
@@ -418,7 +490,7 @@ class SourceChangedError(RuntimeError):
     """A previewed source no longer has its inspected file identity."""
 
 
-def _require_source_fingerprint(item: MediaItem) -> None:
+def require_source_fingerprint(item: MediaItem) -> None:
     expected = item.source_fingerprint
     if expected is None:
         # Compatibility for manually assembled legacy plans. Canonical
@@ -434,3 +506,7 @@ def _require_source_fingerprint(item: MediaItem) -> None:
         raise SourceChangedError(
             f"source identity changed after planning: {item.path}"
         )
+
+
+# Compatibility for internal callers and tests that patched the former helper.
+_require_source_fingerprint = require_source_fingerprint

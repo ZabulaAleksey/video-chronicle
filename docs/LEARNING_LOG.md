@@ -216,3 +216,37 @@ git diff --check
 3. Изменить source bytes, overlay/font или tool identity и проверить новый miss.
 4. Повредить manifest/clip и убедиться, что экспорт использует clean fallback.
 5. Выполнить `--purge-cache` только для выбранного private root.
+
+## 2026-08-14 — Неразрушающий project editor и schema v2
+
+### Что изменилось
+
+Ручной порядок не заменил date-sorted `Timeline`: он хранится отдельным
+immutable layout. Trim использует integer microseconds, groups обязаны быть
+непрерывными, а preset revision сохраняет и ссылку, и resolved render settings.
+Один `plan-v2` связывает GUI preview, FFmpeg export и cache identity.
+
+### Почему project и cache разделены
+
+Project JSON — источник истины пользовательских edits. Cache — отключаемая
+оптимизация нормализации. Повреждённый cache можно удалить без потери проекта;
+rollback project публикуется как новая revision, чтобы stale writer не смог
+перезаписать восстановленное состояние.
+
+### Команды и проверки
+
+```powershell
+$env:QT_QPA_PLATFORM = "offscreen"
+$env:VIDEO_CHRONICLE_FFMPEG = (Resolve-Path "ffmpeg1/bin/ffmpeg.exe").Path
+$env:VIDEO_CHRONICLE_FFPROBE = (Resolve-Path "ffmpeg1/bin/ffprobe.exe").Path
+.venv/Scripts/python -m pytest -q tests/test_nondestructive_editing.py
+.venv/Scripts/python -m pytest -q
+```
+
+### Как повторить самостоятельно
+
+1. Проанализировать mixed photo/video папку и сохранить project.
+2. Переместить элементы, создать группу и задать trim.
+3. Обновить representative preview и выполнить export.
+4. Закрыть приложение, открыть project и повторно проанализировать sources.
+5. Проверить, что edits восстановлены, а SHA-256/size/mtime sources не изменились.

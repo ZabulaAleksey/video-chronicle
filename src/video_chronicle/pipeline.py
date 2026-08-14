@@ -10,6 +10,7 @@ import stat
 import subprocess
 import tempfile
 from datetime import datetime
+from decimal import Decimal, InvalidOperation, ROUND_FLOOR
 from pathlib import Path
 from typing import Any
 
@@ -261,7 +262,50 @@ def inspect_item(
         has_audio=any(stream.get("codec_type") == "audio" for stream in streams),
         date_source=selected.source,
         date_decision=date_decision,
+        source_duration_us=source_duration_us(
+            probe, is_photo=path.suffix.casefold() in PHOTO_EXTENSIONS
+        ),
     )
+
+
+def source_duration_us(probe: dict[str, Any], *, is_photo: bool = False) -> int | None:
+    """Extract EDIT-001 duration from 0:v:0, rounded down to integer µs."""
+
+    if is_photo:
+        return 2_000_000
+    streams = probe.get("streams")
+    if isinstance(streams, list):
+        video = next(
+            (
+                stream
+                for stream in streams
+                if isinstance(stream, dict) and stream.get("codec_type") == "video"
+            ),
+            None,
+        )
+        duration_ts = video.get("duration_ts") if video is not None else None
+        if video is not None and (
+            type(duration_ts) is int
+            or (isinstance(duration_ts, str) and duration_ts.isdigit())
+        ):
+            try:
+                numerator, denominator = str(video.get("time_base")).split("/", 1)
+                duration = Decimal(duration_ts) * Decimal(numerator) / Decimal(denominator)
+                value = int((duration * Decimal(1_000_000)).to_integral_value(rounding=ROUND_FLOOR))
+                if value > 0:
+                    return value
+            except (InvalidOperation, ValueError, OverflowError, ZeroDivisionError):
+                pass
+    format_value = probe.get("format")
+    raw = format_value.get("duration") if isinstance(format_value, dict) else None
+    if isinstance(raw, (str, int, float)) and not isinstance(raw, bool):
+        try:
+            value = int((Decimal(str(raw)) * Decimal(1_000_000)).to_integral_value(rounding=ROUND_FLOOR))
+            if 0 < value <= 7 * 24 * 60 * 60 * 1_000_000:
+                return value
+        except (InvalidOperation, ValueError, OverflowError):
+            pass
+    return None
 
 
 def ffmpeg_filter_escape(value: str) -> str:
@@ -367,7 +411,14 @@ def make_video_filter(
     overlay = _coerce_overlay_config(font_file)
     # Portrait media remains upright and is fitted into the common landscape
     # canvas.  A common canvas is necessary for gapless stream concatenation.
-    filters = [
+    filters: list[str] = []
+    if item.trim_applied:
+        if item.trim_out_us is None:
+            raise ValueError("edited trim requires a resolved out point")
+        filters.append(
+            f"trim=start={_seconds(item.trim_in_us)}:end={_seconds(item.trim_out_us)}"
+        )
+    filters += [
         "setpts=PTS-STARTPTS",
         "scale=1600:900:force_original_aspect_ratio=decrease",
         "pad=1600:900:(ow-iw)/2:(oh-ih)/2:color=black",
@@ -413,6 +464,7 @@ def normalize_item(
         overlay = resolve_overlay_font(overlay, find_default_font())
     require_resolved_overlay_font(overlay)
     command = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y"]
+    photo_duration = item.trim_out_us if item.trim_applied else 2_000_000
     if item.is_photo:
         command += [
             "-f",
@@ -424,7 +476,7 @@ def normalize_item(
             "-framerate",
             "60",
             "-t",
-            "2",
+            _seconds(photo_duration),
             "-i",
             str(item.path),
             "-f",
@@ -444,9 +496,17 @@ def normalize_item(
 
     video_filter = make_video_filter(item, overlay)
     if item.has_audio and not item.is_photo:
+        audio_trim = ""
+        if item.trim_applied:
+            if item.trim_out_us is None:
+                raise ValueError("edited trim requires a resolved out point")
+            audio_trim = (
+                f"atrim=start={_seconds(item.trim_in_us)}:"
+                f"end={_seconds(item.trim_out_us)},"
+            )
         filter_complex = (
             f"[0:v:0]{video_filter}[v];"
-            "[0:a:0]aformat=sample_rates=48000:channel_layouts=stereo,"
+            f"[0:a:0]{audio_trim}aformat=sample_rates=48000:channel_layouts=stereo,"
             "asetpts=PTS-STARTPTS,apad[a]"
         )
         command += [
@@ -470,7 +530,7 @@ def normalize_item(
         ]
 
     if item.is_photo:
-        command += ["-t", "2"]
+        command += ["-t", _seconds(photo_duration)]
     command += [
         "-c:v",
         "libx264",
@@ -538,6 +598,10 @@ def render_overlay_preview(
     runner(command, f"FFmpeg preview failed for {item.path}", timeout=60)
     if not destination.is_file() or destination.stat().st_size == 0:
         raise MediaError(f"FFmpeg preview did not create a PNG for {item.path}")
+
+
+def _seconds(microseconds: int) -> str:
+    return format(Decimal(microseconds) / Decimal(1_000_000), "f")
 
 
 def concat_escape(path: Path) -> str:

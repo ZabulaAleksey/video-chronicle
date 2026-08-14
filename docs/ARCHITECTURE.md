@@ -17,12 +17,14 @@
   filename candidates, provenance, raw values, timezone и conflicts.
 - `src/video_chronicle/overlay.py` — immutable `OverlayConfig`, проверка
   диапазонов, цветов и identity локального шрифта.
-- `src/video_chronicle/project.py` — immutable MODEL-001 timeline, export
-  snapshot, job lifecycle и project state.
-- `src/video_chronicle/repository.py` — `ProjectRepository` port и process-local
-  `InMemoryProjectRepository` reference adapter.
-- `src/video_chronicle/serialization.py` — строгий JSON-compatible schema v1
-  mapping без файлового I/O и выполнения команд.
+- `src/video_chronicle/project.py` — immutable MODEL-001 timeline и EDIT-001
+  layout: reorder, integer-µs trim, contiguous groups, versioned presets,
+  editing export snapshot и job/project lifecycle.
+- `src/video_chronicle/repository.py` — revision-aware `ProjectRepository`,
+  process-local reference adapter и durable `JsonProjectRepository` с lock,
+  atomic save, backup и monotonic rollback.
+- `src/video_chronicle/serialization.py` — строгий JSON-compatible schema v2,
+  pure v1 migration и exact-field validation без выполнения команд.
 - `src/video_chronicle/ports.py` — типизированные границы inspection,
   normalization, concatenation, publication и source discovery.
 - `src/video_chronicle/application.py` — orchestration одного экспорта и
@@ -63,32 +65,37 @@
 4. Изменение только `OverlayConfig` сохраняет уже проанализированные items, но
    инвалидирует визуальный preview. Первый принятый item рендерится через тот же
    filter adapter в 640×360 PNG до разблокировки экспорта.
-5. GUI передаёт тот же plan в `execute_plan` через отдельный worker; execution
+5. При открытом/созданном project GUI связывает текущий analysis с immutable
+   layout: применяет reorder, resolved trim/groups и active preset, создавая
+   `plan-v2`. Любой edit инвалидирует representative preview и export.
+6. GUI передаёт тот же plan в `execute_plan` через отдельный worker; execution
    context транслирует typed progress и принимает отмену только до publication
    commit. CLI создаёт тот же `ExportRequest` и вызывает тот же application path.
-6. Source adapter находит поддерживаемые медиафайлы во входном каталоге.
-7. FFprobe adapter возвращает метаданные и сведения о потоках.
-8. DATE-001 engine собирает кандидатов, выбирает дату из метаданных или имени
+7. Source adapter находит поддерживаемые медиафайлы во входном каталоге.
+8. FFprobe adapter возвращает метаданные, kind и effective duration `0:v:0`.
+9. DATE-001 engine собирает кандидатов, выбирает дату из метаданных или имени
    файла и сохраняет provenance/conflicts без timezone conversion.
-9. Перед каждым tool boundary source fingerprint сравнивается со снимком,
+10. Перед каждым tool boundary source fingerprint сравнивается со снимком,
    полученным до и после inspection. FFmpeg adapter приводит каждый элемент к
    1600×900, 60 FPS, H.264 и AAC и
    применяет единый typed date overlay ко всем элементам либо полностью
    исключает `drawtext`, если подпись выключена.
-10. При включённом cache каждый accepted item получает content/tool/settings
+11. Trimmed video использует `trim/atrim + setpts/asetpts`, фото — resolved
+   duration; preview и export применяют один resolved clip snapshot.
+12. При включённом cache каждый accepted item получает content/tool/settings
    identity. Подтверждённый hit копируется в active workspace; miss проходит
    обычную normalization и атомарно сохраняется. Повреждение даёт warning и
    clean fallback, но никогда не подменяет plan или output path.
-11. Подготовленные клипы объединяются без повторного кодирования.
-12. Каждый subprocess принадлежит Windows Job Object или POSIX process group;
+13. Подготовленные клипы объединяются без повторного кодирования.
+14. Каждый subprocess принадлежит Windows Job Object или POSIX process group;
    cancel, timeout и output-limit завершают и подтверждают остановку всего дерева.
-13. Без разрешения overwrite временный результат публикуется атомарным
+15. Без разрешения overwrite временный результат публикуется атомарным
    no-replace rename на Windows или create-if-absent hard link на POSIX;
    подтверждённая замена использует `os.replace`. Рабочий каталог удаляется,
    если не указан `--keep-work`.
-14. После успешной публикации cache pruning применяет лимиты 10 GiB/30 дней;
+16. После успешной публикации cache pruning применяет лимиты 10 GiB/30 дней;
    explicit purge работает только внутри подтверждённого private cache root.
-15. GUI получает log-сообщения через Qt signal и принимает успех только при
+17. GUI получает log-сообщения через Qt signal и принимает успех только при
    результате 0 и подтверждённой новой identity итогового файла.
 
 ## Границы
@@ -96,9 +103,9 @@
 Проект использует `src` layout и один production path через package application
 service. Root-level CLI только экспортирует канонические функции для обратной
 совместимости. MODEL-001 предоставляет состояния будущих заданий, но проект не
-содержит сервера, базы данных, durable project storage или runtime-очереди.
-Единственное persistent storage — отключаемый файловый cache нормализованных
-клипов; он не является источником истины проекта. GUI не
+содержит сервера, базы данных или runtime-очереди. Durable project storage —
+строгие локальные JSON documents schema v2; normalized cache остаётся отдельной
+отключаемой оптимизацией и не является источником истины проекта. GUI не
 дублирует сортировку, анализ дат, FFmpeg-команды или финализацию.
 Join и Chronicle являются policy-данными одного `ExportRequest`: inspection,
 normalization, concat и publication adapters у них общие.

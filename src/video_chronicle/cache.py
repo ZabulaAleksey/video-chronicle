@@ -18,7 +18,6 @@ import sys
 import time
 import threading
 from contextlib import contextmanager
-from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from fractions import Fraction
@@ -33,6 +32,7 @@ CACHE_VERSION = 1
 CACHE_MARKER = ".video-chronicle-cache"
 CACHE_LOCK = ".video-chronicle-cache.lock"
 NORMALIZATION_PROFILE = "normalize-v1"
+NORMALIZATION_PROFILE_V2 = "normalize-v2"
 ARTIFACT_NAME = "clip.mp4"
 MANIFEST_NAME = "manifest.json"
 MAX_CACHE_BYTES = 10 * 1024**3
@@ -207,9 +207,10 @@ class NormalizedClipCache:
             _fsync_file(copied)
             os.chmod(copied, 0o400)
             now = datetime.now(UTC).isoformat()
+            version = 2 if key.startswith("clip-v2-") else 1
             manifest = {
                 "schema": CACHE_SCHEMA,
-                "version": CACHE_VERSION,
+                "version": version,
                 "key": key,
                 "identity": identity,
                 "created_at": now,
@@ -470,14 +471,15 @@ class NormalizedClipCache:
         self, entry: Path, key: str, *, enforce_directory_name: bool = True
     ) -> dict[str, Any]:
         _require_directory(entry)
-        if (enforce_directory_name and entry.name != key) or not key.startswith("clip-v1-"):
+        if (enforce_directory_name and entry.name != key) or not key.startswith(("clip-v1-", "clip-v2-")):
             raise ValueError("cache key/directory mismatch")
         manifest_path = entry / MANIFEST_NAME
         _require_regular_private_path(manifest_path)
         manifest = _read_bounded_json(manifest_path, MAX_MANIFEST_BYTES)
         if type(manifest) is not dict or set(manifest) != _MANIFEST_FIELDS:
             raise ValueError("cache manifest fields do not match")
-        if manifest["schema"] != CACHE_SCHEMA or manifest["version"] != CACHE_VERSION:
+        expected_version = 2 if key.startswith("clip-v2-") else 1
+        if manifest["schema"] != CACHE_SCHEMA or manifest["version"] != expected_version:
             raise ValueError("cache manifest version is incompatible")
         if manifest["key"] != key or cache_key(manifest["identity"]) != key:
             raise ValueError("cache manifest key does not match")
@@ -497,7 +499,7 @@ class NormalizedClipCache:
     def _actual_cache_bytes(self) -> int:
         total = 0
         for candidate in self.root.iterdir():
-            if candidate.name.startswith(("clip-v1-", "tmp-")):
+            if candidate.name.startswith(("clip-v1-", "clip-v2-", "tmp-")):
                 total += _safe_tree_bytes(candidate)
             elif candidate.name == "trash":
                 _require_directory(candidate)
@@ -520,7 +522,7 @@ class NormalizedClipCache:
 
     def _entry_directories(self) -> Iterator[Path]:
         for candidate in self.root.iterdir():
-            if candidate.name.startswith("clip-v1-"):
+            if candidate.name.startswith(("clip-v1-", "clip-v2-")):
                 _require_directory(candidate)
                 yield candidate
 
@@ -539,7 +541,7 @@ class NormalizedClipCache:
         if trash.exists():
             _require_directory(trash)
             for candidate in trash.iterdir():
-                if not candidate.name.startswith("clip-v1-"):
+                if not candidate.name.startswith(("clip-v1-", "clip-v2-")):
                     raise RuntimeError(f"unrecognized cache trash entry: {candidate}")
                 manifest_path = candidate / MANIFEST_NAME
                 _require_regular_private_path(manifest_path)
@@ -602,10 +604,17 @@ def build_clip_identity(
         source_stat.st_size,
         source_stat.st_mtime_ns,
         source_stat.st_ctime_ns,
+        source_hash,
     )
-    return {
+    identity = {
         "source_path_sha256": _path_hash(item.path),
-        "source_fingerprint": asdict(fingerprint),
+        "source_fingerprint": {
+            "device": fingerprint.device,
+            "inode": fingerprint.inode,
+            "size": fingerprint.size,
+            "mtime_ns": fingerprint.mtime_ns,
+            "ctime_ns": fingerprint.ctime_ns,
+        },
         "source_sha256": source_hash,
         "recorded_date": date_identity,
         "media_shape": {"is_photo": item.is_photo, "has_audio": item.has_audio},
@@ -624,18 +633,24 @@ def build_clip_identity(
             "font": font,
         },
         "encoding": {"crf": request.crf, "preset": request.preset},
-        "normalization": NORMALIZATION_PROFILE,
+        "normalization": NORMALIZATION_PROFILE_V2 if item.trim_applied else NORMALIZATION_PROFILE,
         "tools": tool_identities
         or {
             "ffmpeg": _tool_identity(request.ffmpeg, runner),
             "ffprobe": _tool_identity(request.ffprobe, runner),
         },
     }
+    if item.trim_applied:
+        if item.trim_out_us is None:
+            raise ValueError("edited trim requires a resolved out point")
+        identity["trim"] = {"in_us": item.trim_in_us, "out_us": item.trim_out_us}
+    return identity
 
 
 def cache_key(identity: dict[str, Any]) -> str:
     digest = hashlib.sha256(_canonical_json(identity).encode("utf-8")).hexdigest()
-    return f"clip-v1-{digest}"
+    version = 2 if identity.get("normalization") == NORMALIZATION_PROFILE_V2 else 1
+    return f"clip-v{version}-{digest}"
 
 
 def _date_candidate_identity(candidate: Any) -> dict[str, Any]:
@@ -1122,7 +1137,7 @@ def _reject_reparse_ancestors(path: Path) -> None:
 def _remove_verified_tree(path: Path, *, allow_tmp: bool = False) -> None:
     if _is_symlink_or_reparse(path) or not path.is_dir():
         raise RuntimeError(f"refusing to remove unsafe cache directory: {path}")
-    if not allow_tmp and not path.name.startswith("clip-v1-"):
+    if not allow_tmp and not path.name.startswith(("clip-v1-", "clip-v2-")):
         raise RuntimeError(f"refusing to remove unrecognized cache entry: {path}")
     for parent, directories, files in os.walk(path, followlinks=False):
         for name in [*directories, *files]:

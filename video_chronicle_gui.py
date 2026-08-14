@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import codecs
+import hashlib
 import os
 import sys
 from dataclasses import replace
@@ -13,6 +14,7 @@ from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, Qt, Signal, S
 from PySide6.QtGui import QCloseEvent, QPixmap, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
+    QAbstractItemView,
     QCheckBox,
     QComboBox,
     QFileDialog,
@@ -49,6 +51,17 @@ from video_chronicle.domain import ExportMode, ExportPlan
 from video_chronicle.execution import ProgressEvent
 from video_chronicle.gui_services import ApplicationServiceAdapter
 from video_chronicle.gui_services import replace_plan_overlay
+from video_chronicle.application import apply_project_state
+from video_chronicle.project import (
+    ProjectState,
+    RenderPreset,
+    RenderSettings,
+    Timeline,
+    TimelineItem,
+    TimelineLayout,
+    TrimRange,
+)
+from video_chronicle.repository import JsonProjectRepository
 from video_chronicle.overlay import (
     OVERLAY_FORMATS,
     OVERLAY_POSITIONS,
@@ -208,9 +221,14 @@ class ChronicleWindow(QMainWindow):
             app_adapter.preview_ready.connect(self._on_visual_preview_ready)
             app_adapter.progress_received.connect(self._on_progress_event)
             app_adapter.execution_state_changed.connect(self._on_execution_state)
+            app_adapter.project_ready.connect(self._on_project_ready)
             app_adapter.completed.connect(self._on_application_completed)
         self._active_request: GuiRunRequest | None = None
         self._plan: ExportPlan | None = None
+        self._analyzed_plan: ExportPlan | None = None
+        self._project_state: ProjectState | None = None
+        self._project_repository: JsonProjectRepository | None = None
+        self._persisted_project_revision = 0
         self._visual_preview_current = False
         self._cancel_ui_enabled = (
             not self._legacy_mode
@@ -233,6 +251,20 @@ class ChronicleWindow(QMainWindow):
             )
             self.overlay_group.setEnabled(False)
             self.preview_button.hide()
+            for widget in (
+                self.project_open_button,
+                self.project_save_button,
+                self.move_up_button,
+                self.move_down_button,
+                self.group_button,
+                self.ungroup_button,
+                self.preset_save_version_button,
+                self.preset_apply_button,
+                self.trim_in_spin,
+                self.trim_out_spin,
+                self.trim_apply_button,
+            ):
+                widget.hide()
         else:
             self.run_button.setEnabled(False)
 
@@ -491,14 +523,42 @@ class ChronicleWindow(QMainWindow):
         )
         preview_layout.addWidget(self.plan_summary_label)
 
+        editor_actions = QHBoxLayout()
+        self.project_open_button = QPushButton("Открыть проект…")
+        self.project_save_button = QPushButton("Сохранить проект…")
+        self.move_up_button = QPushButton("↑")
+        self.move_down_button = QPushButton("↓")
+        self.group_button = QPushButton("Группа")
+        self.ungroup_button = QPushButton("Разгруппировать")
+        self.preset_save_version_button = QPushButton("Сохранить preset version")
+        self.preset_apply_button = QPushButton("Применить preset")
+        self.trim_in_spin = QSpinBox(); self.trim_in_spin.setRange(0, 2_147_483_647); self.trim_in_spin.setSuffix(" ms")
+        self.trim_out_spin = QSpinBox(); self.trim_out_spin.setRange(0, 2_147_483_647); self.trim_out_spin.setSuffix(" ms")
+        self.trim_apply_button = QPushButton("Trim")
+        for widget in (self.project_open_button, self.project_save_button, self.move_up_button, self.move_down_button, self.group_button, self.ungroup_button, self.preset_save_version_button, self.preset_apply_button, self.trim_in_spin, self.trim_out_spin, self.trim_apply_button):
+            editor_actions.addWidget(widget)
+        self.project_open_button.clicked.connect(self._open_project)
+        self.project_save_button.clicked.connect(self._save_project)
+        self.move_up_button.clicked.connect(lambda: self._move_selected(-1))
+        self.move_down_button.clicked.connect(lambda: self._move_selected(1))
+        self.group_button.clicked.connect(self._group_selected)
+        self.ungroup_button.clicked.connect(self._ungroup_selected)
+        self.preset_save_version_button.clicked.connect(self._save_preset_version)
+        self.preset_apply_button.clicked.connect(self._apply_active_preset)
+        self.trim_apply_button.clicked.connect(self._trim_selected)
+        preview_layout.addLayout(editor_actions)
+
         self.preview_tree = QTreeWidget()
         self.preview_tree.setObjectName("previewTree")
         self.preview_tree.setAccessibleName("Состав и порядок хронологии")
         self.preview_tree.setHeaderLabels(
-            ["№", "Статус", "Файл", "Дата", "Источник", "Timezone", "Конфликт / причина"]
+            ["№", "Статус", "Файл", "Дата", "Источник", "Timezone", "Конфликт / причина", "Длительность", "Trim"]
         )
         self.preview_tree.setRootIsDecorated(False)
         self.preview_tree.setAlternatingRowColors(True)
+        self.preview_tree.setSelectionMode(
+            QAbstractItemView.SelectionMode.ExtendedSelection
+        )
         self.preview_tree.setUniformRowHeights(True)
         self.preview_tree.setMinimumHeight(165)
         preview_layout.addWidget(self.preview_tree, 1)
@@ -581,6 +641,17 @@ class ChronicleWindow(QMainWindow):
             self.cache_purge_button,
             self.mode_combo,
             self.overlay_group,
+            self.project_open_button,
+            self.project_save_button,
+            self.move_up_button,
+            self.move_down_button,
+            self.group_button,
+            self.ungroup_button,
+            self.preset_save_version_button,
+            self.preset_apply_button,
+            self.trim_in_spin,
+            self.trim_out_spin,
+            self.trim_apply_button,
         ]
 
     def _connect_invalidation_signals(self) -> None:
@@ -800,6 +871,21 @@ class ChronicleWindow(QMainWindow):
             self.visual_preview_state_label.setText("Предпросмотр не построен")
             self.preview_button.setEnabled(False)
             return
+        if self._project_state is not None:
+            active = self._project_state.resolve_active_preset()
+            settings = RenderSettings(
+                self._selected_mode(),
+                overlay,
+                self.crf_spin.value(),
+                self.preset_combo.currentText().strip(),
+            )
+            self._project_state = self._project_state.save_preset(
+                active.preset_id,
+                active.name,
+                settings,
+            )
+            self._refresh_edited_plan()
+            return
         self._plan = replace_plan_overlay(self._plan, overlay)
         if self._active_request is not None:
             self._active_request = replace(self._active_request, overlay=overlay)
@@ -896,9 +982,143 @@ class ChronicleWindow(QMainWindow):
             or plan.request.mode is not active.mode
         ):
             return
+        self._analyzed_plan = plan
+        if self._project_state is not None:
+            try:
+                plan = apply_project_state(plan, self._project_state)
+            except ValueError as exc:
+                self._plan = None
+                QMessageBox.warning(self, "Проект", str(exc))
+                return
         self._plan = plan
         self._visual_preview_current = False
         self._populate_preview(plan)
+
+    def _ensure_project_state(self) -> ProjectState:
+        if self._project_state is not None:
+            return self._project_state
+        if self._analyzed_plan is None:
+            raise RuntimeError("Сначала выполните анализ.")
+        timeline = Timeline.build(TimelineItem.from_media_item(item) for item in self._analyzed_plan.items)
+        request = self._analyzed_plan.request
+        settings = RenderSettings(request.mode, request.overlay, request.crf, request.preset)
+        preset = RenderPreset("gui-default", 1, "GUI default", settings)
+        digest = hashlib.sha256(str(request.input_dir).encode("utf-8")).hexdigest()[:16]
+        self._project_state = ProjectState(f"project-{digest}", timeline, revision=0, layout=TimelineLayout.identity(timeline), presets=(preset,), active_preset=preset.ref)
+        return self._project_state
+
+    def _refresh_edited_plan(self) -> None:
+        if self._analyzed_plan is None or self._project_state is None:
+            return
+        self._plan = apply_project_state(self._analyzed_plan, self._project_state)
+        self._populate_preview(self._plan)
+        self._visual_preview_current = False
+        self.visual_preview_state_label.setText("Предпросмотр устарел")
+        self.preview_button.setEnabled(True)
+        self.preview_state_label.setText("План изменён; обновите preview")
+        self.run_button.setEnabled(False)
+
+    def _selected_item_ids(self) -> tuple[str, ...]:
+        self._ensure_project_state()
+        return tuple(
+            item_id
+            for item in self.preview_tree.selectedItems()
+            if isinstance(
+                (item_id := item.data(0, Qt.ItemDataRole.UserRole)), str
+            )
+        )
+
+    @Slot()
+    def _move_selected(self, direction: int) -> None:
+        ids = self._selected_item_ids()
+        if not ids: return
+        state = self._ensure_project_state(); assert state.layout is not None
+        positions = [i for i, entry in enumerate(state.layout.entries) if entry.item_id in set(ids)]
+        target = min(positions) - 1 if direction < 0 else max(positions) + 2
+        if target < 0 or target > len(state.layout.entries): return
+        before = state.layout.entries[target].item_id if target < len(state.layout.entries) else None
+        try: self._project_state = state.move_items(ids, before)
+        except ValueError as exc: QMessageBox.warning(self, "Редактирование", str(exc)); return
+        self._refresh_edited_plan()
+
+    @Slot()
+    def _group_selected(self) -> None:
+        ids = self._selected_item_ids()
+        if len(ids) < 2: return
+        state = self._ensure_project_state()
+        group_id = f"group-{state.revision + 1}"
+        try: self._project_state = state.create_group(group_id, f"Группа {state.revision + 1}", ids)
+        except ValueError as exc: QMessageBox.warning(self, "Группа", str(exc)); return
+        self._refresh_edited_plan()
+
+    @Slot()
+    def _ungroup_selected(self) -> None:
+        state = self._ensure_project_state(); assert state.layout is not None
+        ids = self._selected_item_ids()
+        groups = {entry.group_id for entry in state.layout.entries if entry.item_id in ids and entry.group_id}
+        if len(groups) != 1: return
+        self._project_state = state.ungroup(next(iter(groups))); self._refresh_edited_plan()
+
+    @Slot()
+    def _trim_selected(self) -> None:
+        ids = self._selected_item_ids()
+        if len(ids) != 1: return
+        try: self._project_state = self._ensure_project_state().set_trim(ids[0], TrimRange(self.trim_in_spin.value() * 1000, self.trim_out_spin.value() * 1000))
+        except ValueError as exc: QMessageBox.warning(self, "Trim", str(exc)); return
+        self._refresh_edited_plan()
+
+    @Slot()
+    def _save_preset_version(self) -> None:
+        state = self._ensure_project_state()
+        try:
+            settings = RenderSettings(self._selected_mode(), self._form_overlay_config(resolve_fallback=True), self.crf_spin.value(), self.preset_combo.currentText().strip())
+            preset_id = state.active_preset.preset_id if state.active_preset is not None else "gui-default"
+            self._project_state = state.save_preset(preset_id, self.preset_combo.currentText().strip() or "Preset", settings)
+        except (ValueError, RuntimeError) as exc:
+            QMessageBox.warning(self, "Preset", str(exc)); return
+        self._refresh_edited_plan()
+
+    @Slot()
+    def _apply_active_preset(self) -> None:
+        state = self._ensure_project_state()
+        if state.active_preset is None: return
+        preset = state.resolve_active_preset()
+        self.crf_spin.setValue(preset.settings.crf)
+        self.preset_combo.setCurrentText(preset.settings.encoder_preset)
+        self._project_state = state.apply_preset(preset.ref)
+        self._refresh_edited_plan()
+
+    @Slot()
+    def _save_project(self) -> None:
+        if not isinstance(self._adapter, ApplicationServiceAdapter): return
+        state = self._ensure_project_state()
+        selected = QFileDialog.getExistingDirectory(
+            self, "Папка хранения проектов", str(Path.home())
+        )
+        if not selected: return
+        repository = JsonProjectRepository(Path(selected) / ".video-chronicle-projects")
+        self._project_repository = repository
+        self._adapter.start_project_save(
+            repository,
+            state,
+            expected_revision=self._persisted_project_revision,
+        )
+
+    @Slot()
+    def _open_project(self) -> None:
+        if not isinstance(self._adapter, ApplicationServiceAdapter): return
+        selected, _ = QFileDialog.getOpenFileName(self, "Открыть проект", "", "Video Chronicle project (*.json)")
+        if not selected: return
+        path = Path(selected); self._project_repository = JsonProjectRepository(path.parent)
+        self._adapter.start_project_open(self._project_repository, path.stem)
+
+    @Slot(object)
+    def _on_project_ready(self, state: object) -> None:
+        if not isinstance(state, ProjectState): return
+        self._project_state = state
+        self._persisted_project_revision = state.revision
+        try: self._refresh_edited_plan()
+        except ValueError as exc: QMessageBox.warning(self, "Проект", str(exc))
 
     def _populate_preview(self, plan: ExportPlan) -> None:
         self.preview_tree.clear()
@@ -920,7 +1140,14 @@ class ChronicleWindow(QMainWindow):
                     provenance,
                     timezone,
                     conflicts,
+                    "—" if item.source_duration_us is None else f"{item.source_duration_us / 1_000_000:.3f} s",
+                    f"{item.trim_in_us / 1_000_000:.3f}–" + ("full" if item.trim_out_us is None else f"{item.trim_out_us / 1_000_000:.3f} s"),
                 ]
+            )
+            row.setData(
+                0,
+                Qt.ItemDataRole.UserRole,
+                TimelineItem.from_media_item(item).stable_id,
             )
             row.setToolTip(2, str(item.path))
             if selected is not None:
@@ -931,7 +1158,7 @@ class ChronicleWindow(QMainWindow):
             self.preview_tree.addTopLevelItem(row)
         for path, reason in plan.inspection_failures:
             row = QTreeWidgetItem(
-                ["—", "Пропущен", str(path), "—", "—", "—", reason]
+                ["—", "Пропущен", str(path), "—", "—", "—", reason, "—", "—"]
             )
             row.setToolTip(2, str(path))
             row.setToolTip(6, reason)
@@ -944,7 +1171,7 @@ class ChronicleWindow(QMainWindow):
         self.preview_tree.resizeColumnToContents(5)
         request = plan.request
         self.preview_state_label.setText("План готов")
-        if request.mode is ExportMode.JOIN:
+        if request.mode is ExportMode.JOIN and self._project_state is None:
             self._visual_preview_current = True
             self.visual_preview_state_label.setText("Отключён в режиме Join")
             self.visual_preview_label.setText("Join не добавляет подпись даты")
@@ -1021,6 +1248,17 @@ class ChronicleWindow(QMainWindow):
             self.status_label.setText("Кэш очищен" if success else "Не удалось очистить кэш")
             self.progress.setRange(0, 1)
             self.progress.setValue(1 if success else 0)
+            return
+
+        if operation in {"project-save", "project-open", "project-rollback"}:
+            self.status_label.setText(
+                "Проект сохранён/открыт" if success else "Ошибка проекта"
+            )
+            self.progress.setRange(0, 1)
+            self.progress.setValue(1 if success else 0)
+            self.run_button.setEnabled(
+                self._plan is not None and self._visual_preview_current
+            )
             return
 
         terminal_state = (
@@ -1135,7 +1373,12 @@ class ChronicleWindow(QMainWindow):
             self.visual_preview_label.setText(str(exc))
             self.run_button.setEnabled(False)
             return
-        self._plan = replace_plan_overlay(self._plan, overlay)
+        if self._plan.project_snapshot is None:
+            self._plan = replace_plan_overlay(self._plan, overlay)
+        elif overlay != self._plan.request.overlay:
+            self.visual_preview_state_label.setText("Preset проекта изменился")
+            self.run_button.setEnabled(False)
+            return
         self._visual_preview_current = False
         self.visual_preview_state_label.setText("Загрузка…")
         self.visual_preview_label.setText("FFmpeg создаёт representative frame…")

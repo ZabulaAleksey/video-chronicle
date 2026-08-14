@@ -16,6 +16,11 @@ services и сохраняется прямой CLI-интерфейс.
 - отдельное действие «Анализировать» строит immutable preview до экспорта;
 - accepted/skipped элементы показаны в детерминированном порядке с выбранной
   датой, provenance, timezone, конфликтом или причиной пропуска;
+- project editor позволяет открыть/сохранить JSON project, перемещать selected
+  items вверх/вниз, задавать trim в миллисекундах, группировать/разгруппировать
+  contiguous items и сохранять/применять versioned render presets;
+- сохранённый `item_id`, а не номер строки, связывает edits с source; partial
+  success не переназначает edit соседнему элементу;
 - preview summary показывает input/output, количество элементов, CRF, preset и
   явную overwrite policy;
 - preview и read-only журнал находятся в изменяемой горизонтальной splitter-паре;
@@ -44,8 +49,8 @@ services и сохраняется прямой CLI-интерфейс.
 - при размере 820×660 всё содержимое доступно через центральную прокрутку;
   default layout 1060×860 показывает параметры и две рабочие панели без clipping.
 
-GUI пока не поддерживает ручной reorder/trim, воспроизведение preview и
-сохранение project/edit-настроек между запусками. Cache хранит только проверенные
+GUI пока не поддерживает воспроизведение timeline, drag-and-drop, undo/redo,
+multi-track, transitions или nested groups. Cache хранит только проверенные
 normalized clips и не является persistence проекта. Cancel скрыт для
 legacy/injected backend без явной safe capability и через
 `VIDEO_CHRONICLE_CANCEL_UI=0`. Overlay ограничен

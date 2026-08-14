@@ -48,6 +48,8 @@ export и реальными FFmpeg preview/normalize с включённой и
 | Windows Job/POSIX group, descendants, timeout/output-limit и real FFmpeg cancel | platform/integration/security | `tests/test_process_control.py` | `EXEC-AC-002`, `AC-006` |
 | Cache key/manifest, corruption fallback, bounds, purge и interprocess lock | unit/integration/security | `tests/test_cache.py`, `tests/test_execution.py` | `CACHE-AC-001–004`, `AC-007` |
 | Interrupted/repeated mixed-media export и byte-identical clean/resumed result | integration smoke | `tests/test_execution.py`, `tests/test_ffmpeg_smoke.py` | `CACHE-AC-002/003`, `AC-005/007/010` |
+| Reorder/trim/groups/presets, schema-v2 migration и revision rollback | unit/property/fault | `tests/test_nondestructive_editing.py` | `EDIT-AC-001–005` |
+| Exact trim preview/export, cache v1/v2 и immutable source | GUI/integration/real FFmpeg | `tests/test_nondestructive_editing.py` | `EDIT-AC-002/004/006/007` |
 
 Synthetic smoke создаёт короткие BMP и MP4 во временном каталоге с пробелом,
 апострофом и Unicode, запускает CLI list-argv без shell, проверяет итоговые

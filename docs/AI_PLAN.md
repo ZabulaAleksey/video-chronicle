@@ -2,41 +2,46 @@
 
 ## Срез
 
-- Этап: **11 — Неразрушающее редактирование timeline**
-- Статус: EDIT-001 утверждён; production-реализация в работе
-- Prompt: `prompts/stages/11-nondestructive-editing.md`
-- Зависимости: этапы 01–10 завершены; MVP стабилен, cache/resume является opt-in
-- Требования: будут выделены из `FR-002`, `FR-003`, `FR-005`, `FR-006`, `FR-007`
-- SPEC: `specs/features/nondestructive-editing.spec.md`
-- Критерии: `EDIT-AC-001–007`
+- Этап: **12 — Optional timeline interchange и scene analysis**
+- Статус: experiment/specification gate; adapter-код до решения SCENE-001 не писать
+- Prompt: `prompts/stages/12-timeline-interchange-scene.md`
+- Зависимости: этапы 01–11 завершены; project schema v2 и editing snapshot стабильны
+- SPEC/AC: будут созданы только после выбора формата, corpus и метрик
 
 ## Цель текущего среза
 
-Определить Qt-free contract неразрушающих edits: stable reorder, trim in/out,
-groups и versioned presets как данные проекта. Preview, export, persistence и
-cache identity должны использовать один и тот же immutable snapshot, не меняя
-и не переименовывая исходные медиафайлы.
+Проверить полезность одного timeline interchange adapter и optional scene
+detector, который создаёт только предложения edits. Core project schema,
+legacy export и ручной editor не должны зависеть от optional формата/библиотеки.
 
-## Утверждённый contract
+## Experiment gate
 
-- date-sorted `Timeline` остаётся baseline, ручная перестановка живёт в layout;
-- trim хранится в integer µs, runtime snapshot содержит resolved bounds;
-- группы непрерывны, не вложены и перемещаются блоком;
-- immutable presets versioned, snapshot хранит ref и resolved settings;
-- schema v2 мигрирует v1 только с backup-before-replace и rollback;
-- full-source cache v1 совместим, реальный trim использует cache v2 identity.
+До implementation необходимо:
 
-## Quality gates и DoD этапа
+- сравнить доступные interchange formats/versions и выбрать ровно один;
+- определить явную обработку unknown fields, rates и timebase;
+- создать bounded golden fixtures и malformed/large negative corpus;
+- определить scene benchmark corpus, ground truth и метрики качества/скорости;
+- провести dependency/license/security review и определить clean fallback;
+- зафиксировать feature flag, критерии continue/drop и удаляемость adapter.
 
-- model/property tests для reorder/trim/group и утверждённых state transitions;
-- проект повторно открывается без потери edits;
-- preview/export parity и точная invalidation cache;
-- исходники побайтно неизменны;
-- migration имеет воспроизводимый rollback;
-- full regression, GUI QA, review и security review зелёные;
-- после acceptance `AI_PLAN` переключается на этап 12.
+## Non-goals
+
+- внедрение OTIO или другого формата в core domain/schema;
+- silent download моделей/бинарников;
+- автоматическое необратимое редактирование;
+- обещание lossless round-trip без golden verification.
+
+## DoD
+
+- отдельная утверждённая SPEC и ADR continue/drop;
+- golden round-trip/timebase и bounded parser negatives;
+- scene benchmark достигает заранее выбранных метрик либо эксперимент удалён;
+- optional dependency отсутствует в default install и имеет clean fallback;
+- full regression/review/security/license gates зелёные;
+- после acceptance `AI_PLAN` переключается на этап 13.
 
 ## Откат
 
-Editing schema должна быть feature-gated либо иметь backup/rollback. Отключение
-редактора не должно менять legacy/MVP export path и существующие schema-v1 проекты.
+Adapter и feature flag удаляются без migration project schema. Предложения сцен
+не применяются автоматически и могут быть отброшены без изменения проекта.

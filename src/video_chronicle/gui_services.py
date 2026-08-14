@@ -24,6 +24,8 @@ from .domain import ExportPlan, ExportRequest
 from .execution import ExecutionContext, ProgressEvent
 from .ports import PipelinePorts
 from .overlay import OverlayConfig, require_resolved_overlay_font, resolve_overlay_font
+from .project import ProjectState
+from .repository import ProjectRepository
 
 
 def build_application_request(request: GuiRunRequest) -> ExportRequest:
@@ -61,6 +63,10 @@ def build_application_request(request: GuiRunRequest) -> ExportRequest:
 def replace_plan_overlay(plan: ExportPlan, overlay: OverlayConfig) -> ExportPlan:
     """Replace only overlay settings while preserving inspected media/order."""
 
+    if plan.project_snapshot is not None and overlay != plan.request.overlay:
+        raise ValueError(
+            "editing-plan overlay changes must create a new project preset snapshot"
+        )
     return replace(plan, request=replace(plan.request, overlay=overlay))
 
 
@@ -115,6 +121,7 @@ class ApplicationServiceAdapter(QObject):
     completed = Signal(str, bool, str)
     progress_received = Signal(object)
     execution_state_changed = Signal(str)
+    project_ready = Signal(object)
 
     def __init__(
         self,
@@ -269,6 +276,41 @@ class ApplicationServiceAdapter(QObject):
 
         self._start("cache-purge", task)
 
+    def start_project_save(
+        self,
+        repository: ProjectRepository,
+        state: ProjectState,
+        *,
+        expected_revision: int,
+    ) -> None:
+        """Persist a project through the repository port off the UI thread."""
+
+        self._start(
+            "project-save",
+            lambda: repository.save(state, expected_revision=expected_revision),
+        )
+
+    def start_project_open(
+        self, repository: ProjectRepository, project_id: str
+    ) -> None:
+        """Strict-load and migrate a project off the UI thread."""
+
+        self._start("project-open", lambda: repository.get(project_id))
+
+    def start_project_rollback(
+        self,
+        repository: ProjectRepository,
+        project_id: str,
+        *,
+        expected_revision: int,
+    ) -> None:
+        self._start(
+            "project-rollback",
+            lambda: repository.restore_backup(
+                project_id, expected_revision=expected_revision
+            ),
+        )
+
     def cancel_export(self) -> bool:
         """Request cancellation of the active application-service export."""
 
@@ -298,6 +340,8 @@ class ApplicationServiceAdapter(QObject):
                 require_resolved_overlay_font(plan.request.overlay)
                 ports = self._ports_factory()
                 ports.validate_source(plan.request.input_dir, plan.items[0].path)
+                from .application import require_source_fingerprint
+                require_source_fingerprint(plan.items[0])
                 self._preview_service(
                     plan.items[0],
                     plan.request.overlay,
@@ -305,6 +349,7 @@ class ApplicationServiceAdapter(QObject):
                     path,
                     ports.command_runner,
                 )
+                require_source_fingerprint(plan.items[0])
                 return path
             except Exception:
                 path.unlink(missing_ok=True)
@@ -405,6 +450,13 @@ class ApplicationServiceAdapter(QObject):
             self.completed.emit(
                 operation, True, f"Кэш очищен: {int(result or 0)} entries."
             )
+            return
+        if operation in {"project-save", "project-open", "project-rollback"}:
+            if not isinstance(result, ProjectState):
+                self.completed.emit(operation, False, "Операция проекта не вернула ProjectState.")
+                return
+            self.project_ready.emit(result)
+            self.completed.emit(operation, True, f"Проект готов: {result.project_id}, revision {result.revision}.")
             return
 
         output_after = (

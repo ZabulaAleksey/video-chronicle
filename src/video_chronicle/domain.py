@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -90,16 +91,26 @@ class SourceFingerprint:
     size: int
     mtime_ns: int
     ctime_ns: int
+    sha256: str | None = None
 
     @classmethod
     def capture(cls, path: Path) -> "SourceFingerprint":
+        before = path.stat()
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
         stat_result = path.stat()
+        fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
+        if any(getattr(before, field) != getattr(stat_result, field) for field in fields):
+            raise OSError(f"source changed while fingerprinting: {path}")
         return cls(
             device=stat_result.st_dev,
             inode=stat_result.st_ino,
             size=stat_result.st_size,
             mtime_ns=stat_result.st_mtime_ns,
             ctime_ns=stat_result.st_ctime_ns,
+            sha256=digest.hexdigest(),
         )
 
 
@@ -114,6 +125,26 @@ class MediaItem:
     date_source: str
     date_decision: DateDecision | None = None
     source_fingerprint: SourceFingerprint | None = None
+    source_duration_us: int | None = None
+    trim_in_us: int = 0
+    trim_out_us: int | None = None
+    trim_applied: bool = False
+
+    def __post_init__(self) -> None:
+        if self.source_duration_us is not None and (
+            isinstance(self.source_duration_us, bool)
+            or not isinstance(self.source_duration_us, int)
+            or self.source_duration_us <= 0
+        ):
+            raise ValueError("source_duration_us must be a positive integer or null")
+        if isinstance(self.trim_in_us, bool) or not isinstance(self.trim_in_us, int) or self.trim_in_us < 0:
+            raise ValueError("trim_in_us must be a non-negative integer")
+        if self.trim_out_us is not None and (
+            isinstance(self.trim_out_us, bool)
+            or not isinstance(self.trim_out_us, int)
+            or self.trim_out_us <= self.trim_in_us
+        ):
+            raise ValueError("trim_out_us must be greater than trim_in_us")
 
 
 @dataclass(frozen=True)
@@ -146,6 +177,11 @@ class ExportPlan:
     request: ExportRequest
     items: tuple[MediaItem, ...]
     inspection_failures: tuple[tuple[Path, str], ...] = ()
+    project_snapshot: object | None = None
+
+    @property
+    def plan_id(self) -> str | None:
+        return getattr(self.project_snapshot, "plan_id", None)
 
 
 class MediaError(RuntimeError):
