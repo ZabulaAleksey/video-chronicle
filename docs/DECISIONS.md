@@ -235,3 +235,9 @@
   proposal, не edit; adapters не входят в project schema. OTIO Apache-2.0
   совместим как optional extra, но release заблокирован до project license и
   отдельного FFmpeg redistribution review.
+- Результат gate: эксперимент принят. Golden на 4096 clips занимает
+  2 834 552 bytes/131 101 JSON nodes; strict limits уточнены до
+  32 MiB/262144 nodes. FFmpeg 9.0.1 baseline дал P/R/F1 `1.0/1.0/1.0`,
+  `0` FP/min, p95 `0 µs`, determinism `3/3` и wall/media `0.080509`.
+  `ffmpeg-scdet-v1` остаётся default-off removable adapter; PySceneDetect не
+  вводится.

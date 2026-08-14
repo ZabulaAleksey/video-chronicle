@@ -50,6 +50,14 @@ export и реальными FFmpeg preview/normalize с включённой и
 | Interrupted/repeated mixed-media export и byte-identical clean/resumed result | integration smoke | `tests/test_execution.py`, `tests/test_ffmpeg_smoke.py` | `CACHE-AC-002/003`, `AC-005/007/010` |
 | Reorder/trim/groups/presets, schema-v2 migration и revision rollback | unit/property/fault | `tests/test_nondestructive_editing.py` | `EDIT-AC-001–005` |
 | Exact trim preview/export, cache v1/v2 и immutable source | GUI/integration/real FFmpeg | `tests/test_nondestructive_editing.py` | `EDIT-AC-002/004/006/007` |
+| Native OTIO 0/1/4096 clips, rational time, proposal apply и strict resource/path/schema negatives | golden/contract/security | `tests/test_timeline_interchange.py` | `INTEROP-AC-001–003`, `OPTIONAL-AC-001` |
+| FFmpeg scdet mapping, malformed output, cancel/tool identity и deterministic benchmark | unit/integration/benchmark | `tests/test_scene_suggestions.py` | `SCENE-AC-001/002` |
+
+Stage 12 golden на 4096 clips занимает 2 834 552 bytes и 131 101 JSON nodes,
+что подтверждает bounded caps 32 MiB/262144 nodes. Checked benchmark artifacts
+находятся в `benchmarks/`: FFmpeg 9.0.1 дал precision/recall/F1 `1.0/1.0/1.0`,
+negative FP/min `0`, p95 `0 µs`, одинаковые timestamps `3/3` и wall/media
+`0.080509`; решение experiment gate — CONTINUE.
 
 Synthetic smoke создаёт короткие BMP и MP4 во временном каталоге с пробелом,
 апострофом и Unicode, запускает CLI list-argv без shell, проверяет итоговые
@@ -113,7 +121,7 @@ ffprobe version 9.0.1-essentials_build-www.gyan.dev
 
 ```powershell
 python -m venv .venv
-.venv/Scripts/python -m pip install -r requirements-dev.txt
+.venv/Scripts/python -m pip install -e ".[dev,otio]"
 $env:QT_QPA_PLATFORM = "offscreen"
 .venv/Scripts/python -m pytest -q
 ```

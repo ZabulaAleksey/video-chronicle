@@ -6,7 +6,7 @@ import logging
 from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
-from typing import Callable
+from typing import Callable, TYPE_CHECKING
 
 from .domain import ExportPlan, ExportRequest, MediaItem, SourceFingerprint
 from .project import (
@@ -21,9 +21,13 @@ from .execution import (
     ProgressEvent,
     bind_execution_context,
 )
-from .ports import NormalizedClipCachePort, PipelinePorts
+from .ports import CommandRunner, NormalizedClipCachePort, PipelinePorts
 from .overlay import require_resolved_overlay_font
 from .process_control import ProcessSafetyError
+
+if TYPE_CHECKING:
+    from .interchange import OptionalFeature
+    from .scene import OptionalSceneFeature
 
 
 def default_ports() -> PipelinePorts:
@@ -510,3 +514,26 @@ def require_source_fingerprint(item: MediaItem) -> None:
 
 # Compatibility for internal callers and tests that patched the former helper.
 _require_source_fingerprint = require_source_fingerprint
+
+
+def experimental_timeline_interchange(
+    environ: dict[str, str] | None = None,
+) -> "OptionalFeature":
+    """Return explicit OTIO availability without affecting the default path."""
+
+    from .interchange import optional_otio_adapter
+
+    return optional_otio_adapter(environ)
+
+
+def experimental_scene_suggestions(
+    ffmpeg: str,
+    environ: dict[str, str] | None = None,
+    *,
+    runner: CommandRunner | None = None,
+) -> "OptionalSceneFeature":
+    """Return explicit scene-detector availability without starting a tool."""
+
+    from .scene import optional_scene_adapter
+
+    return optional_scene_adapter(ffmpeg, environ, runner=runner)

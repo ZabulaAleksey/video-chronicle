@@ -1,0 +1,12 @@
+{
+  "items": [
+    {"duration_us": 5000000, "filename": "hard_0_24_1.mp4", "hard_cuts_us": [1250000, 2500000, 3750000], "item_id": "hard-0", "negative_kind": null, "rate": "24", "sha256": "933382cbda763c877f7e86ad0b588a63893378bcbc31e08e624b12eb2b94149b"},
+    {"duration_us": 5120000, "filename": "hard_1_25_1.mp4", "hard_cuts_us": [1280000, 2560000, 3840000], "item_id": "hard-1", "negative_kind": null, "rate": "25", "sha256": "db11c79cab746023f7f9d96d514aa9641b7abb87ba5df0b50a2ae9fb246ec6cf"},
+    {"duration_us": 5071733, "filename": "hard_2_30000_1001.mp4", "hard_cuts_us": [1267933, 2535867, 3803800], "item_id": "hard-2", "negative_kind": null, "rate": "30000/1001", "sha256": "24162cb85f5a69bba860bb5ccb3d0ac6158b093734ed957b2258b54157d1d48f"},
+    {"duration_us": 5000000, "filename": "hard_3_60_1.mp4", "hard_cuts_us": [1250000, 2500000, 3750000], "item_id": "hard-3", "negative_kind": null, "rate": "60", "sha256": "4b1e26e9e3ac9ce8894770c1909906ded9e4b4d2e2110783ce166b2373060a73"},
+    {"duration_us": 2000000, "filename": "no-cut.mp4", "hard_cuts_us": [], "item_id": "no-cut", "negative_kind": "no-cut", "rate": "30", "sha256": "28581d5c1d40c3d760d0f8041a925052ed8aa92640c3062da4b88647b1b471c4"},
+    {"duration_us": 2000000, "filename": "fade.mp4", "hard_cuts_us": [], "item_id": "fade", "negative_kind": "fade/dissolve", "rate": "30", "sha256": "ec93bd8f9d22d9c5051bc11f032c65e2a005a88872e82202036c64b3339f3e34"},
+    {"duration_us": 2000000, "filename": "flash.mp4", "hard_cuts_us": [], "item_id": "flash", "negative_kind": "flash", "rate": "30", "sha256": "a282c7045df0e9e7d6278bc44adeecd20fcf93e49e06256be1a540b6c6c5635e"}
+  ],
+  "version": "scene-corpus-v1"
+}

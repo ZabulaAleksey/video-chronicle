@@ -1,7 +1,7 @@
 # INTEROP-001 — Optional OTIO interchange и scene suggestions
 
-- Статус: утверждённый experiment contract этапа 12
-- Версия: 1.0
+- Статус: утверждён и реализован на этапе 12
+- Версия: 1.1
 - Родительская SPEC: `timeline-builder.spec.md`
 - Зависимости: EDIT-001, EXEC-001, system path/process invariants
 
@@ -86,14 +86,20 @@ schema v2 и default install не импортируют OTIO types.
 
 До вызова OTIO parser выполняется bounded JSON preflight:
 
-- UTF-8 file не более 4 MiB, top-level object, NaN/Infinity запрещены;
-- глубина до 32, до 8192 JSON nodes, до 4096 clips;
+- UTF-8 file не более 32 MiB, top-level object, NaN/Infinity запрещены;
+- глубина до 32, до 262144 рекурсивно посчитанных JSON scalar/container nodes,
+  до 4096 clips;
 - строка до 4096 chars;
 - metadata до 64 KiB, depth 8 и 1024 entries;
 - только утверждённые schema names/versions и structural fields;
 - никакого filesystem/tool access до полного structural validation.
 
 Ошибка лимита/структуры возвращает diagnostics и не меняет project/source.
+
+Лимиты 32 MiB/262144 nodes уточнены по принятому golden на 4096 clips:
+native OTIO занимает 2 834 552 bytes и 131 101 рекурсивно посчитанный node.
+Первоначальные 4 MiB/8192 nodes противоречили `INTEROP-AC-001`; отдельные
+ограничения depth/string/metadata/clip count сохраняют bounded preflight.
 
 ## 6. Scene detector `ffmpeg-scdet-v1`
 
@@ -135,6 +141,11 @@ Continue criteria на документированном FFmpeg 9.0.1 baseline:
 Если критерии не достигнуты, scene adapter и flag удаляются. PySceneDetect
 исследуется только если улучшает F1 минимум на 0.05 без нарушения performance,
 dependency и license gates.
+
+Принятый Windows baseline FFmpeg 9.0.1 дал precision/recall/F1 `1.0/1.0/1.0`,
+`0` negative FP/min, p95 `0 µs`, одинаковые timestamps `3/3` и wall/media
+`0.080509`. Решение этапа 12 — **CONTINUE** для `ffmpeg-scdet-v1` за default-off
+feature flag.
 
 ## 8. Критерии приёмки
 

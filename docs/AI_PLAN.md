@@ -3,44 +3,44 @@
 ## Срез
 
 - Этап: **12 — Optional timeline interchange и scene analysis**
-- Статус: INTEROP-001 утверждён; bounded experiment implementation в работе
+- Статус: **завершён; дальнейшая реализация приостановлена по указанию пользователя**
 - Prompt: `prompts/stages/12-timeline-interchange-scene.md`
-- Зависимости: этапы 01–11 завершены; project schema v2 и editing snapshot стабильны
-- SPEC: `specs/features/timeline-interchange-scene.spec.md`
-- AC: `INTEROP-AC-001–003`, `SCENE-AC-001/002`, `OPTIONAL-AC-001`, `LICENSE-AC-001`
+- SPEC: `specs/features/timeline-interchange-scene.spec.md`, версия 1.1
+- Acceptance: `INTEROP-AC-001–003`, `SCENE-AC-001/002`,
+  `OPTIONAL-AC-001`, `LICENSE-AC-001` выполнены
 
-## Цель текущего среза
+## Принятый результат
 
-Проверить полезность одного timeline interchange adapter и optional scene
-detector, который создаёт только предложения edits. Core project schema,
-legacy export и ручной editor не должны зависеть от optional формата/библиотеки.
+- native `.otio` реализован как removable optional adapter с exact pin
+  `opentimelineio==0.18.1`;
+- import создаёт immutable proposal и требует явного применения к новой
+  project revision;
+- strict preflight ограничивает schemas, поля, local refs, JSON resources и
+  не вызывает ambient OTIO plugins/hooks/media linker;
+- `ffmpeg-scdet-v1` возвращает только source-relative предложения сцен и
+  использует managed process/cancel/tool-identity boundary;
+- synthetic benchmark прошёл continue-gate: P/R/F1 `1.0/1.0/1.0`, FP/min `0`,
+  p95 `0 µs`, timestamps `3/3`, wall/media `0.080509`;
+- feature flags по умолчанию выключены, schema v2 и обычный export не зависят
+  от OTIO или scene adapter.
 
-## Утверждённый experiment
+## Проверки acceptance
 
-- native `.otio` bounded subset, optional `opentimelineio==0.18.1`/Apache-2.0;
-- integer-µs native export и explicit rational-time import rounding;
-- FFmpeg `scdet=10.0` выдаёт suggestions, но никогда не auto-edits;
-- flags default off и clean fallback без dependency;
-- synthetic corpus и численные precision/recall/FP/error/runtime gates;
-- adapters удаляются без migration schema v2.
+- focused: `34 passed`;
+- full: `298 passed, 2 skipped`;
+- correctness review: READY;
+- security review: READY;
+- `compileall`/CLI help/`git diff --check`: пройдены.
 
-## Non-goals
+## Точка продолжения
 
-- внедрение OTIO или другого формата в core domain/schema;
-- silent download моделей/бинарников;
-- автоматическое необратимое редактирование;
-- обещание lossless round-trip без golden verification.
+Следующим по roadmap является этап 13 — optional local transcription, но он
+**не начат**, его prompt не выбран как текущий срез и новые зависимости не
+исследуются. Возобновлять его только по новой команде пользователя.
 
-## DoD
+## Сохраняющиеся release blockers
 
-- отдельная утверждённая SPEC и ADR continue/drop;
-- golden round-trip/timebase и bounded parser negatives;
-- scene benchmark достигает заранее выбранных метрик либо эксперимент удалён;
-- optional dependency отсутствует в default install и имеет clean fallback;
-- full regression/review/security/license gates зелёные;
-- после acceptance `AI_PLAN` переключается на этап 13.
-
-## Откат
-
-Adapter и feature flag удаляются без migration project schema. Предложения сцен
-не применяются автоматически и могут быть отброшены без изменения проекта.
+- у проекта пока нет утверждённой `LICENSE`;
+- FFmpeg остаётся отдельно устанавливаемым executable, его redistribution
+  требует отдельного review этапов 15–16;
+- optional adapters не считаются release-ready до общего hardening/packaging.

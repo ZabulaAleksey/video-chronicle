@@ -103,8 +103,8 @@ interprocess lifecycle. Clean и resumed mixed-media exports эквивален�
 ## Текущий целевой v1 — этапы 11–16
 
 - **[11 — завершён](../prompts/stages/11-nondestructive-editing.md):** schema v2, durable project, неразрушающие reorder/trim/groups и versioned presets;
-- **Следующий — [12](../prompts/stages/12-timeline-interchange-scene.md):** experiment gate optional timeline interchange и анализа сцен за интерфейсами;
-- **[13](../prompts/stages/13-local-transcription.md):** optional локальная транскрипция с provenance модели;
+- **[12 — завершён](../prompts/stages/12-timeline-interchange-scene.md):** removable native OTIO adapter и прошедшие benchmark FFmpeg scene suggestions за default-off flags;
+- **Следующий, но не начат — [13](../prompts/stages/13-local-transcription.md):** optional локальная транскрипция с provenance модели; работа приостановлена до новой команды пользователя;
 - **[14](../prompts/stages/14-hardware-quality.md):** проверка возможностей оборудования, метрики качества и обязательный
   software fallback;
 - **[15](../prompts/stages/15-security-hardening.md):** аудит недоверенных медиа, subprocess, путей, кэша и зависимостей;

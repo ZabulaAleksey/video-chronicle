@@ -17,6 +17,25 @@ python -m venv .venv
 .venv/Scripts/python -m pip install -e ".[dev]"
 ```
 
+Optional native OTIO interchange устанавливается отдельно и не нужен обычному
+CLI/GUI экспорту:
+
+```powershell
+.venv/Scripts/python -m pip install -e ".[dev,otio]"
+$env:VIDEO_CHRONICLE_EXPERIMENTAL_OTIO = "1"
+```
+
+Scene suggestions используют уже выбранный FFmpeg и также выключены по
+умолчанию:
+
+```powershell
+$env:VIDEO_CHRONICLE_EXPERIMENTAL_SCENE = "ffmpeg-scdet"
+```
+
+Обе функции доступны через application API как экспериментальные adapters.
+OTIO import возвращает proposal, а `scdet` — предложения cuts; ни один из них
+не изменяет project автоматически и пока не добавляет отдельные GUI actions.
+
 После установки доступны единые entry points:
 
 ```powershell
@@ -112,6 +131,10 @@ Cache выключен по умолчанию. При включении GUI п
 клипов, позволяет выбрать private local cache и отдельно подтверждает purge.
 Cache не содержит project state или partial final: повреждённая запись просто
 отклоняется, после чего выполняется обычная clean normalization.
+
+Optional OTIO/scene adapters не входят в project schema v2 и удаляются без
+migration. Проект пока не имеет утверждённой `LICENSE`, а локальная FFmpeg
+сборка не распространяется; release требует отдельного license/packaging review.
 
 Если FFmpeg уже добавлен в `PATH`, параметры `--ffmpeg` и `--ffprobe` можно не указывать.
 

@@ -2,14 +2,15 @@
 
 ## Текущий этап
 
-Этапы 00–11 завершены; целевой MVP и non-destructive editor приняты. Текущий
-этап — 12, experiment gate timeline interchange/scene analysis. Default PySide6 GUI
+Этапы 00–12 завершены; целевой MVP, non-destructive editor и optional
+timeline-interchange/scene experiment приняты. Дальнейшая реализация
+приостановлена по указанию пользователя; этап 13 не начат. Default PySide6 GUI
 строит plan и representative overlay preview через application services и
 запускает тот же immutable plan вне UI thread. Whole-CLI `QProcess` сохранён
 только как явный диагностический fallback. Runtime-очередь отсутствует; durable
 project schema v2 и opt-in normalized-clip cache являются разными storage boundaries.
 
-Текущий experiment-срез этапа 12 хранится в `docs/AI_PLAN.md`. Этапы 01–17
+Принятый срез этапа 12 и точка продолжения хранятся в `docs/AI_PLAN.md`. Этапы 01–17
 разделены на самостоятельные project prompts в `prompts/stages/`; они
 загружаются по одному и не заменяют SPEC или текущий план.
 
@@ -44,6 +45,11 @@ project schema v2 и opt-in normalized-clip cache являются разным�
   JSON repository с revision/backup/rollback;
 - `application.apply_project_state` связывает сохранённые edits со свежим
   analysis и создаёт один `plan-v2` для preview, export и cache identity;
+- `interchange.py` и `otio_adapter.py` реализуют adapter-neutral proposal и
+  strict optional native OTIO subset без типов OTIO в schema v2/core;
+- `scene.py` реализует default-off `ffmpeg-scdet-v1` suggestions через bounded
+  managed process и source/tool fingerprints; `scene_benchmark.py` хранит
+  воспроизводимый corpus/metrics contract;
 - `docs/ARCHITECTURE.md` и `docs/DESIGN.md` описывают только реализованное;
 - целевое развитие Timeline Builder описано отдельно в
   `specs/features/timeline-builder.spec.md` и не считается готовой функцией;
@@ -95,7 +101,14 @@ project schema v2 и opt-in normalized-clip cache являются разным�
   contiguous groups, versioned presets и async Open/Save project;
 - video/audio trim и representative preview используют один resolved snapshot;
   real FFmpeg test подтверждает длительность с допуском один target frame;
-- 264 теста проходят, включая editing migration/fault/cache/GUI/FFmpeg; два
+- optional extra `otio` фиксирует `opentimelineio==0.18.1`; без flag/dependency
+  основной package/import graph и schema v2 не меняются;
+- OTIO golden покрывает 0/1/4096 clips и rational timebases; импорт всегда
+  возвращает proposal, неизвестные/неоднозначные local refs не auto-bind;
+- synthetic scene benchmark на FFmpeg 9.0.1 дал P/R/F1 `1.0/1.0/1.0`,
+  `0` FP/min, p95 `0 µs`, deterministic `3/3` и wall/media `0.080509`;
+- 298 тестов проходят, включая interchange/parser/security/scene benchmark;
+  два
   Windows symlink/reparse теста пропущены из-за WinError 1314.
 
 ## Локальные зависимости
@@ -114,13 +127,16 @@ project schema v2 и opt-in normalized-clip cache являются разным�
 - drag-and-drop, undo/redo, playback, multi-track, transitions и nested groups
   не входят в EDIT-001;
 - same-user process остаётся вне гарантии аутентичности cache/project files;
-- SQLite, ExifTool, Pydantic и OTIO остаются неутверждёнными кандидатами;
-  PySide6 принят только для GUI.
+- SQLite, ExifTool и Pydantic остаются неутверждёнными кандидатами;
+- OTIO/scdet приняты только как default-off removable adapters, не как часть
+  project schema или автоматическое редактирование;
+- у проекта нет утверждённой `LICENSE`; release и FFmpeg redistribution
+  заблокированы до отдельных этапов hardening/packaging;
+- PySide6 принят только для GUI.
 
 ## Следующая задача
 
-Провести experiment gate этапа 12: выбрать один interchange format, определить
-bounded parser/golden fixtures и scene benchmark/метрики, проверить license и
-clean fallback. До утверждения отдельной SPEC adapter-код не писать. Текущий
-срез находится в `docs/AI_PLAN.md` и
-`prompts/stages/12-timeline-interchange-scene.md`.
+Работа приостановлена после принятия этапа 12. Следующим по roadmap остаётся
+этап 13 — optional local transcription, но он не начат и не является текущим
+срезом. Возобновлять его только по новой команде пользователя; точка
+продолжения зафиксирована в `docs/AI_PLAN.md`.

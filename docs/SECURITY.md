@@ -111,6 +111,28 @@ Output path, порядок, overwrite и workspace не дают права н�
   становятся целями записи. Content identity/fingerprint повторно проверяется
   у runtime tool boundary.
 
+## Optional interchange и scene suggestions
+
+- Experimental features выключены по умолчанию. `opentimelineio` импортируется
+  лениво только внутри adapter и отсутствует в default dependency/import graph.
+- OTIO payload сначала проходит strict UTF-8/JSON preflight: максимум 32 MiB,
+  depth 32, 262144 scalar/container nodes, 4096 clips и отдельные лимиты строк
+  и metadata. Duplicate/unknown fields, NaN/Infinity и неутверждённые schemas
+  отклоняются до path I/O или project mutation.
+- Native codec вызывается напрямую через OTIO core serialization. Ambient
+  adapter manifest, hooks, plugins и media linker не получают управление.
+- Разрешены только canonical local `file:` references к известным regular
+  sources. Remote/UNC/device, traversal, symlink/reparse, двойное URL decode и
+  неоднозначная identity дают отказ или unmapped warning без auto-bind.
+- Import возвращает immutable proposal; source/project не меняются до явного
+  применения, которое проверяет project ID/revision и создаёт новую revision.
+- Scene adapter один раз разрешает выбранный FFmpeg в абсолютный local regular
+  executable, фиксирует его content identity и повторно проверяет до/после
+  version/detection boundary. Source также хэшируется чанками до и после tool.
+- Один 120-секундный deadline покрывает hashing, version preflight и managed
+  `scdet`; checkpoints учитывают cancel, stdout/stderr bounded, timestamps
+  ограничены resolved trim. Suggestions не применяются автоматически.
+
 ## Проверки перед выпуском
 
 Обязательны отрицательные сценарии из `docs/TESTING.md`, в особенности странные

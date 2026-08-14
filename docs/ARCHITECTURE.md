@@ -36,6 +36,15 @@
 - `src/video_chronicle/cache.py` — opt-in immutable normalized-clip cache:
   canonical `clip-v1` identity, строгий path-free manifest, bounded validation,
   private platform root и межпроцессная сериализация мутаций.
+- `src/video_chronicle/interchange.py` — Qt/OTIO-free DTO, port и явное
+  применение immutable import proposal к новой revision проекта.
+- `src/video_chronicle/otio_adapter.py` — optional native `.otio` adapter:
+  bounded strict JSON/subset validation, exact rational-time conversion и
+  direct OTIO core codec без ambient adapter/plugin/media-linker dispatch.
+- `src/video_chronicle/scene.py` — optional `ffmpeg-scdet-v1` suggestions с
+  source-relative timestamps, managed process tree и source/tool identity.
+- `src/video_chronicle/scene_benchmark.py` — deterministic synthetic corpus,
+  maximum-cardinality matching и воспроизводимый quality/performance report.
 - `src/video_chronicle/pipeline.py` — production adapters FFprobe/FFmpeg и
   атомарной публикации.
 - `src/video_chronicle/cli.py` — парсинг/валидация CLI и mapping в application
@@ -97,6 +106,10 @@
    explicit purge работает только внутри подтверждённого private cache root.
 17. GUI получает log-сообщения через Qt signal и принимает успех только при
    результате 0 и подтверждённой новой identity итогового файла.
+18. Только при явном experimental flag application лениво создаёт optional
+   interchange/scene adapter. OTIO import формирует proposal и не меняет
+   project до explicit apply; scene detection формирует suggestions и никогда
+   не создаёт edit автоматически.
 
 ## Границы
 
@@ -114,3 +127,6 @@ Legacy whole-CLI `QProcess` остаётся только явным adapter fal
 backend либо явно объявленному совместимому backend; feature flag может скрыть
 его без изменения pipeline. Каталоги `ffmpeg/` и `ffmpeg1/` являются локальными
 сторонними зависимостями и не входят в историю основного репозитория.
+OTIO extra и scene adapter выключены по умолчанию, не входят в schema v2/cache
+authority и удаляются без migration. Любой imported proposal или scene
+suggestion остаётся недоверенным transient data до явной проверки/применения.

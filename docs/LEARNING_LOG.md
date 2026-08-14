@@ -250,3 +250,47 @@ $env:VIDEO_CHRONICLE_FFPROBE = (Resolve-Path "ffmpeg1/bin/ffprobe.exe").Path
 3. Обновить representative preview и выполнить export.
 4. Закрыть приложение, открыть project и повторно проанализировать sources.
 5. Проверить, что edits восстановлены, а SHA-256/size/mtime sources не изменились.
+
+## 2026-08-14 — Removable OTIO interchange и измеримые scene suggestions
+
+### Что изменилось
+
+Этап 12 добавил adapter-neutral timeline DTO/proposal, optional native OTIO
+subset и FFmpeg `scdet` suggestions. Оба adapter выключены по умолчанию, не
+входят в schema v2 и ничего не редактируют автоматически.
+
+### Почему parser вызывается не первым
+
+Даже optional library может иметь глобальные adapter manifests, hooks и media
+linkers. Поэтому payload сначала проходит собственный bounded JSON/subset
+preflight, а затем используется direct OTIO core codec. Remote/traversal refs,
+unknown schemas/fields и превышение limits отклоняются до project mutation.
+
+### Как принималось решение scene detector
+
+Checked synthetic corpus сравнивает suggestions с exact hard-cut boundaries
+через maximum-cardinality matching. FFmpeg 9.0.1 получил P/R/F1 `1.0`, ноль
+false positives на negatives, p95 `0 µs`, одинаковые результаты `3/3` и
+wall/media `0.080509`, поэтому lightweight `ffmpeg-scdet-v1` сохранён, а
+PySceneDetect не добавлен.
+
+### Команды и проверки
+
+```powershell
+$env:QT_QPA_PLATFORM = "offscreen"
+$env:VIDEO_CHRONICLE_FFMPEG = (Resolve-Path "ffmpeg1/bin/ffmpeg.exe").Path
+$env:VIDEO_CHRONICLE_FFPROBE = (Resolve-Path "ffmpeg1/bin/ffprobe.exe").Path
+.venv/Scripts/python -m pytest -q tests/test_timeline_interchange.py tests/test_scene_suggestions.py
+.venv/Scripts/python -m pytest -q
+.venv/Scripts/python -m compileall -q src tests
+git diff --check
+```
+
+### Как повторить самостоятельно
+
+1. Установить optional extra командой `pip install -e ".[dev,otio]"`.
+2. Запустить focused OTIO/scene tests с локальным FFmpeg 9.0.1.
+3. Проверить export/import golden для 0/1/4096 clips.
+4. Подать forbidden schema, remote URL и oversized JSON и увидеть отказ без mutation.
+5. Сгенерировать synthetic corpus и сравнить JSON/Markdown benchmark report.
+6. Выключить оба flags и убедиться, что обычный import graph/export не изменился.

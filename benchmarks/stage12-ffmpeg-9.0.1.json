@@ -1,0 +1,18 @@
+{
+  "continue_passed": true,
+  "corpus_version": "scene-corpus-v1",
+  "criteria": {"determinism": true, "f1": true, "negative_fp_per_min": true, "p95_error": true, "precision": true, "recall": true, "runtime": true},
+  "deterministic_runs": 3,
+  "f1": 1.0,
+  "ffmpeg_identity": "ffmpeg version 9.0.1-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+  "media_seconds": 26.191733,
+  "negative_false_positives_per_minute": 0.0,
+  "p95_boundary_error_us": 0,
+  "platform": "Windows-10-10.0.19045-SP0",
+  "precision": 1.0,
+  "python_version": "3.12.5",
+  "recall": 1.0,
+  "suggestions_identical": true,
+  "wall_media_ratio": 0.08050902931831588,
+  "wall_seconds": 2.1086709999945015
+}

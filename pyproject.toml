@@ -16,6 +16,9 @@ dependencies = [
 dev = [
     "pytest>=8,<10",
 ]
+otio = [
+    "opentimelineio==0.18.1",
+]
 
 [project.scripts]
 video-chronicle = "video_chronicle.cli:main"
