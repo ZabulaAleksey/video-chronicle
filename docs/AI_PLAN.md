@@ -3,7 +3,7 @@
 ## Срез
 
 - Этап: **10 — Resume и cache**
-- Статус: decision gate; identity/key/storage contract ещё не утверждён
+- Статус: CACHE-001 утверждён; production-реализация в работе
 - Prompt: `prompts/stages/10-resume-cache.md`
 - Зависимости: этапы 01–09 завершены; export lifecycle, source fingerprint,
   process-tree cancel и atomic publication стабильны
@@ -16,13 +16,15 @@
 использовать только подтверждённые intermediates, связанные с точной identity
 входа, immutable plan, параметрами и совместимой версией инструментов.
 
-## Decision gate до production-кода
+## Утверждённый contract
 
-- утвердить канонический cache key и manifest schema/version;
-- выбрать локальный storage adapter, atomic write и crash recovery;
-- определить integrity validation, invalidation, retention и explicit purge;
-- зафиксировать поведение при corrupt/tampered/old state и нехватке места;
-- сохранить clean export как обязательный fallback и не доверять cache paths.
+- opt-in normalized-clip cache; legacy/default CLI остаётся clean;
+- `clip-v1` canonical key связывает content/stat/date/settings/profile/font и
+  FFmpeg/FFprobe identities, но не output/order/overwrite;
+- strict path-free manifest v1 и bounded FFprobe validation;
+- private platform cache root, atomic no-replace store, 10 GiB/30-day limits;
+- I/O/corruption означает miss + clean fallback; explicit purge scoped marker;
+- cache hit копируется в active workspace и завершает одну progress unit.
 
 ## Scope
 

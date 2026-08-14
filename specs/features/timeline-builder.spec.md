@@ -267,6 +267,75 @@ application/pipeline path и не меняет CLI argv или атомарну�
 - cancel analysis/representative preview: они остаются текущими bounded tool
   calls, а safe cancel в этом срезе относится к export.
 
+## Утверждённый срез CACHE-001 — resume normalized clips
+
+Этот срез утверждён прямой командой пользователя от 2026-08-14 последовательно
+выполнить оставшиеся этапы. Cache является отключаемой оптимизацией единственного
+`execute_plan` и не меняет результат, immutable preview plan или legacy default.
+
+- **CACHE-001 — Opt-in policy.** GUI checkbox «Использовать кэш» и CLI
+  `--cache` выключены по умолчанию. `--cache-dir` выбирает private root,
+  `--purge-cache` выполняет отдельную explicit purge. Без opt-in persistent
+  artifacts не создаются; legacy CLI argv/результат остаются прежними.
+- **CACHE-002 — Единица reuse.** Entry содержит только один полностью
+  нормализованный MP4 clip. Workspace, partial final, argv, команды, overwrite
+  permission и durable runtime queue не сохраняются. Порядок и concat каждый
+  раз строятся заново; hit материализуется копией в новый private workspace.
+- **CACHE-003 — Canonical key.** `clip-v1-<sha256>` вычисляется из canonical
+  JSON с sorted UTF-8 fields: hash нормализованного absolute source path;
+  `SourceFingerprint`; full source SHA-256, подтверждённый stat до/после;
+  recorded date/provenance, media shape; mode; весь `OverlayConfig` и hash/
+  identity explicit font; CRF/preset; `normalize-v1`; bounded FFmpeg/FFprobe
+  version-output digest и executable size/mtime. Output path/order,
+  overwrite/keep-work/error-log в key не входят.
+- **CACHE-004 — Strict manifest.** Отдельный exact-field schema
+  `video-chronicle-normalized-clip-cache` v1 содержит key, canonical identity,
+  UTC creation time и artifact size/SHA-256, но не paths/argv. Unknown version,
+  extra/missing fields, key/directory mismatch, corrupt artifact, symlink/
+  reparse или несовместимый bounded FFprobe stream дают cache miss.
+- **CACHE-005 — Private atomic storage.** Default root использует user cache
+  directory ОС; custom root получает exact marker и private permissions.
+  Entry создаётся в random `tmp`, полностью проверяется и публикуется atomic
+  no-replace directory rename; manifest/artifact immutable. Cache path никогда
+  не передаётся concat напрямую. Ошибка cache I/O/validation/store означает
+  warning и clean fallback, не failure media export.
+- **CACHE-006 — Retention/purge.** Initial limits: 10 GiB и 30 дней без
+  verified hit; entry больше cap не сохраняется. Automatic prune выполняется
+  только после успешного export. Explicit purge разрешена только без активной
+  операции, перемещает entry в verified `trash` и не удаляет root/marker.
+  Root/home/source/output, каталоги без marker и symlink/reparse не удаляются.
+- **CACHE-007 — Integration.** `execute_plan` получает optional typed cache
+  port. На hit одна normalize progress-unit завершается с `cache_hit=True`; на
+  miss выполняется текущий normalize и только после его проверки допускается
+  store. Cancel/publication/cleanup semantics этапа 09 не меняются. GUI
+  показывает hit/miss и подтверждаемую purge; widgets не читают manifest.
+- **CACHE-008 — Trust model.** Hashes обнаруживают corruption и обычную
+  подмену, но не заявляют аутентичность против same-user attacker, способного
+  переписать artifact и manifest. Resume state никогда не становится источником
+  command/path/overwrite authority; clean export всегда доступен.
+
+### Критерии приёмки среза
+
+- **CACHE-AC-001 (CACHE-002/003/007, FR-010, AC-007).** После cancel на
+  позднем item повторный совместимый export подтверждённо reuse завершённые
+  clips; изменение content/stat/date/settings/font/profile/tool version даёт
+  miss до reuse, а clean/resumed outputs эквивалентны.
+- **CACHE-AC-002 (CACHE-004/005/008, SEC-005, AC-007).** Corrupt/tampered/old
+  manifest, hash/size/stream mismatch и unsafe paths не используются; cache
+  failure даёт clean success либо явный warning и не меняет sources/output.
+- **CACHE-AC-003 (CACHE-001/006, FR-011/012).** Cache disabled не создаёт
+  storage и сохраняет CLI characterization; purge/retention затрагивают только
+  verified private entries и недоступны во время active GUI operation.
+- **CACHE-AC-004 (CACHE-003/007, NFR-001/003).** Key стабилен для Unicode и
+  canonical field order; output/order/overwrite не инвалидируют совместимый
+  normalized clip; mixed photo/video real FFmpeg проходит clean и resumed.
+
+### Не входит в срез
+
+- SQLite/project-schema migration, durable job manifest и background queue;
+- hardlink cache artifact в active workspace, background GC и cloud cache;
+- HMAC/keyring authenticity, distributed locks и ML artifacts.
+
 ## Утверждённый срез DATE-001 — metadata/date engine
 
 Этот раздел утверждён в рамках прямой команды пользователя от 2026-08-14
