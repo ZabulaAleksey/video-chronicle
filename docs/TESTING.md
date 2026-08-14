@@ -20,6 +20,8 @@
 входы, частичный успех, коллизии результата, неизменность источников,
 построение GUI argv, реальный legacy `QProcess`, application-service worker,
 preview states, invalidation, overwrite timing и responsive scrolling.
+Overlay покрыт validation/golden tests, preview lifecycle, synthetic multi-item
+export и реальными FFmpeg preview/normalize с включённой и выключенной подписью.
 
 ## Матрица baseline этапа 01
 
@@ -40,6 +42,7 @@ preview states, invalidation, overwrite timing и responsive scrolling.
 | DATE-001 priority, raw provenance, timezone и conflicts | unit/table | `tests/test_metadata_date_engine.py` | `DATE-AC-001–003`, `AC-002` |
 | MODEL-001 IDs/order, job transitions, schema v1 и repository | unit/table | `tests/test_project_queue_model.py` | `MODEL-AC-001–003` |
 | GUI application preview, async lifecycle, Unicode, stale plan и overwrite | GUI/contract | `tests/test_gui_application.py` | `GUI-APP-AC-001–003`, `AC-001/002/010` |
+| Единый overlay config, escaping шрифта, preview и multi-item export | unit/GUI/integration | `tests/test_overlay.py` | `OVERLAY-AC-001–003`, `AC-004/010` |
 
 Synthetic smoke создаёт короткие BMP и MP4 во временном каталоге с пробелом,
 апострофом и Unicode, запускает CLI list-argv без shell, проверяет итоговые

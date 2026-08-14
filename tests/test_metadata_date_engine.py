@@ -159,6 +159,7 @@ def test_export_plan_excludes_missing_date_and_keeps_diagnostic(
 
     from video_chronicle.application import plan_export
     from video_chronicle.domain import ExportRequest
+    from video_chronicle.overlay import OverlayConfig
     from video_chronicle.ports import PipelinePorts
     from video_chronicle import pipeline
 
@@ -174,11 +175,11 @@ def test_export_plan_excludes_missing_date_and_keeps_diagnostic(
         error_log=tmp_path / "errors.log",
         ffmpeg="ffmpeg",
         ffprobe="ffprobe",
-        font_file=None,
         crf=20,
         preset="medium",
         overwrite=False,
         keep_work=False,
+        overlay=OverlayConfig(enabled=False),
     )
     runner = lambda command, context, **kwargs: subprocess.CompletedProcess(
         command, 0, "", ""

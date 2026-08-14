@@ -11,6 +11,12 @@ import pytest
 import join_media
 
 
+def _fixture_font(tmp_path: Path) -> Path:
+    font = tmp_path / "fixture font.ttf"
+    font.write_bytes(b"test-font-placeholder")
+    return font
+
+
 def _close_join_media_logger() -> None:
     logger = logging.getLogger("join_media")
     for handler in logger.handlers:
@@ -254,7 +260,7 @@ def test_main_orders_items_by_date_then_casefolded_name(
         item: join_media.MediaItem,
         destination: Path,
         _ffmpeg: str,
-        _font_file: Path | None,
+        _overlay,
         _crf: int,
         _preset: str,
         _runner=None,
@@ -272,7 +278,8 @@ def test_main_orders_items_by_date_then_casefolded_name(
         temporary_output.write_bytes(b"movie")
 
     monkeypatch.setattr(join_media, "resolve_executable", lambda value, label: value)
-    monkeypatch.setattr(join_media, "find_default_font", lambda: None)
+    font = _fixture_font(tmp_path)
+    monkeypatch.setattr(join_media, "find_default_font", lambda: font)
     monkeypatch.setattr(join_media, "inspect_item", fake_inspect)
     monkeypatch.setattr(join_media, "normalize_item", fake_normalize)
     monkeypatch.setattr(join_media, "concatenate", fake_concatenate)
@@ -336,7 +343,7 @@ def test_normalize_item_builds_list_argv_for_each_media_shape(
         item,
         destination,
         "trusted ffmpeg",
-        None,
+        _fixture_font(tmp_path),
         crf=17,
         preset="slow",
     )
@@ -353,6 +360,27 @@ def test_normalize_item_builds_list_argv_for_each_media_shape(
     assert expected_audio_map in command
     assert "29.02.24 Чт" in command[command.index("-filter_complex") + 1]
     assert str(source) in context
+
+
+def test_legacy_filter_helper_accepts_none_and_font_file_keyword(
+    tmp_path: Path,
+) -> None:
+    item = join_media.MediaItem(
+        path=tmp_path / "legacy.mp4",
+        taken_at=datetime(2024, 2, 29, 23, 59, 59),
+        is_photo=False,
+        has_audio=True,
+        date_source="fixture",
+    )
+
+    fallback_filter = join_media.make_video_filter(item, None)
+    explicit_filter = join_media.make_video_filter(
+        item, font_file=_fixture_font(tmp_path)
+    )
+
+    assert "drawtext=" in fallback_filter
+    assert "fontfile=" not in fallback_filter
+    assert "fontfile=" in explicit_filter
 
 
 def test_concatenate_writes_escaped_list_and_list_argv(
@@ -404,7 +432,8 @@ def test_empty_input_returns_failure_before_media_work(
     output = tmp_path / "result.mp4"
     error_log = tmp_path / "errors.log"
     monkeypatch.setattr(join_media, "resolve_executable", lambda value, label: value)
-    monkeypatch.setattr(join_media, "find_default_font", lambda: None)
+    font = _fixture_font(tmp_path)
+    monkeypatch.setattr(join_media, "find_default_font", lambda: font)
 
     exit_code = _run_main(
         monkeypatch,
@@ -434,7 +463,8 @@ def test_corrupt_input_is_skipped_and_source_is_unchanged(
     output = tmp_path / "result.mp4"
     error_log = tmp_path / "errors.log"
     monkeypatch.setattr(join_media, "resolve_executable", lambda value, label: value)
-    monkeypatch.setattr(join_media, "find_default_font", lambda: None)
+    font = _fixture_font(tmp_path)
+    monkeypatch.setattr(join_media, "find_default_font", lambda: font)
     monkeypatch.setattr(
         join_media,
         "inspect_item",
@@ -477,7 +507,8 @@ def test_partial_encoding_success_publishes_only_complete_result_and_keeps_input
     error_log = tmp_path / "errors.log"
 
     monkeypatch.setattr(join_media, "resolve_executable", lambda value, label: value)
-    monkeypatch.setattr(join_media, "find_default_font", lambda: None)
+    font = _fixture_font(tmp_path)
+    monkeypatch.setattr(join_media, "find_default_font", lambda: font)
     monkeypatch.setattr(
         join_media,
         "inspect_item",
@@ -494,7 +525,7 @@ def test_partial_encoding_success_publishes_only_complete_result_and_keeps_input
         item: join_media.MediaItem,
         destination: Path,
         ffmpeg: str,
-        font_file: Path | None,
+        overlay,
         crf: int,
         preset: str,
         runner=None,

@@ -15,6 +15,8 @@
   экспорта, включая выбранное date decision.
 - `src/video_chronicle/metadata.py` — Qt-free DATE-001 engine: metadata и
   filename candidates, provenance, raw values, timezone и conflicts.
+- `src/video_chronicle/overlay.py` — immutable `OverlayConfig`, проверка
+  диапазонов, цветов и identity локального шрифта.
 - `src/video_chronicle/project.py` — immutable MODEL-001 timeline, export
   snapshot, job lifecycle и project state.
 - `src/video_chronicle/repository.py` — `ProjectRepository` port и process-local
@@ -30,7 +32,8 @@
 - `src/video_chronicle/cli.py` — парсинг/валидация CLI и mapping в application
   request.
 - `src/video_chronicle/gui_services.py` — PySide6 `QThread`/worker boundary для
-  `plan_export` и `execute_plan`, без widgets и собственного медиаконвейера.
+  `plan_export`, representative-frame preview и `execute_plan`, без widgets и
+  собственного медиаконвейера.
 - `join_media.py` — тонкий legacy compatibility shim и direct-source entry point.
 - `gui_contract.py` — чистая конфигурация одного GUI-запуска и построение argv.
 - `video_chronicle_gui.py` — PySide6 Widgets UI, preview presenter и временный
@@ -49,20 +52,24 @@
 3. Immutable `ExportPlan` возвращается в GUI: accepted/skipped элементы,
    date provenance и порядок показываются до экспорта. Изменение формы
    инвалидирует plan; overwrite подтверждается непосредственно перед запуском.
-4. GUI передаёт тот же plan в `execute_plan` через отдельный worker; CLI создаёт
+4. Изменение только `OverlayConfig` сохраняет уже проанализированные items, но
+   инвалидирует визуальный preview. Первый принятый item рендерится через тот же
+   filter adapter в 640×360 PNG до разблокировки экспорта.
+5. GUI передаёт тот же plan в `execute_plan` через отдельный worker; CLI создаёт
    тот же `ExportRequest` и вызывает тот же application path напрямую.
-5. Source adapter находит поддерживаемые медиафайлы во входном каталоге.
-6. FFprobe adapter возвращает метаданные и сведения о потоках.
-7. DATE-001 engine собирает кандидатов, выбирает дату из метаданных или имени
+6. Source adapter находит поддерживаемые медиафайлы во входном каталоге.
+7. FFprobe adapter возвращает метаданные и сведения о потоках.
+8. DATE-001 engine собирает кандидатов, выбирает дату из метаданных или имени
    файла и сохраняет provenance/conflicts без timezone conversion.
-8. FFmpeg adapter приводит каждый элемент к 1600×900, 60 FPS, H.264 и AAC и
-   добавляет дату.
-9. Подготовленные клипы объединяются без повторного кодирования.
-10. Без разрешения overwrite временный результат публикуется атомарным
+9. FFmpeg adapter приводит каждый элемент к 1600×900, 60 FPS, H.264 и AAC и
+   применяет единый typed date overlay ко всем элементам либо полностью
+   исключает `drawtext`, если подпись выключена.
+10. Подготовленные клипы объединяются без повторного кодирования.
+11. Без разрешения overwrite временный результат публикуется атомарным
    no-replace rename на Windows или create-if-absent hard link на POSIX;
    подтверждённая замена использует `os.replace`. Рабочий каталог удаляется,
    если не указан `--keep-work`.
-11. GUI получает log-сообщения через Qt signal и принимает успех только при
+12. GUI получает log-сообщения через Qt signal и принимает успех только при
    результате 0 и подтверждённой новой identity итогового файла.
 
 ## Границы

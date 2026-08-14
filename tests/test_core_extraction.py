@@ -72,6 +72,7 @@ def test_plan_and_execution_use_injected_workspace_and_process_ports(
 ) -> None:
     from video_chronicle.application import execute_plan, plan_export
     from video_chronicle.domain import ExportRequest, MediaItem
+    from video_chronicle.overlay import OverlayConfig
     from video_chronicle.ports import PipelinePorts
 
     input_dir = tmp_path / "input"
@@ -88,11 +89,11 @@ def test_plan_and_execution_use_injected_workspace_and_process_ports(
         error_log=tmp_path / "errors.log",
         ffmpeg="ffmpeg",
         ffprobe="ffprobe",
-        font_file=None,
         crf=20,
         preset="medium",
         overwrite=False,
         keep_work=False,
+        overlay=OverlayConfig(enabled=False),
     )
 
     def runner(command, context, **kwargs):
@@ -103,7 +104,7 @@ def test_plan_and_execution_use_injected_workspace_and_process_ports(
         assert probe(path, ffprobe, command_runner)["streams"]
         return MediaItem(path, datetime(2024, 1, 1), False, True, "fixture")
 
-    def normalize(item, destination, ffmpeg, font, crf, preset, command_runner):
+    def normalize(item, destination, ffmpeg, overlay, crf, preset, command_runner):
         command_runner([ffmpeg], "normalize")
         destination.write_bytes(b"clip")
 

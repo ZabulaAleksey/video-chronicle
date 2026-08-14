@@ -154,3 +154,17 @@
   worker lifecycle, а legacy fallback можно удалить после стабилизации. До
   этапа 09 окно по-прежнему нельзя закрыть во время активного worker, потому
   что process-tree cancellation ещё не реализована.
+
+## 2026-08-14 — единый typed date overlay
+
+- Решение: хранить immutable `OverlayConfig` в `ExportRequest` и использовать
+  один объект для representative preview и каждого элемента export; разрешить
+  только утверждённые format/position/range presets и явное отключение.
+- Причина: preview обязан соответствовать финальному фильтру, а widgets не
+  должны строить FFmpeg DSL или дублировать media policy.
+- Альтернативы: отдельные GUI/CLI filter builders; произвольная строка
+  `drawtext`; preview без FFmpeg; копирование шрифта в каждый clip workspace.
+- Последствия: шрифт валидируется как локальный bounded regular file и
+  перепроверяется у tool boundary; FFmpeg escaping сосредоточен в adapter;
+  overlay-only change сохраняет inspection plan, но требует нового visual
+  preview. Video playback, keyframes и arbitrary expressions остаются вне scope.

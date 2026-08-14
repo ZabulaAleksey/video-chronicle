@@ -2,51 +2,53 @@
 
 ## Срез
 
-- Этап: **07 — Overlay editor**
-- Статус: в работе; overlay contract `OVERLAY-001` утверждён
-- Prompt: `prompts/stages/07-overlay-editor.md`
-- Зависимости: этапы 01–06 завершены; preview использует immutable `ExportPlan`
-- Требования: `FR-002`, `FR-007`, `NFR-003/004`
-- Критерий: `AC-004`
+- Этап: **08 — Join и Chronicle modes**
+- Статус: подготовка decision gate; реализация не начата
+- Prompt: `prompts/stages/08-join-chronicle-modes.md`
+- Зависимости: этапы 01–07 завершены; единый `ExportPlan` содержит immutable
+  `OverlayConfig`
+- Требования: `FR-006`, `FR-007`, `FR-011`, system compatibility
+- Критерии: `AC-003`, `AC-004`, `AC-008`
 
 ## Цель
 
-Ввести один typed overlay config для настройки подписи даты, быстрого
-representative-frame preview и финального FFmpeg export path.
+Утвердить и реализовать два понятных режима поверх одного медиаконвейера:
+обратно совместимый Join и Chronicle с date policy/overlay.
 
-## Утверждённый контракт
+## Decision gate до кода
 
-- default: enabled, `dd.MM.yy ddd`, `bottom-left`, margins 20, font size 72,
-  black text, white outline width 4;
-- только три format preset и четыре corner position; numeric/hex ranges строгие;
-- explicit `.ttf`/`.otf` обязан существовать; иначе проверенный system fallback;
-- preview первого accepted item — PNG 640×360 через тот же filter adapter;
-- overlay-only change не повторяет FFprobe, но инвалидирует visual preview;
-- text/font paths экранируются только в pipeline adapter, argv остаётся list.
+- определить наблюдаемую разницу режимов и их defaults;
+- решить, является ли overlay допустимым в Join и как mode влияет на date
+  requirement;
+- зафиксировать legacy CLI default и совместимое явное representation mode;
+- описать недопустимые сочетания и сообщения пользователю;
+- добавить требования и acceptance matrix в feature SPEC.
 
 ## Scope
 
-- Qt-free immutable overlay config с валидацией и defaults;
-- единый adapter к FFmpeg filter generation;
-- PySide6 controls и асинхронный representative-frame preview;
-- overlay on/off integration smoke без изменения источников.
+- Qt-free mode enum/config и policy на уровне request/plan;
+- единый plan builder и существующий normalize/concat path;
+- GUI selector с объяснением результата до экспорта;
+- совместимое CLI representation и migration tests;
+- matrix tests mode × overlay × media type и mixed-media smoke обоих режимов.
 
 ## Non-goals
 
-- полноценный video editor, animation/keyframes и arbitrary FFmpeg expressions;
-- marketplace/templates, manual timeline editing и mode switch;
-- progress/cancel, resume/cache или persistence UI.
+- второй медиаконвейер или дублирование FFmpeg filters;
+- новые codecs, trim/reorder, progress/cancel, cache/resume;
+- изменение legacy поведения без утверждённой migration policy.
 
 ## Quality gates и DoD
 
-- `AC-004` прослеживается до config, preview и synthetic export test;
-- preview и export получают один config object;
-- Unicode text/font paths экранируются adapter’ом, не widgets;
-- scaling, keyboard, contrast, loading/error preview проверены;
-- full regression, compileall и `git diff --check` зелёные;
-- после acceptance `AI_PLAN` переключён на этап 08.
+- SPEC утверждает mode contract до production-кода;
+- legacy invocation сохраняет ожидаемый результат;
+- mode хранится как данные immutable plan, а не как ветвление widgets;
+- оба режима проходят один application/pipeline path;
+- focused matrix, CLI characterization, mixed-media smoke, full regression,
+  compileall и `git diff --check` зелёные;
+- после acceptance `AI_STATUS` и `ROADMAP` обновлены, `AI_PLAN` переключён на 09.
 
 ## Откат
 
-Overlay config имеет `enabled=False`; preview adapter removable, а выключение
-overlay возвращает действующий media filter без изменения source или plan schema.
+Mode policy должна быть обратимой: legacy Join остаётся безопасным fallback,
+а mode selector удаляется без изменения normalize/concat/publication adapters.

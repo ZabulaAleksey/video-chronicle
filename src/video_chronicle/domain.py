@@ -7,6 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
+from .overlay import DEFAULT_OVERLAY_CONFIG, OverlayConfig
+
 
 DateOrigin = Literal["metadata", "filename"]
 
@@ -92,11 +94,11 @@ class ExportRequest:
     error_log: Path
     ffmpeg: str
     ffprobe: str
-    font_file: Path | None
     crf: int
     preset: str
     overwrite: bool
     keep_work: bool
+    overlay: OverlayConfig = DEFAULT_OVERLAY_CONFIG
 
 
 @dataclass(frozen=True)

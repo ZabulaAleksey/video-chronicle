@@ -10,9 +10,10 @@ from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, Qt, Signal, Slot
-from PySide6.QtGui import QCloseEvent, QTextCursor
+from PySide6.QtGui import QCloseEvent, QPixmap, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QFileDialog,
     QFormLayout,
@@ -31,6 +32,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QSpinBox,
     QSplitter,
+    QTabWidget,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -45,6 +47,13 @@ from gui_contract import (
 )
 from video_chronicle.domain import ExportPlan
 from video_chronicle.gui_services import ApplicationServiceAdapter
+from video_chronicle.gui_services import replace_plan_overlay
+from video_chronicle.overlay import (
+    OVERLAY_FORMATS,
+    OVERLAY_POSITIONS,
+    OverlayConfig,
+    resolve_overlay_font,
+)
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -195,9 +204,11 @@ class ChronicleWindow(QMainWindow):
             app_adapter.started.connect(self._on_application_started)
             app_adapter.output_received.connect(self._append_output)
             app_adapter.plan_ready.connect(self._on_plan_ready)
+            app_adapter.preview_ready.connect(self._on_visual_preview_ready)
             app_adapter.completed.connect(self._on_application_completed)
         self._active_request: GuiRunRequest | None = None
         self._plan: ExportPlan | None = None
+        self._visual_preview_current = False
         self._building_ui = True
 
         default_input = Path.home() / "Input"
@@ -211,6 +222,8 @@ class ChronicleWindow(QMainWindow):
             self.preview_state_label.setText(
                 "Диагностический режим: preview отключён, запускается legacy CLI."
             )
+            self.overlay_group.setEnabled(False)
+            self.preview_button.hide()
         else:
             self.run_button.setEnabled(False)
 
@@ -316,7 +329,73 @@ class ChronicleWindow(QMainWindow):
         tool_warning.setObjectName("hint")
         tool_warning.setWordWrap(True)
         advanced_layout.addWidget(tool_warning, 4, 0, 1, 3)
-        card_layout.addWidget(advanced)
+
+        self.overlay_group = QGroupBox("Подпись даты")
+        overlay_layout = QGridLayout(self.overlay_group)
+        overlay_layout.setHorizontalSpacing(12)
+        overlay_layout.setVerticalSpacing(10)
+        self.overlay_enabled = QCheckBox("Показывать дату на кадре")
+        self.overlay_enabled.setChecked(True)
+        self.overlay_enabled.setAccessibleName("Включить подпись даты")
+        overlay_layout.addWidget(self.overlay_enabled, 0, 0, 1, 3)
+
+        self.overlay_format_combo = QComboBox()
+        self.overlay_format_combo.addItems(list(OVERLAY_FORMATS))
+        self.overlay_position_combo = QComboBox()
+        self.overlay_position_combo.addItems(list(OVERLAY_POSITIONS))
+        self.overlay_position_combo.setCurrentText("bottom-left")
+        overlay_layout.addWidget(QLabel("Формат"), 1, 0)
+        overlay_layout.addWidget(self.overlay_format_combo, 1, 1)
+        overlay_layout.addWidget(QLabel("Позиция"), 2, 0)
+        overlay_layout.addWidget(self.overlay_position_combo, 2, 1)
+
+        self.overlay_horizontal_margin = QSpinBox()
+        self.overlay_horizontal_margin.setRange(0, 300)
+        self.overlay_horizontal_margin.setValue(20)
+        self.overlay_vertical_margin = QSpinBox()
+        self.overlay_vertical_margin.setRange(0, 300)
+        self.overlay_vertical_margin.setValue(20)
+        self.overlay_font_size = QSpinBox()
+        self.overlay_font_size.setRange(12, 200)
+        self.overlay_font_size.setValue(72)
+        self.overlay_outline_width = QSpinBox()
+        self.overlay_outline_width.setRange(0, 20)
+        self.overlay_outline_width.setValue(4)
+        overlay_layout.addWidget(QLabel("Отступ X"), 3, 0)
+        overlay_layout.addWidget(self.overlay_horizontal_margin, 3, 1)
+        overlay_layout.addWidget(QLabel("Отступ Y"), 3, 2)
+        overlay_layout.addWidget(self.overlay_vertical_margin, 3, 3)
+        overlay_layout.addWidget(QLabel("Размер шрифта"), 4, 0)
+        overlay_layout.addWidget(self.overlay_font_size, 4, 1)
+        overlay_layout.addWidget(QLabel("Обводка"), 4, 2)
+        overlay_layout.addWidget(self.overlay_outline_width, 4, 3)
+
+        self.overlay_text_color = QLineEdit("#000000")
+        self.overlay_text_color.setMaxLength(7)
+        self.overlay_outline_color = QLineEdit("#FFFFFF")
+        self.overlay_outline_color.setMaxLength(7)
+        overlay_layout.addWidget(QLabel("Цвет текста"), 5, 0)
+        overlay_layout.addWidget(self.overlay_text_color, 5, 1)
+        overlay_layout.addWidget(QLabel("Цвет обводки"), 5, 2)
+        overlay_layout.addWidget(self.overlay_outline_color, 5, 3)
+
+        self.overlay_font_edit = QLineEdit("")
+        self.overlay_font_edit.setPlaceholderText("Системный fallback (.ttf/.otf)")
+        self.overlay_font_button = QPushButton("Файл…")
+        self.overlay_font_button.clicked.connect(self._browse_overlay_font)
+        overlay_layout.addWidget(QLabel("Шрифт"), 6, 0)
+        overlay_layout.addWidget(self.overlay_font_edit, 6, 1, 1, 2)
+        overlay_layout.addWidget(self.overlay_font_button, 6, 3)
+        overlay_layout.setColumnStretch(1, 1)
+        overlay_layout.setColumnStretch(3, 1)
+        settings_tabs = QTabWidget()
+        settings_tabs.setObjectName("settingsTabs")
+        settings_tabs.setMinimumHeight(310)
+        advanced.setTitle("")
+        self.overlay_group.setTitle("")
+        settings_tabs.addTab(advanced, "Кодирование")
+        settings_tabs.addTab(self.overlay_group, "Подпись даты")
+        card_layout.addWidget(settings_tabs)
         root.addWidget(settings_card)
 
         action_row = QHBoxLayout()
@@ -380,6 +459,29 @@ class ChronicleWindow(QMainWindow):
         self.preview_tree.setMinimumHeight(165)
         preview_layout.addWidget(self.preview_tree, 1)
 
+        visual_header = QHBoxLayout()
+        visual_title = QLabel("Кадр с подписью")
+        visual_title.setObjectName("sectionTitle")
+        self.visual_preview_state_label = QLabel("Предпросмотр не построен")
+        self.visual_preview_state_label.setObjectName("previewState")
+        self.preview_button = QPushButton("Обновить предпросмотр")
+        self.preview_button.setEnabled(False)
+        self.preview_button.clicked.connect(self._start_visual_preview)
+        visual_header.addWidget(visual_title)
+        visual_header.addStretch(1)
+        visual_header.addWidget(self.visual_preview_state_label)
+        visual_header.addWidget(self.preview_button)
+        preview_layout.addLayout(visual_header)
+        self.visual_preview_label = QLabel("640 × 360")
+        self.visual_preview_label.setObjectName("visualPreview")
+        self.visual_preview_label.setAccessibleName("Предпросмотр подписи даты")
+        self.visual_preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.visual_preview_label.setMinimumSize(320, 180)
+        self.visual_preview_label.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        preview_layout.addWidget(self.visual_preview_label)
+
         log_panel = QFrame()
         log_layout = QVBoxLayout(log_panel)
         log_layout.setContentsMargins(8, 0, 0, 0)
@@ -429,6 +531,7 @@ class ChronicleWindow(QMainWindow):
             self.ffprobe_button,
             self.crf_spin,
             self.preset_combo,
+            self.overlay_group,
         ]
 
     def _connect_invalidation_signals(self) -> None:
@@ -441,6 +544,16 @@ class ChronicleWindow(QMainWindow):
             edit.textChanged.connect(self._invalidate_plan)
         self.crf_spin.valueChanged.connect(self._invalidate_plan)
         self.preset_combo.currentTextChanged.connect(self._invalidate_plan)
+        self.overlay_enabled.toggled.connect(self._invalidate_overlay)
+        self.overlay_format_combo.currentTextChanged.connect(self._invalidate_overlay)
+        self.overlay_position_combo.currentTextChanged.connect(self._invalidate_overlay)
+        self.overlay_horizontal_margin.valueChanged.connect(self._invalidate_overlay)
+        self.overlay_vertical_margin.valueChanged.connect(self._invalidate_overlay)
+        self.overlay_font_size.valueChanged.connect(self._invalidate_overlay)
+        self.overlay_outline_width.valueChanged.connect(self._invalidate_overlay)
+        self.overlay_text_color.textChanged.connect(self._invalidate_overlay)
+        self.overlay_outline_color.textChanged.connect(self._invalidate_overlay)
+        self.overlay_font_edit.textChanged.connect(self._invalidate_overlay)
 
     @staticmethod
     def _path_row(line_edit: QLineEdit, button: QPushButton) -> QWidget:
@@ -479,6 +592,17 @@ class ChronicleWindow(QMainWindow):
                 output = output.with_suffix(".mp4")
             self.output_edit.setText(str(output))
 
+    @Slot()
+    def _browse_overlay_font(self) -> None:
+        selected, _ = QFileDialog.getOpenFileName(
+            self,
+            "Выберите шрифт подписи",
+            self.overlay_font_edit.text(),
+            "Fonts (*.ttf *.otf)",
+        )
+        if selected:
+            self.overlay_font_edit.setText(selected)
+
     def _browse_tool(self, target: QLineEdit, label: str) -> None:
         selected, _ = QFileDialog.getOpenFileName(
             self, f"Выберите {label}", target.text(), "Executable (*.exe);;All files (*)"
@@ -494,7 +618,31 @@ class ChronicleWindow(QMainWindow):
             ffprobe_text=self.ffprobe_edit.text(),
             crf=self.crf_spin.value(),
             preset_text=self.preset_combo.currentText(),
+            overlay=self._form_overlay_config(resolve_fallback=False),
         )
+
+    def _form_overlay_config(self, *, resolve_fallback: bool) -> OverlayConfig:
+        raw_font = self.overlay_font_edit.text().strip()
+        try:
+            config = OverlayConfig(
+                enabled=self.overlay_enabled.isChecked(),
+                format=self.overlay_format_combo.currentText(),  # type: ignore[arg-type]
+                position=self.overlay_position_combo.currentText(),  # type: ignore[arg-type]
+                horizontal_margin=self.overlay_horizontal_margin.value(),
+                vertical_margin=self.overlay_vertical_margin.value(),
+                font_size=self.overlay_font_size.value(),
+                text_color=self.overlay_text_color.text().strip(),
+                outline_color=self.overlay_outline_color.text().strip(),
+                outline_width=self.overlay_outline_width.value(),
+                font_file=Path(raw_font).expanduser() if raw_font else None,
+            )
+            if resolve_fallback:
+                from video_chronicle import pipeline
+
+                config = resolve_overlay_font(config, pipeline.find_default_font())
+            return config
+        except (ValueError, RuntimeError) as exc:
+            raise RequestValidationError(str(exc)) from exc
 
     @Slot()
     def _invalidate_plan(self, *_args: object) -> None:
@@ -502,6 +650,10 @@ class ChronicleWindow(QMainWindow):
             return
         self._plan = None
         self._active_request = None
+        self._visual_preview_current = False
+        self.visual_preview_label.clear()
+        self.visual_preview_state_label.setText("Предпросмотр устарел")
+        self.preview_button.setEnabled(False)
         self.preview_tree.clear()
         self.preview_state_label.setText("План устарел — повторите анализ")
         self.plan_summary_label.setText(
@@ -510,6 +662,33 @@ class ChronicleWindow(QMainWindow):
         if not self._adapter.is_running:
             self.run_button.setEnabled(False)
             self.status_label.setText("Требуется повторный анализ")
+
+    @Slot()
+    def _invalidate_overlay(self, *_args: object) -> None:
+        if self._building_ui or self._legacy_mode:
+            return
+        self._visual_preview_current = False
+        self.visual_preview_label.clear()
+        self.run_button.setEnabled(False)
+        try:
+            overlay = self._form_overlay_config(resolve_fallback=True)
+        except RequestValidationError as exc:
+            self.visual_preview_state_label.setText("Ошибка параметров подписи")
+            self.visual_preview_label.setText(str(exc))
+            self.preview_button.setEnabled(False)
+            self.status_label.setText("Исправьте параметры подписи")
+            return
+        if self._plan is None:
+            self.visual_preview_state_label.setText("Предпросмотр не построен")
+            self.preview_button.setEnabled(False)
+            return
+        self._plan = replace_plan_overlay(self._plan, overlay)
+        if self._active_request is not None:
+            self._active_request = replace(self._active_request, overlay=overlay)
+        self.visual_preview_state_label.setText("Предпросмотр устарел")
+        self.visual_preview_label.setText("Обновите кадр перед экспортом")
+        self.preview_button.setEnabled(not self._adapter.is_running)
+        self.status_label.setText("Подпись изменена — обновите предпросмотр")
 
     @Slot()
     def _start_analysis(self) -> None:
@@ -524,11 +703,15 @@ class ChronicleWindow(QMainWindow):
             return
 
         self._plan = None
+        self._visual_preview_current = False
         self._active_request = request
         self.preview_tree.clear()
         self.log_view.clear()
         self.result_label.clear()
         self.preview_state_label.setText("Анализ выполняется…")
+        self.visual_preview_state_label.setText("Ожидание плана…")
+        self.visual_preview_label.clear()
+        self.preview_button.setEnabled(False)
         self.plan_summary_label.setText(f"Проверка: {request.input_dir}")
         self._set_running(True)
         try:
@@ -557,6 +740,7 @@ class ChronicleWindow(QMainWindow):
         ):
             return
         self._plan = plan
+        self._visual_preview_current = False
         self._populate_preview(plan)
 
     def _populate_preview(self, plan: ExportPlan) -> None:
@@ -603,6 +787,9 @@ class ChronicleWindow(QMainWindow):
         self.preview_tree.resizeColumnToContents(5)
         request = plan.request
         self.preview_state_label.setText("План готов")
+        self.visual_preview_state_label.setText("Требуется предпросмотр")
+        self.visual_preview_label.setText("Обновите кадр перед экспортом")
+        self.preview_button.setEnabled(True)
         self.plan_summary_label.setText(
             f"Вход: {request.input_dir} | Выход: {request.output} | "
             f"принято: {len(plan.items)}, пропущено: {len(plan.inspection_failures)} | "
@@ -619,8 +806,9 @@ class ChronicleWindow(QMainWindow):
         self._append_output(f"\n{message}\n")
         if operation == "analysis":
             if success and self._plan is not None:
-                self.status_label.setText("План готов к экспорту")
-                self.run_button.setEnabled(True)
+                self.status_label.setText("План готов — обновите предпросмотр")
+                self.run_button.setEnabled(False)
+                self.preview_button.setEnabled(True)
                 self.progress.setValue(1)
                 return
             self._plan = None
@@ -636,6 +824,24 @@ class ChronicleWindow(QMainWindow):
                 self.preview_state_label.setText("Ошибка анализа")
                 self.plan_summary_label.setText(message)
                 self.status_label.setText("Анализ не выполнен")
+            return
+
+        if operation == "preview":
+            self.preview_button.setEnabled(self._plan is not None)
+            if success and self._visual_preview_current:
+                self.visual_preview_state_label.setText(
+                    "Подпись выключена" if not self._plan.request.overlay.enabled else "Готов"
+                )
+                self.status_label.setText("План и предпросмотр готовы к экспорту")
+                self.run_button.setEnabled(True)
+                self.progress.setValue(1)
+            else:
+                self._visual_preview_current = False
+                self.visual_preview_state_label.setText("Ошибка предпросмотра")
+                self.visual_preview_label.setText(message)
+                self.status_label.setText("Предпросмотр не обновлён")
+                self.run_button.setEnabled(False)
+                self.progress.setValue(0)
             return
 
         self.status_label.setText("Экспорт завершён" if success else "Экспорт не выполнен")
@@ -678,7 +884,11 @@ class ChronicleWindow(QMainWindow):
             self._on_completed(False, str(exc))
 
     def _start_application_export(self) -> None:
-        if self._adapter.is_running or self._plan is None:
+        if (
+            self._adapter.is_running
+            or self._plan is None
+            or not self._visual_preview_current
+        ):
             return
         overwrite = False
         output = self._plan.request.output
@@ -706,6 +916,50 @@ class ChronicleWindow(QMainWindow):
             self._adapter.start_export(self._plan, overwrite=overwrite)
         except RuntimeError as exc:
             self._on_application_completed("export", False, str(exc))
+
+    @Slot()
+    def _start_visual_preview(self) -> None:
+        if self._legacy_mode or self._adapter.is_running or self._plan is None:
+            return
+        try:
+            overlay = self._form_overlay_config(resolve_fallback=True)
+        except RequestValidationError as exc:
+            self.visual_preview_state_label.setText("Ошибка параметров подписи")
+            self.visual_preview_label.setText(str(exc))
+            self.run_button.setEnabled(False)
+            return
+        self._plan = replace_plan_overlay(self._plan, overlay)
+        self._visual_preview_current = False
+        self.visual_preview_state_label.setText("Загрузка…")
+        self.visual_preview_label.setText("FFmpeg создаёт representative frame…")
+        self._set_running(True)
+        try:
+            assert isinstance(self._adapter, ApplicationServiceAdapter)
+            self._adapter.start_preview(self._plan)
+        except RuntimeError as exc:
+            self._on_application_completed("preview", False, str(exc))
+
+    @Slot(object)
+    def _on_visual_preview_ready(self, path_value: object) -> None:
+        if not isinstance(path_value, Path):
+            return
+        try:
+            pixmap = QPixmap(str(path_value))
+            if pixmap.isNull():
+                self._visual_preview_current = False
+                self.visual_preview_label.setText("Не удалось загрузить PNG preview.")
+                return
+            self.visual_preview_label.setPixmap(
+                pixmap.scaled(
+                    640,
+                    360,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
+            self._visual_preview_current = True
+        finally:
+            path_value.unlink(missing_ok=True)
 
     @Slot()
     def _on_started(self) -> None:
@@ -740,10 +994,17 @@ class ChronicleWindow(QMainWindow):
         for widget in self._editable_widgets:
             widget.setEnabled(not running)
         self.analyze_button.setEnabled(not running)
+        self.preview_button.setEnabled(
+            not running and not self._legacy_mode and self._plan is not None
+        )
         if self._legacy_mode:
             self.run_button.setEnabled(not running)
         else:
-            self.run_button.setEnabled(not running and self._plan is not None)
+            self.run_button.setEnabled(
+                not running
+                and self._plan is not None
+                and self._visual_preview_current
+            )
         if running:
             self.progress.setRange(0, 0)
         else:
@@ -806,6 +1067,10 @@ QPushButton#primary { background: #176f6b; border-color: #176f6b; color: white; 
 QPushButton#primary:hover { background: #0f5f5b; }
 QPushButton#primary:disabled { color: #8d9b9d; background: #edf1f1; border-color: #d2dddd; }
 QComboBox QAbstractItemView { background: #ffffff; color: #182528; selection-background-color: #2f918d; }
+QCheckBox { color: #233b3f; spacing: 8px; }
+QTabWidget::pane { border: 1px solid #d5e1e2; border-radius: 8px; top: -1px; }
+QTabBar::tab { background: #e7efef; color: #40575b; padding: 8px 16px; margin-right: 2px; }
+QTabBar::tab:selected { background: #ffffff; color: #176f6b; font-weight: 700; }
 QTreeWidget { alternate-background-color: #f5f9f9; }
 QHeaderView::section { background: #e7efef; color: #233b3f; padding: 6px; border: 0; border-right: 1px solid #d3dfdf; }
 QProgressBar { border: 0; background: #dfe9e9; border-radius: 3px; height: 6px; }

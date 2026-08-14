@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import threading
 import time
+import base64
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QCloseEvent
@@ -19,7 +21,24 @@ from video_chronicle.domain import (
     MediaItem,
 )
 from video_chronicle.gui_services import ApplicationServiceAdapter
+from video_chronicle.overlay import OverlayConfig
 from video_chronicle_gui import ChronicleWindow
+
+
+_PNG_1X1 = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+)
+
+
+def _fake_preview(item, overlay, ffmpeg, destination, runner) -> None:
+    destination.write_bytes(_PNG_1X1)
+
+
+def _preview_ports():
+    return SimpleNamespace(
+        command_runner=lambda *args: None,
+        validate_source=lambda input_dir, source: None,
+    )
 
 
 def _wait_until(qapp, predicate, timeout_seconds: float = 5.0) -> None:
@@ -37,11 +56,11 @@ def _canonical_request(input_dir: Path, output: Path) -> ExportRequest:
         error_log=(output.parent / "errors.log").resolve(),
         ffmpeg="resolved-ffmpeg",
         ffprobe="resolved-ffprobe",
-        font_file=None,
         crf=20,
         preset="medium",
         overwrite=False,
         keep_work=False,
+        overlay=OverlayConfig(enabled=False),
     )
 
 
@@ -209,7 +228,8 @@ def test_window_renders_plan_and_invalidates_it_on_any_form_change(
     assert skipped.text(1) == "Пропущен"
     assert skipped.text(6) == "bad media"
     assert "принято: 1, пропущено: 1" in window.plan_summary_label.text()
-    assert window.run_button.isEnabled() is True
+    assert window.run_button.isEnabled() is False
+    assert window.preview_button.isEnabled() is True
 
     window.preset_combo.setCurrentText("slow")
     qapp.processEvents()
@@ -269,7 +289,8 @@ def test_overwrite_is_confirmed_only_immediately_before_application_export(
     adapter = ApplicationServiceAdapter(
         plan_service=lambda request, ports, logger: _preview_plan(request),
         execute_service=execute_service,
-        ports_factory=lambda: object(),  # type: ignore[arg-type]
+        preview_service=_fake_preview,
+        ports_factory=_preview_ports,  # type: ignore[arg-type]
         request_factory=lambda gui: canonical,
     )
     window = ChronicleWindow(application_adapter=adapter)
@@ -278,6 +299,9 @@ def test_overwrite_is_confirmed_only_immediately_before_application_export(
     window.analyze_button.click()
     _wait_until(qapp, lambda: not adapter.is_running)
     assert output.exists() is False
+    window.preview_button.click()
+    _wait_until(qapp, lambda: not adapter.is_running)
+    assert window.run_button.isEnabled() is True
 
     output.write_bytes(b"existing")
     monkeypatch.setattr(
@@ -349,4 +373,87 @@ def test_minimum_window_keeps_full_form_accessible_via_scroll(qapp) -> None:
     scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
     qapp.processEvents()
     assert scroll.verticalScrollBar().value() > 0
+    window.close()
+
+
+def test_overlay_only_change_keeps_plan_and_preview_temp_is_cleaned(
+    qapp, tmp_path: Path
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    output = tmp_path / "output.mp4"
+    canonical = _canonical_request(input_dir, output)
+    analysis_calls: list[bool] = []
+    preview_paths: list[Path] = []
+    preview_configs: list[OverlayConfig] = []
+
+    def plan_service(request, ports, logger):
+        analysis_calls.append(True)
+        return _preview_plan(request)
+
+    def preview_service(item, overlay, ffmpeg, destination, runner):
+        assert overlay.enabled is False
+        preview_configs.append(overlay)
+        preview_paths.append(destination)
+        destination.write_bytes(_PNG_1X1)
+
+    adapter = ApplicationServiceAdapter(
+        plan_service=plan_service,
+        preview_service=preview_service,
+        ports_factory=_preview_ports,  # type: ignore[arg-type]
+        request_factory=lambda gui: canonical,
+    )
+    window = ChronicleWindow(application_adapter=adapter)
+    window.input_edit.setText(str(input_dir))
+    window.output_edit.setText(str(output))
+    window.analyze_button.click()
+    _wait_until(qapp, lambda: not adapter.is_running)
+    original_items = window._plan.items
+
+    window.overlay_enabled.setChecked(False)
+    qapp.processEvents()
+    assert analysis_calls == [True]
+    assert window._plan.items is original_items
+    assert window.run_button.isEnabled() is False
+    assert window.visual_preview_state_label.text() == "Предпросмотр устарел"
+
+    window.preview_button.click()
+    _wait_until(qapp, lambda: not adapter.is_running)
+    assert preview_paths and all(not path.exists() for path in preview_paths)
+    assert window._plan.request.overlay is not canonical.overlay
+    assert window._plan.request.overlay.enabled is False
+    assert preview_configs == [window._plan.request.overlay]
+    assert preview_configs[0] is window._plan.request.overlay
+    assert window.visual_preview_state_label.text() == "Подпись выключена"
+    assert window.run_button.isEnabled() is True
+    window.close()
+
+
+def test_preview_error_is_visible_and_export_stays_disabled(qapp, tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    output = tmp_path / "output.mp4"
+    canonical = _canonical_request(input_dir, output)
+
+    def failing_preview(*args, **kwargs):
+        raise RuntimeError("FFmpeg preview failed: synthetic diagnostic")
+
+    adapter = ApplicationServiceAdapter(
+        plan_service=lambda request, ports, logger: _preview_plan(request),
+        preview_service=failing_preview,
+        ports_factory=_preview_ports,  # type: ignore[arg-type]
+        request_factory=lambda gui: canonical,
+    )
+    window = ChronicleWindow(application_adapter=adapter)
+    window.input_edit.setText(str(input_dir))
+    window.output_edit.setText(str(output))
+    window.analyze_button.click()
+    _wait_until(qapp, lambda: not adapter.is_running)
+    window.overlay_enabled.setChecked(False)
+    window.preview_button.click()
+    _wait_until(qapp, lambda: not adapter.is_running)
+
+    assert window.visual_preview_state_label.text() == "Ошибка предпросмотра"
+    assert "synthetic diagnostic" in window.visual_preview_label.text()
+    assert window.run_button.isEnabled() is False
     window.close()

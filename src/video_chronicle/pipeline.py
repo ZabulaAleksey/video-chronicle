@@ -15,6 +15,11 @@ from pathlib import Path
 from typing import Any
 
 from .domain import MediaError, MediaItem
+from .overlay import (
+    OverlayConfig,
+    require_resolved_overlay_font,
+    resolve_overlay_font,
+)
 from .metadata import (
     DATE_TAGS,
     FILENAME_PATTERNS,
@@ -235,17 +240,20 @@ def probe_media(
     runner: CommandRunner | None = None,
 ) -> dict[str, Any]:
     runner = runner or run_command
+    command = [
+        ffprobe,
+        "-v",
+        "error",
+        "-show_format",
+        "-show_streams",
+        "-of",
+        "json",
+    ]
+    if path.suffix.casefold() in PHOTO_EXTENSIONS:
+        command += ["-f", "image2", "-pattern_type", "none"]
+    command.append(str(path))
     result = runner(
-        [
-            ffprobe,
-            "-v",
-            "error",
-            "-show_format",
-            "-show_streams",
-            "-of",
-            "json",
-            str(path),
-        ],
+        command,
         f"ffprobe failed for {path}",
         timeout=30,
         max_output_bytes=8 * 1024 * 1024,
@@ -298,6 +306,26 @@ def ffmpeg_filter_escape(value: str) -> str:
     )
 
 
+def ffmpeg_fontfile_escape(value: str) -> str:
+    """Escape a drawtext ``fontfile`` value at both parser levels.
+
+    The filtergraph parser consumes one backslash before the drawtext option
+    parser sees the value.  A Windows drive colon therefore needs two, while
+    an apostrophe needs three.  Filtergraph delimiters need one.  Returning an
+    unquoted value is deliberate: FFmpeg quotes cannot contain an apostrophe.
+    """
+
+    return (
+        value.replace("\\", "/")
+        .replace(":", r"\\:")
+        .replace("'", r"\\\'")
+        .replace("[", r"\[")
+        .replace("]", r"\]")
+        .replace(",", r"\,")
+        .replace(";", r"\;")
+    )
+
+
 WEEKDAY_ABBREV_RU = ("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
 
 
@@ -312,6 +340,7 @@ def find_default_font() -> Path | None:
         home / "AppData/Local/Microsoft/Windows/Fonts/comicbd.ttf",
         home / "AppData/Local/Microsoft/Windows/Fonts/arial.ttf",
         home / ".local/share/fonts/DejaVuSans.ttf",
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
         home / "Library/Fonts/Arial.ttf",
     ]
     windows_dir = os.environ.get("WINDIR")
@@ -325,7 +354,47 @@ def find_default_font() -> Path | None:
     return next((font for font in candidates if font.is_file()), None)
 
 
-def make_video_filter(item: MediaItem, font_file: Path | None) -> str:
+def format_overlay_text(item: MediaItem, config: OverlayConfig) -> str:
+    """Format the selected wall-clock date using an approved preset."""
+
+    if config.format == "dd.MM.yy ddd":
+        return (
+            f"{item.taken_at.strftime('%d.%m.%y')} "
+            f"{russian_weekday_abbrev(item.taken_at)}"
+        )
+    if config.format == "dd.MM.yyyy":
+        return item.taken_at.strftime("%d.%m.%Y")
+    if config.format == "dd.MM.yyyy HH:mm":
+        return item.taken_at.strftime("%d.%m.%Y %H:%M")
+    raise ValueError(f"unsupported overlay format: {config.format}")
+
+
+def _overlay_coordinates(config: OverlayConfig) -> tuple[str, str]:
+    x = (
+        str(config.horizontal_margin)
+        if config.position.endswith("left")
+        else f"w-text_w-{config.horizontal_margin}"
+    )
+    y = (
+        str(config.vertical_margin)
+        if config.position.startswith("top")
+        else f"h-text_h-{config.vertical_margin}"
+    )
+    return x, y
+
+
+def _coerce_overlay_config(value: OverlayConfig | Path | None) -> OverlayConfig:
+    """Accept the historical ``font_file`` helper argument during migration."""
+
+    if isinstance(value, OverlayConfig):
+        return value
+    return OverlayConfig(font_file=value)
+
+
+def make_video_filter(
+    item: MediaItem, font_file: OverlayConfig | Path | None
+) -> str:
+    overlay = _coerce_overlay_config(font_file)
     # Portrait media remains upright and is fitted into the common landscape
     # canvas.  A common canvas is necessary for gapless stream concatenation.
     filters = [
@@ -335,22 +404,25 @@ def make_video_filter(item: MediaItem, font_file: Path | None) -> str:
         "setsar=1",
         "fps=60",
     ]
-    timestamp = ffmpeg_filter_escape(
-        f"{item.taken_at.strftime('%d.%m.%y')} {russian_weekday_abbrev(item.taken_at)}"
-    )
+    if not overlay.enabled:
+        return ",".join(filters)
+
+    timestamp = ffmpeg_filter_escape(format_overlay_text(item, overlay))
+    x, y = _overlay_coordinates(overlay)
     drawtext_options = [
         f"text='{timestamp}'",
-        "fontcolor=black",
-        "bordercolor=white",
-        "borderw=4",
-        "fontsize=72",
+        f"fontcolor={overlay.text_color}",
+        f"bordercolor={overlay.outline_color}",
+        f"borderw={overlay.outline_width}",
+        f"fontsize={overlay.font_size}",
         "box=0",
-        "x=20",
-        "y=h-text_h-20",
+        f"x={x}",
+        f"y={y}",
     ]
-    if font_file is not None:
+    if overlay.font_file is not None:
         drawtext_options.insert(
-            0, f"fontfile='{ffmpeg_filter_escape(str(font_file.resolve()))}'"
+            0,
+            f"fontfile={ffmpeg_fontfile_escape(str(overlay.font_file.resolve()))}",
         )
     filters.append("drawtext=" + ":".join(drawtext_options))
     return ",".join(filters)
@@ -360,15 +432,23 @@ def normalize_item(
     item: MediaItem,
     destination: Path,
     ffmpeg: str,
-    font_file: Path | None,
+    font_file: OverlayConfig | Path | None,
     crf: int,
     preset: str,
     runner: CommandRunner | None = None,
 ) -> None:
     runner = runner or run_command
+    overlay = _coerce_overlay_config(font_file)
+    if overlay.enabled and overlay.font_file is None:
+        overlay = resolve_overlay_font(overlay, find_default_font())
+    require_resolved_overlay_font(overlay)
     command = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y"]
     if item.is_photo:
         command += [
+            "-f",
+            "image2",
+            "-pattern_type",
+            "none",
             "-loop",
             "1",
             "-framerate",
@@ -392,7 +472,7 @@ def normalize_item(
                 "anullsrc=channel_layout=stereo:sample_rate=48000",
             ]
 
-    video_filter = make_video_filter(item, font_file)
+    video_filter = make_video_filter(item, overlay)
     if item.has_audio and not item.is_photo:
         filter_complex = (
             f"[0:v:0]{video_filter}[v];"
@@ -453,6 +533,41 @@ def normalize_item(
         str(destination),
     ]
     runner(command, f"FFmpeg failed for {item.path}")
+
+
+def render_overlay_preview(
+    item: MediaItem,
+    overlay: OverlayConfig,
+    ffmpeg: str,
+    destination: Path,
+    runner: CommandRunner | None = None,
+) -> None:
+    """Render the first representative frame through list argv without shell."""
+
+    runner = runner or run_command
+    require_resolved_overlay_font(overlay)
+    command = [
+        ffmpeg,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+    ]
+    if item.is_photo:
+        command += ["-f", "image2", "-pattern_type", "none"]
+    command += [
+        "-i",
+        str(item.path),
+        "-frames:v",
+        "1",
+        "-vf",
+        make_video_filter(item, overlay) + ",scale=640:360",
+        "-an",
+        str(destination),
+    ]
+    runner(command, f"FFmpeg preview failed for {item.path}", timeout=60)
+    if not destination.is_file() or destination.stat().st_size == 0:
+        raise MediaError(f"FFmpeg preview did not create a PNG for {item.path}")
 
 
 def concat_escape(path: Path) -> str:

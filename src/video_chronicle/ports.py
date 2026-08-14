@@ -8,6 +8,7 @@ import subprocess
 from typing import Any, Protocol
 
 from .domain import MediaItem
+from .overlay import OverlayConfig
 
 
 class CommandRunner(Protocol):
@@ -43,7 +44,7 @@ class NormalizeMedia(Protocol):
         item: MediaItem,
         destination: Path,
         ffmpeg: str,
-        font_file: Path | None,
+        overlay: OverlayConfig,
         crf: int,
         preset: str,
         runner: CommandRunner,

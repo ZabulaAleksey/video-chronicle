@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .domain import ExportPlan, ExportRequest, MediaItem
 from .ports import PipelinePorts
+from .overlay import require_resolved_overlay_font
 
 
 def default_ports() -> PipelinePorts:
@@ -102,6 +103,7 @@ def execute_plan(
     """Execute an already planned export through explicit external ports."""
 
     request = plan.request
+    require_resolved_overlay_font(request.overlay)
     items = plan.items
     failed_count = len(plan.inspection_failures)
 
@@ -121,11 +123,12 @@ def execute_plan(
             )
             try:
                 ports.validate_source(request.input_dir, item.path)
+                require_resolved_overlay_font(request.overlay)
                 ports.normalize_item(
                     item,
                     destination,
                     request.ffmpeg,
-                    request.font_file,
+                    request.overlay,
                     request.crf,
                     request.preset,
                     ports.command_runner,

@@ -2,13 +2,13 @@
 
 ## Текущий этап
 
-Этапы 00–06 завершены. Следующий этап — 07, overlay editor; он подготовлен, но
-ещё не начат. Default PySide6 GUI строит preview через application services и
-запускает тот же immutable plan вне UI thread. Whole-CLI `QProcess` сохранён
-только как явный диагностический fallback. Runtime-очередь, durable storage и
-кэш отсутствуют.
+Этапы 00–07 завершены. Следующий этап — 08, явные Join/Chronicle modes; его
+decision gate ещё не утверждён. Default PySide6 GUI строит plan и
+representative overlay preview через application services и запускает тот же
+immutable plan вне UI thread. Whole-CLI `QProcess` сохранён только как явный
+диагностический fallback. Runtime-очередь, durable storage и кэш отсутствуют.
 
-Подготовленный ограниченный срез этапа 07 хранится в `docs/AI_PLAN.md`. Этапы 01–17
+Подготовленный ограниченный срез этапа 08 хранится в `docs/AI_PLAN.md`. Этапы 01–17
 разделены на самостоятельные project prompts в `prompts/stages/`; они
 загружаются по одному и не заменяют SPEC или текущий план.
 
@@ -18,6 +18,8 @@
   `domain → ports → application → pipeline adapters`;
 - `src/video_chronicle/metadata.py` реализует утверждённую DATE-001 policy и
   отдаёт typed provenance/conflict/timezone result;
+- `src/video_chronicle/overlay.py` реализует immutable OVERLAY-001 config,
+  font identity policy и approved formats/positions/ranges;
 - `src/video_chronicle/project.py`, `repository.py` и `serialization.py`
   реализуют MODEL-001: stable timeline IDs/order, immutable export snapshot,
   job transitions, strict schema v1 и in-memory repository;
@@ -50,15 +52,19 @@
   provenance, timezone, conflicts и причинами пропуска;
 - invalidation preview при изменении формы, loading/empty/error/populated/stale
   состояния и доступный layout 820×660 через прокрутку;
+- вкладка настройки date overlay, representative 640×360 preview и единый
+  config для preview и всех accepted items экспорта;
+- overlay on/off и пути шрифтов с Unicode/пробелами/апострофами подтверждены
+  реальным FFmpeg 9.0.1; literal `%03d` photo path не расширяется в sequence;
 - завершённый characterization baseline дат, сортировки, FFmpeg argv, ошибок,
   partial success, коллизий и неизменности исходников;
 - синтетический mixed photo/video smoke на FFmpeg/FFprobe 9.0.1;
 - устанавливаемый пакет версии 0.2.0 с console/GUI entry points и группой
   зависимостей `dev`;
-- 122 успешно пройденных unit/contract/GUI/integration теста, включая реальный
+- 157 успешно пройденных unit/contract/GUI/integration тестов, включая реальный
   FFmpeg smoke;
-- один symlink-specific тест корректно пропущен в текущем Windows-окружении,
-  где создание symbolic link недоступно без дополнительных прав;
+- два symlink/reparse-specific теста корректно пропущены в текущем
+  Windows-окружении без права на создание symbolic link;
 - атомарная no-replace финализация закрывает коллизию, возникшую уже во время
   длительного рендера.
 
@@ -82,8 +88,7 @@
 
 ## Следующая задача
 
-Начать этап 07: утвердить единый typed overlay contract (format, enabled,
-position, font fallback, colors, ranges и missing-font policy), затем связать
-его с быстрым representative-frame preview и финальным FFmpeg filter path.
-Подготовленный срез находится в `docs/AI_PLAN.md` и
-`prompts/stages/07-overlay-editor.md`.
+Начать этап 08: сначала утвердить в feature SPEC различия Join/Chronicle,
+defaults, CLI migration и допустимую матрицу mode × overlay × media type; затем
+ввести mode как данные плана без второго медиаконвейера. Подготовленный срез
+находится в `docs/AI_PLAN.md` и `prompts/stages/08-join-chronicle-modes.md`.

@@ -68,16 +68,20 @@ in-memory reference adapter.
 и экспорт вызывают канонические application services через `QThread` worker.
 Whole-CLI `QProcess` сохранён только как явный диагностический fallback.
 
-## Следующий этап — 07. Overlay editor
+## Выполненный этап — 07. Overlay editor
 
 Самостоятельный prompt: [`07-overlay-editor.md`](../prompts/stages/07-overlay-editor.md).
+
+Этап завершён: один immutable `OverlayConfig` управляет representative preview
+и всеми элементами экспорта; GUI предоставляет ограниченные presets, а adapter
+безопасно обрабатывает Unicode/апострофы, literal photo paths и font identity.
 
 ## Запланированный MVP — этапы 08–10
 
 Этапы выполняются последовательно и только после критериев завершения
 предыдущего этапа.
 
-1. **[08 — Join/Chronicle modes](../prompts/stages/08-join-chronicle-modes.md):** понятные режимы без дублирования
+1. **Следующий — [08 — Join/Chronicle modes](../prompts/stages/08-join-chronicle-modes.md):** понятные режимы без дублирования
    медиаконвейера и с сохранением legacy join.
 2. **[09 — Export/progress/cancel](../prompts/stages/09-export-progress-cancel.md):** план экспорта, прогресс, безопасная отмена,
    проверка коллизий и атомарная финализация.

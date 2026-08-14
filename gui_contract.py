@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from video_chronicle.overlay import DEFAULT_OVERLAY_CONFIG, OverlayConfig
+
 
 class RequestValidationError(ValueError):
     """A user-correctable GUI launch configuration error."""
@@ -21,6 +23,7 @@ class GuiRunRequest:
     crf: int = 20
     preset: str = "medium"
     overwrite: bool = False
+    overlay: OverlayConfig = DEFAULT_OVERLAY_CONFIG
 
 
 def create_run_request(
@@ -32,6 +35,7 @@ def create_run_request(
     crf: int,
     preset_text: str,
     overwrite: bool = False,
+    overlay: OverlayConfig = DEFAULT_OVERLAY_CONFIG,
 ) -> GuiRunRequest:
     """Validate editable form values without invoking Qt or the media pipeline."""
 
@@ -70,6 +74,7 @@ def create_run_request(
         crf=crf,
         preset=preset,
         overwrite=overwrite,
+        overlay=overlay,
     )
 
 

@@ -8,6 +8,8 @@ time.  The media pipeline itself remains in :mod:`video_chronicle.application`.
 from __future__ import annotations
 
 import logging
+import os
+import tempfile
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
@@ -19,6 +21,7 @@ from gui_contract import GuiRunRequest
 
 from .domain import ExportPlan, ExportRequest
 from .ports import PipelinePorts
+from .overlay import OverlayConfig, require_resolved_overlay_font, resolve_overlay_font
 
 
 def build_application_request(request: GuiRunRequest) -> ExportRequest:
@@ -37,21 +40,25 @@ def build_application_request(request: GuiRunRequest) -> ExportRequest:
     pipeline.validate_error_log_path(input_dir, output, error_log)
     ffmpeg = pipeline.resolve_executable(request.ffmpeg, "FFmpeg")
     ffprobe = pipeline.resolve_executable(request.ffprobe, "FFprobe")
-    font_file = pipeline.find_default_font()
-    if font_file is not None and not font_file.is_file():
-        raise RuntimeError(f"font file does not exist: {font_file}")
+    overlay = resolve_overlay_font(request.overlay, pipeline.find_default_font())
     return ExportRequest(
         input_dir=input_dir,
         output=output,
         error_log=error_log,
         ffmpeg=ffmpeg,
         ffprobe=ffprobe,
-        font_file=font_file,
         crf=request.crf,
         preset=request.preset,
         overwrite=False,
         keep_work=False,
+        overlay=overlay,
     )
+
+
+def replace_plan_overlay(plan: ExportPlan, overlay: OverlayConfig) -> ExportPlan:
+    """Replace only overlay settings while preserving inspected media/order."""
+
+    return replace(plan, request=replace(plan.request, overlay=overlay))
 
 
 class _SignalLogHandler(logging.Handler):
@@ -101,6 +108,7 @@ class ApplicationServiceAdapter(QObject):
     started = Signal(str)
     output_received = Signal(str)
     plan_ready = Signal(object)
+    preview_ready = Signal(object)
     completed = Signal(str, bool, str)
 
     def __init__(
@@ -111,6 +119,7 @@ class ApplicationServiceAdapter(QObject):
         execute_service: ExecuteService | None = None,
         ports_factory: Callable[[], PipelinePorts] | None = None,
         request_factory: Callable[[GuiRunRequest], ExportRequest] = build_application_request,
+        preview_service: Callable[..., None] | None = None,
     ) -> None:
         super().__init__(parent)
         from . import application
@@ -119,12 +128,18 @@ class ApplicationServiceAdapter(QObject):
         self._execute_service = execute_service or application.execute_plan
         self._ports_factory = ports_factory or application.default_ports
         self._request_factory = request_factory
+        if preview_service is None:
+            from . import pipeline
+
+            preview_service = pipeline.render_overlay_preview
+        self._preview_service = preview_service
         self._thread: QThread | None = None
         self._worker: _TaskWorker | None = None
         self._operation: str | None = None
         self._outcome: tuple[object | None, BaseException | None] = (None, None)
         self._output_path: Path | None = None
         self._output_before: tuple[int, int, int, int] | None = None
+        self._preview_path: Path | None = None
 
     @property
     def is_running(self) -> bool:
@@ -180,6 +195,38 @@ class ApplicationServiceAdapter(QObject):
                 handler.close()
 
         self._start("export", task)
+
+    def start_preview(self, plan: ExportPlan) -> None:
+        """Render a representative 640x360 PNG for the first accepted item."""
+
+        if self.is_running:
+            raise RuntimeError("Другая операция уже выполняется.")
+        if not plan.items:
+            raise RuntimeError("В плане нет принятого media item для preview.")
+
+        def task() -> Path:
+            descriptor, raw_path = tempfile.mkstemp(
+                prefix="video_chronicle_preview_", suffix=".png"
+            )
+            os.close(descriptor)
+            path = Path(raw_path)
+            try:
+                require_resolved_overlay_font(plan.request.overlay)
+                ports = self._ports_factory()
+                ports.validate_source(plan.request.input_dir, plan.items[0].path)
+                self._preview_service(
+                    plan.items[0],
+                    plan.request.overlay,
+                    plan.request.ffmpeg,
+                    path,
+                    ports.command_runner,
+                )
+                return path
+            except Exception:
+                path.unlink(missing_ok=True)
+                raise
+
+        self._start("preview", task)
 
     def _memory_logger(self, suffix: str) -> logging.Logger:
         logger = logging.getLogger(f"video_chronicle.gui.{suffix}.{id(self)}")
@@ -244,6 +291,21 @@ class ApplicationServiceAdapter(QObject):
                 return
             self.plan_ready.emit(result)
             self.completed.emit(operation, True, "План анализа готов.")
+            return
+        if operation == "preview":
+            if not isinstance(result, Path) or not result.is_file():
+                self.completed.emit(
+                    operation, False, "Предпросмотр не создал временный PNG."
+                )
+                return
+            self._preview_path = result
+            self.preview_ready.emit(result)
+            # The GUI slot loads QPixmap synchronously before this queued
+            # completion and removes the file. This fallback prevents a leak
+            # for headless/non-widget consumers.
+            result.unlink(missing_ok=True)
+            self._preview_path = None
+            self.completed.emit(operation, True, "Предпросмотр обновлён.")
             return
 
         output_after = (

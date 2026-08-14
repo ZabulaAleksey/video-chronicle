@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .application import execute_export
 from .domain import ExportRequest
+from .overlay import OverlayConfig, resolve_overlay_font
 from . import pipeline
 
 
@@ -94,6 +95,9 @@ def _build_request(args: argparse.Namespace) -> ExportRequest:
     )
     if font_file is not None and not font_file.is_file():
         raise RuntimeError(f"font file does not exist: {font_file}")
+    overlay = resolve_overlay_font(
+        OverlayConfig(font_file=font_file), pipeline.find_default_font()
+    )
 
     return ExportRequest(
         input_dir=input_dir,
@@ -101,11 +105,11 @@ def _build_request(args: argparse.Namespace) -> ExportRequest:
         error_log=error_log,
         ffmpeg=ffmpeg,
         ffprobe=ffprobe,
-        font_file=font_file,
         crf=args.crf,
         preset=args.preset,
         overwrite=args.overwrite,
         keep_work=args.keep_work,
+        overlay=overlay,
     )
 
 
