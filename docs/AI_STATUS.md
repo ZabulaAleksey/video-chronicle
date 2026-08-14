@@ -2,8 +2,8 @@
 
 ## Текущий этап
 
-Этапы 00–07 завершены. Следующий этап — 08, явные Join/Chronicle modes; его
-decision gate ещё не утверждён. Default PySide6 GUI строит plan и
+Этапы 00–07 завершены. Текущий этап — 08, явные Join/Chronicle modes;
+MODE-001 утверждён, production-реализация ещё не начата. Default PySide6 GUI строит plan и
 representative overlay preview через application services и запускает тот же
 immutable plan вне UI thread. Whole-CLI `QProcess` сохранён только как явный
 диагностический fallback. Runtime-очередь, durable storage и кэш отсутствуют.

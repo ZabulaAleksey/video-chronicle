@@ -3,7 +3,7 @@
 ## Срез
 
 - Этап: **08 — Join и Chronicle modes**
-- Статус: подготовка decision gate; реализация не начата
+- Статус: MODE-001 утверждён; реализация в работе
 - Prompt: `prompts/stages/08-join-chronicle-modes.md`
 - Зависимости: этапы 01–07 завершены; единый `ExportPlan` содержит immutable
   `OverlayConfig`
@@ -15,14 +15,13 @@
 Утвердить и реализовать два понятных режима поверх одного медиаконвейера:
 обратно совместимый Join и Chronicle с date policy/overlay.
 
-## Decision gate до кода
+## Утверждённый contract
 
-- определить наблюдаемую разницу режимов и их defaults;
-- решить, является ли overlay допустимым в Join и как mode влияет на date
-  requirement;
-- зафиксировать legacy CLI default и совместимое явное representation mode;
-- описать недопустимые сочетания и сообщения пользователю;
-- добавить требования и acceptance matrix в feature SPEC.
+- оба режима используют один date-sorted accepted plan и один media pipeline;
+- Join всегда отключает overlay; Join+enabled overlay отвергается domain;
+- Chronicle разрешает overlay on/off, default сохраняет legacy overlay;
+- CLI без `--mode` эквивалентен `--mode chronicle`; `--mode join` — opt-in;
+- GUI default Chronicle, mode switch инвалидирует plan и объясняет последствия.
 
 ## Scope
 

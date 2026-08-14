@@ -139,6 +139,53 @@ execution path, но сохраняет GUI-001 как временный диа
 - полноценное воспроизведение видео или timeline editor;
 - аппаратный preview acceleration, cache и persistence.
 
+## Утверждённый срез MODE-001 — Join и Chronicle
+
+Этот срез утверждён прямой командой пользователя от 2026-08-14 последовательно
+выполнить оставшиеся этапы. Он вводит пользовательский mode как данные плана,
+не создавая второй media pipeline.
+
+- **MODE-001 — Typed mode.** Immutable `ExportRequest` и производный plan
+  содержат один из двух mode: `join` или `chronicle`. Mode участвует в equality
+  и snapshot determinism и меняется только созданием нового request/plan.
+- **MODE-002 — Join.** Join использует тот же принятый date-sorted plan,
+  normalization, codecs, concat и publication, но никогда не добавляет
+  `drawtext`. Сочетание Join с `overlay.enabled=True` недопустимо на domain
+  boundary; adapters обязаны строить disabled overlay.
+- **MODE-003 — Chronicle.** Chronicle использует тот же date-sorted plan и
+  разрешает утверждённый OVERLAY-001 как включённым, так и выключенным. Default
+  Chronicle сохраняет legacy overlay: `dd.MM.yy ddd`, `bottom-left`.
+- **MODE-004 — CLI compatibility.** Отсутствующий `--mode` и явный
+  `--mode chronicle` эквивалентны прежнему CLI: текущие аргументы, порядок,
+  overlay, коды и финализация сохраняются. `--mode join` является только новым
+  opt-in; explicit `--font-file` с ним отклоняется как неприменимый параметр.
+- **MODE-005 — GUI policy.** GUI по умолчанию показывает Chronicle и до анализа
+  объясняет: Join создаёт хронологический MP4 без подписи, Chronicle разрешает
+  подпись даты. Переключение mode инвалидирует plan; в Join overlay controls
+  выключены, visual preview имеет явное disabled состояние.
+- **MODE-006 — Один pipeline.** Mode-specific policy заканчивается на
+  request/plan/overlay boundary. Inspection, normalize, concat и publication
+  ports не дублируются и не получают widget-specific ветвлений.
+
+### Критерии приёмки среза
+
+- **MODE-AC-001 (MODE-001–003, FR-006/007, AC-003/004).** Matrix
+  `mode × overlay × photo/video` отвергает только Join+enabled overlay; валидные
+  планы детерминированы, Join не содержит `drawtext`, Chronicle on/off следует
+  OVERLAY-001, а оба режима проходят те же media adapters.
+- **MODE-AC-002 (MODE-004, FR-011, AC-008).** Characterization доказывает, что
+  legacy invocation без `--mode` эквивалентен Chronicle, а новый `--mode join`
+  не меняет прежние параметры, коды, overwrite и path handling.
+- **MODE-AC-003 (MODE-005/006, FR-005/012, NFR-001/004).** GUI показывает mode
+  и его последствия в plan summary, инвалидирует snapshot при переключении и
+  остаётся отзывчивым; review подтверждает один application/pipeline path.
+
+### Не входит в срез
+
+- режим с filename/filesystem order или включение undated media;
+- разные codecs/normalization для Join и Chronicle;
+- trim/reorder, progress/cancel, cache/resume и persistence.
+
 ## Утверждённый срез DATE-001 — metadata/date engine
 
 Этот раздел утверждён в рамках прямой команды пользователя от 2026-08-14
@@ -370,7 +417,7 @@ execution path, но сохраняет GUI-001 как временный диа
 - Расширение DATE-001 новыми EXIF/ExifTool источниками и лицензирование.
 - Пользовательское исправление missing/conflicting даты и явное timezone
   conversion после DATE-001.
-- Набор режимов экспорта и поддерживаемые форматы входа/выхода.
+- Новые режимы сверх утверждённых Join/Chronicle и форматы выхода кроме MP4.
 - Семантика процента прогресса и предельное время отмены.
 - Граница совместимости текущего CLI и политика устаревания параметров.
 - Выбор durable хранилища проекта и библиотек валидации после MODEL-001.
