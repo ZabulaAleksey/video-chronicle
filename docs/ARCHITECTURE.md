@@ -26,7 +26,11 @@
 - `src/video_chronicle/ports.py` — типизированные границы inspection,
   normalization, concatenation, publication и source discovery.
 - `src/video_chronicle/application.py` — orchestration одного экспорта и
-  partial-success policy.
+  partial-success policy, structured progress и checkpoints отмены.
+- `src/video_chronicle/execution.py` — Qt-free lifecycle одного экспорта,
+  `ProgressEvent`, cancellation token и atomic publication commit point.
+- `src/video_chronicle/process_control.py` — platform-owned subprocess tree:
+  Windows Job Object либо POSIX process group с bounded terminate/reap.
 - `src/video_chronicle/pipeline.py` — production adapters FFprobe/FFmpeg и
   атомарной публикации.
 - `src/video_chronicle/cli.py` — парсинг/валидация CLI и mapping в application
@@ -56,21 +60,26 @@
 4. Изменение только `OverlayConfig` сохраняет уже проанализированные items, но
    инвалидирует визуальный preview. Первый принятый item рендерится через тот же
    filter adapter в 640×360 PNG до разблокировки экспорта.
-5. GUI передаёт тот же plan в `execute_plan` через отдельный worker; CLI создаёт
-   тот же `ExportRequest` и вызывает тот же application path напрямую.
+5. GUI передаёт тот же plan в `execute_plan` через отдельный worker; execution
+   context транслирует typed progress и принимает отмену только до publication
+   commit. CLI создаёт тот же `ExportRequest` и вызывает тот же application path.
 6. Source adapter находит поддерживаемые медиафайлы во входном каталоге.
 7. FFprobe adapter возвращает метаданные и сведения о потоках.
 8. DATE-001 engine собирает кандидатов, выбирает дату из метаданных или имени
    файла и сохраняет provenance/conflicts без timezone conversion.
-9. FFmpeg adapter приводит каждый элемент к 1600×900, 60 FPS, H.264 и AAC и
+9. Перед каждым tool boundary source fingerprint сравнивается со снимком,
+   полученным до и после inspection. FFmpeg adapter приводит каждый элемент к
+   1600×900, 60 FPS, H.264 и AAC и
    применяет единый typed date overlay ко всем элементам либо полностью
    исключает `drawtext`, если подпись выключена.
 10. Подготовленные клипы объединяются без повторного кодирования.
-11. Без разрешения overwrite временный результат публикуется атомарным
+11. Каждый subprocess принадлежит Windows Job Object или POSIX process group;
+   cancel, timeout и output-limit завершают и подтверждают остановку всего дерева.
+12. Без разрешения overwrite временный результат публикуется атомарным
    no-replace rename на Windows или create-if-absent hard link на POSIX;
    подтверждённая замена использует `os.replace`. Рабочий каталог удаляется,
    если не указан `--keep-work`.
-12. GUI получает log-сообщения через Qt signal и принимает успех только при
+13. GUI получает log-сообщения через Qt signal и принимает успех только при
    результате 0 и подтверждённой новой identity итогового файла.
 
 ## Границы
@@ -83,6 +92,7 @@ service. Root-level CLI только экспортирует каноничес
 Join и Chronicle являются policy-данными одного `ExportRequest`: inspection,
 normalization, concat и publication adapters у них общие.
 Legacy whole-CLI `QProcess` остаётся только явным adapter fallback и может быть
-удалён без изменения core. Безопасная отмена пока отсутствует: окно нельзя
-закрыть во время активного worker. Каталоги `ffmpeg/` и `ffmpeg1/` являются локальными сторонними
-зависимостями и не входят в историю основного репозитория.
+удалён без изменения core. Safe cancel доступен только default application
+backend либо явно объявленному совместимому backend; feature flag может скрыть
+его без изменения pipeline. Каталоги `ffmpeg/` и `ffmpeg1/` являются локальными
+сторонними зависимостями и не входят в историю основного репозитория.

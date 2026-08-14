@@ -246,7 +246,7 @@ def test_synthetic_multi_item_export_uses_the_exact_previewed_config(
         publish_output=publish,
         collect_source_paths=lambda *args: list(sources),
         create_workspace=lambda parent: workspace,
-        cleanup_workspace=lambda path: None,
+        cleanup_workspace=lambda path: __import__("shutil").rmtree(path),
         validate_source=lambda input_path, source: None,
     )
 

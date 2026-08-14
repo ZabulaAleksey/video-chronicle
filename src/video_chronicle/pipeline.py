@@ -9,7 +9,6 @@ import shutil
 import stat
 import subprocess
 import tempfile
-import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -56,6 +55,8 @@ PHOTO_EXTENSIONS = {
     ".webp",
 }
 MEDIA_EXTENSIONS = VIDEO_EXTENSIONS | PHOTO_EXTENSIONS
+WORKSPACE_PREFIX = "video_join_work_"
+WORKSPACE_MARKER = ".video_chronicle_workspace"
 
 def _is_symlink_or_reparse(path: Path) -> bool:
     if path.is_symlink():
@@ -172,60 +173,29 @@ def run_command(
     timeout: float | None = None,
     max_output_bytes: int = 8 * 1024 * 1024,
 ) -> subprocess.CompletedProcess[str]:
-    """Run list argv with bounded in-memory capture and optional timeout."""
+    """Run list argv inside a platform-owned, cancellable process tree."""
 
-    creation_flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-    process = subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        creationflags=creation_flags,
-        shell=False,
+    from .execution import current_execution_context, translate_process_cancel
+    from .process_control import (
+        ProcessCancelled,
+        ProcessControlError,
+        ProcessSafetyError,
+        run_managed_command,
     )
-    buffers = {"stdout": bytearray(), "stderr": bytearray()}
-    lock = threading.Lock()
-    limit_exceeded = threading.Event()
 
-    def drain(name: str, stream) -> None:
-        while True:
-            chunk = stream.read(64 * 1024)
-            if not chunk:
-                return
-            with lock:
-                used = len(buffers["stdout"]) + len(buffers["stderr"])
-                remaining = max(0, max_output_bytes - used)
-                buffers[name].extend(chunk[:remaining])
-                if len(chunk) > remaining:
-                    limit_exceeded.set()
-                    process.kill()
-                    return
-
-    threads = [
-        threading.Thread(target=drain, args=("stdout", process.stdout), daemon=True),
-        threading.Thread(target=drain, args=("stderr", process.stderr), daemon=True),
-    ]
-    for thread in threads:
-        thread.start()
     try:
-        returncode = process.wait(timeout=timeout)
-    except subprocess.TimeoutExpired as exc:
-        process.kill()
-        process.wait()
-        for thread in threads:
-            thread.join()
-        raise MediaError(f"{context}: timed out after {timeout:g} seconds") from exc
-    for thread in threads:
-        thread.join()
-    if limit_exceeded.is_set():
-        raise MediaError(f"{context}: tool output exceeded {max_output_bytes} bytes")
-    stdout = bytes(buffers["stdout"]).decode("utf-8", errors="replace")
-    stderr = bytes(buffers["stderr"]).decode("utf-8", errors="replace")
-    result = subprocess.CompletedProcess(
-        args=command,
-        returncode=returncode,
-        stdout=stdout,
-        stderr=stderr,
-    )
+        result = run_managed_command(
+            command,
+            cancellation=current_execution_context(),
+            timeout=timeout,
+            max_output_bytes=max_output_bytes,
+        )
+    except ProcessCancelled as exc:
+        raise translate_process_cancel(exc) from exc
+    except ProcessSafetyError:
+        raise
+    except ProcessControlError as exc:
+        raise MediaError(f"{context}: {exc}") from exc
     if result.returncode != 0:
         details = result.stderr.strip() or result.stdout.strip() or "unknown error"
         if len(details) > 6000:
@@ -679,13 +649,49 @@ def validate_source_path(input_dir: Path, source: Path) -> None:
 
 
 def create_workspace(output_parent: Path) -> Path:
-    return Path(
-        tempfile.mkdtemp(prefix="video_join_work_", dir=str(output_parent))
+    workspace = Path(
+        tempfile.mkdtemp(prefix=WORKSPACE_PREFIX, dir=str(output_parent))
     )
+    try:
+        (workspace / WORKSPACE_MARKER).write_text(
+            workspace.name, encoding="utf-8", errors="strict"
+        )
+    except Exception:
+        shutil.rmtree(workspace)
+        raise
+    return workspace
 
 
 def cleanup_workspace(workspace: Path) -> None:
-    shutil.rmtree(workspace, ignore_errors=True)
+    """Remove only a verified private workspace and confirm its disappearance."""
+
+    if workspace.name.startswith(WORKSPACE_PREFIX) is False:
+        raise RuntimeError(f"refusing to clean an unrecognized workspace: {workspace}")
+    if _is_symlink_or_reparse(workspace):
+        raise RuntimeError(
+            f"refusing to clean a symlink or reparse workspace: {workspace}"
+        )
+    try:
+        resolved = workspace.resolve(strict=True)
+    except FileNotFoundError:
+        return
+    if not resolved.is_dir():
+        raise RuntimeError(f"workspace is not a directory: {workspace}")
+    marker = resolved / WORKSPACE_MARKER
+    if _is_symlink_or_reparse(marker) or not marker.is_file():
+        raise RuntimeError(f"workspace marker is missing or unsafe: {workspace}")
+    if marker.read_text(encoding="utf-8", errors="strict") != resolved.name:
+        raise RuntimeError(f"workspace marker does not match: {workspace}")
+    for parent, directories, files in os.walk(resolved, followlinks=False):
+        for name in [*directories, *files]:
+            candidate = Path(parent) / name
+            if _is_symlink_or_reparse(candidate):
+                raise RuntimeError(
+                    f"workspace contains a symlink or reparse point: {candidate}"
+                )
+    shutil.rmtree(resolved)
+    if workspace.exists() or resolved.exists():
+        raise RuntimeError(f"workspace cleanup was not confirmed: {workspace}")
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -7,6 +7,7 @@ time.  The media pipeline itself remains in :mod:`video_chronicle.application`.
 
 from __future__ import annotations
 
+import inspect
 import logging
 import os
 import tempfile
@@ -20,6 +21,7 @@ from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot
 from gui_contract import GuiRunRequest
 
 from .domain import ExportPlan, ExportRequest
+from .execution import ExecutionContext, ProgressEvent
 from .ports import PipelinePorts
 from .overlay import OverlayConfig, require_resolved_overlay_font, resolve_overlay_font
 
@@ -111,6 +113,8 @@ class ApplicationServiceAdapter(QObject):
     plan_ready = Signal(object)
     preview_ready = Signal(object)
     completed = Signal(str, bool, str)
+    progress_received = Signal(object)
+    execution_state_changed = Signal(str)
 
     def __init__(
         self,
@@ -121,6 +125,7 @@ class ApplicationServiceAdapter(QObject):
         ports_factory: Callable[[], PipelinePorts] | None = None,
         request_factory: Callable[[GuiRunRequest], ExportRequest] = build_application_request,
         preview_service: Callable[..., None] | None = None,
+        cancel_capable: bool | None = None,
     ) -> None:
         super().__init__(parent)
         from . import application
@@ -128,6 +133,11 @@ class ApplicationServiceAdapter(QObject):
         self._plan_service = plan_service or application.plan_export
         self._execute_service = execute_service or application.execute_plan
         self._ports_factory = ports_factory or application.default_ports
+        self._cancel_capable = (
+            execute_service is None and ports_factory is None
+            if cancel_capable is None
+            else cancel_capable
+        )
         self._request_factory = request_factory
         if preview_service is None:
             from . import pipeline
@@ -141,12 +151,30 @@ class ApplicationServiceAdapter(QObject):
         self._output_path: Path | None = None
         self._output_before: tuple[int, int, int, int] | None = None
         self._preview_path: Path | None = None
+        self._execution_context: ExecutionContext | None = None
+        self._last_terminal_state: str | None = None
 
     @property
     def is_running(self) -> bool:
         """Return true through worker teardown, not merely task completion."""
 
         return self._thread is not None
+
+    @property
+    def current_operation(self) -> str | None:
+        return self._operation
+
+    @property
+    def last_terminal_state(self) -> str | None:
+        return self._last_terminal_state
+
+    @property
+    def supports_cancel(self) -> bool:
+        from .process_control import safe_cancel_supported
+
+        return self._cancel_capable and safe_cancel_supported() and _declares_keyword(
+            self._execute_service, "execution"
+        )
 
     def start_analysis(self, request: GuiRunRequest) -> None:
         """Resolve tools and create an immutable export plan off the UI thread."""
@@ -156,6 +184,13 @@ class ApplicationServiceAdapter(QObject):
             ports = self._ports_factory()
             logger = self._memory_logger("analysis")
             try:
+                if _accepts_keyword(self._plan_service, "progress"):
+                    return self._plan_service(
+                        canonical,
+                        ports,
+                        logger,
+                        progress=self.progress_received.emit,
+                    )
                 return self._plan_service(canonical, ports, logger)
             finally:
                 self._close_logger(logger)
@@ -173,6 +208,13 @@ class ApplicationServiceAdapter(QObject):
         )
         self._output_path = executable_plan.request.output
         self._output_before = _file_identity(self._output_path)
+        self._last_terminal_state = None
+        execution = (
+            ExecutionContext(self.progress_received.emit)
+            if self.supports_cancel
+            else None
+        )
+        self._execution_context = execution
 
         def task() -> int:
             from . import pipeline
@@ -186,16 +228,32 @@ class ApplicationServiceAdapter(QObject):
             handler = _SignalLogHandler(self.output_received.emit)
             logger.addHandler(handler)
             try:
+                if execution is not None:
+                    return self._execute_service(
+                        executable_plan,
+                        logger,
+                        self._ports_factory(),
+                        execution=execution,
+                    )
                 return self._execute_service(
-                    executable_plan,
-                    logger,
-                    self._ports_factory(),
+                    executable_plan, logger, self._ports_factory()
                 )
             finally:
                 logger.removeHandler(handler)
                 handler.close()
 
         self._start("export", task)
+
+    def cancel_export(self) -> bool:
+        """Request cancellation of the active application-service export."""
+
+        context = self._execution_context
+        if self._operation != "export" or context is None:
+            return False
+        accepted = context.request_cancel()
+        if accepted:
+            self.execution_state_changed.emit(context.state.value)
+        return accepted
 
     def start_preview(self, plan: ExportPlan) -> None:
         """Render a representative 640x360 PNG for the first accepted item."""
@@ -279,11 +337,21 @@ class ApplicationServiceAdapter(QObject):
     def _finish_task(self) -> None:
         operation = self._operation or "operation"
         result, error = self._outcome
+        execution = self._execution_context if operation == "export" else None
+        if execution is not None:
+            self._last_terminal_state = execution.state.value
+            self.execution_state_changed.emit(execution.state.value)
         self._thread = None
         self._worker = None
         self._operation = None
+        self._execution_context = None
 
         if error is not None:
+            if operation == "export" and self._last_terminal_state == "cancelled":
+                self.completed.emit(
+                    operation, False, "Экспорт отменён; итоговый файл не опубликован."
+                )
+                return
             self.completed.emit(operation, False, str(error))
             return
         if operation == "analysis":
@@ -333,3 +401,30 @@ def _file_identity(path: Path) -> tuple[int, int, int, int] | None:
     except OSError:
         return None
     return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns)
+
+
+def _accepts_keyword(callable_value: Callable[..., object], keyword: str) -> bool:
+    """Keep injected legacy callables compatible while enabling new options."""
+
+    try:
+        parameters = inspect.signature(callable_value).parameters.values()
+    except (TypeError, ValueError):
+        return False
+    return any(
+        parameter.name == keyword
+        or parameter.kind is inspect.Parameter.VAR_KEYWORD
+        for parameter in parameters
+    )
+
+
+def _declares_keyword(callable_value: Callable[..., object], keyword: str) -> bool:
+    """Require explicit opt-in before advertising a safety capability."""
+
+    try:
+        parameter = inspect.signature(callable_value).parameters.get(keyword)
+    except (TypeError, ValueError):
+        return False
+    return parameter is not None and parameter.kind in {
+        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        inspect.Parameter.KEYWORD_ONLY,
+    }

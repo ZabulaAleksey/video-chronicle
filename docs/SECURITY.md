@@ -50,12 +50,22 @@ release gate для будущего пакетирования, но ещё н�
   UNC и symlink/reparse отвергаются, а identity повторно проверяется перед
   preview и каждым FFmpeg normalize. Экранирование `fontfile` выполняется в
   pipeline adapter на двух уровнях FFmpeg parser, без shell.
-- Вывод subprocess сначала направляется во временные файловые потоки, затем
-  читается только в пределах лимита; FFprobe имеет отдельные timeout 30 секунд
-  и лимит ответа 8 MiB. Длительный FFmpeg пока не имеет timeout: его безопасная
-  process-tree отмена остаётся задачей этапа 09.
-- До реализации process-tree cancellation GUI блокирует закрытие активного
-  окна и не выдаёт остановку только родительского процесса за безопасную отмену.
+- Каждый tool process запускается в принадлежащем операции дереве: unnamed
+  Windows Job Object с `KILL_ON_JOB_CLOSE` и проверкой `ActiveProcesses == 0`
+  либо новая POSIX session/process group. Cancel сначала отправляет FFmpeg `q`,
+  через 2 секунды завершает дерево принудительно и подтверждает reap в пределах
+  следующих 3 секунд. Timeout и output-limit используют тот же boundary.
+- Вывод stdout/stderr дренируется параллельно и ограничен 8 MiB; превышение
+  лимита прекращает всё дерево. FFprobe дополнительно имеет timeout 30 секунд.
+- Source fingerprint фиксируется до и после inspection и повторно проверяется
+  до workspace и каждого normalize. Подмена regular file после preview не
+  экспортируется с устаревшими metadata/date.
+- Workspace имеет private prefix/marker, не следует через symlink/reparse и
+  считается очищенным только после подтверждённого удаления. Ошибка cleanup до
+  publication даёт `failed`; после уже успешной атомарной publication она
+  журналируется, не объявляя существующий корректный output неуспешным.
+- Cancel UI доступен только default safe backend либо явному capability opt-in;
+  `VIDEO_CHRONICLE_CANCEL_UI=0` и legacy fallback оставляют безопасное ожидание.
 
 ## Возобновление и кэш
 

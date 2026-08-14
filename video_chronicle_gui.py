@@ -46,6 +46,7 @@ from gui_contract import (
     create_run_request,
 )
 from video_chronicle.domain import ExportMode, ExportPlan
+from video_chronicle.execution import ProgressEvent
 from video_chronicle.gui_services import ApplicationServiceAdapter
 from video_chronicle.gui_services import replace_plan_overlay
 from video_chronicle.overlay import (
@@ -205,10 +206,18 @@ class ChronicleWindow(QMainWindow):
             app_adapter.output_received.connect(self._append_output)
             app_adapter.plan_ready.connect(self._on_plan_ready)
             app_adapter.preview_ready.connect(self._on_visual_preview_ready)
+            app_adapter.progress_received.connect(self._on_progress_event)
+            app_adapter.execution_state_changed.connect(self._on_execution_state)
             app_adapter.completed.connect(self._on_application_completed)
         self._active_request: GuiRunRequest | None = None
         self._plan: ExportPlan | None = None
         self._visual_preview_current = False
+        self._cancel_ui_enabled = (
+            not self._legacy_mode
+            and os.environ.get("VIDEO_CHRONICLE_CANCEL_UI", "1") != "0"
+            and isinstance(self._adapter, ApplicationServiceAdapter)
+            and self._adapter.supports_cancel
+        )
         self._building_ui = True
 
         default_input = Path.home() / "Input"
@@ -423,9 +432,14 @@ class ChronicleWindow(QMainWindow):
         self.run_button.setObjectName("primary")
         self.run_button.setMinimumHeight(42)
         self.run_button.clicked.connect(self._start_export)
+        self.cancel_button = QPushButton("Отменить экспорт")
+        self.cancel_button.setEnabled(False)
+        self.cancel_button.setVisible(self._cancel_ui_enabled)
+        self.cancel_button.clicked.connect(self._cancel_export)
         action_row.addWidget(self.status_label, 1)
         action_row.addWidget(self.analyze_button)
         action_row.addWidget(self.run_button)
+        action_row.addWidget(self.cancel_button)
         root.addLayout(action_row)
 
         self.progress = QProgressBar()
@@ -773,6 +787,41 @@ class ChronicleWindow(QMainWindow):
             self.status_label.setText("Анализ медиафайлов…")
         else:
             self.status_label.setText("Медиаконвейер выполняется…")
+            self.cancel_button.setEnabled(False)
+
+    @Slot(object)
+    def _on_progress_event(self, value: object) -> None:
+        if not isinstance(value, ProgressEvent):
+            return
+        if value.total_units is None:
+            self.progress.setRange(0, 0)
+            return
+        self.progress.setRange(0, max(1, value.total_units))
+        self.progress.setValue(value.completed_units)
+        self.progress.setTextVisible(True)
+        if value.operation == "export":
+            self.cancel_button.setEnabled(self._cancel_ui_enabled)
+            phase_names = {
+                "preflight": "Проверка плана…",
+                "normalize": "Нормализация медиа…",
+                "concat": "Объединение клипов…",
+                "publication": "Результат опубликован",
+            }
+            self.status_label.setText(phase_names.get(value.phase, value.phase))
+
+    @Slot(str)
+    def _on_execution_state(self, state: str) -> None:
+        if state == "cancel-requested":
+            self.status_label.setText("Отмена экспорта…")
+            self.cancel_button.setEnabled(False)
+
+    @Slot()
+    def _cancel_export(self) -> None:
+        if not isinstance(self._adapter, ApplicationServiceAdapter):
+            return
+        if self._adapter.cancel_export():
+            self.status_label.setText("Отмена экспорта…")
+            self.cancel_button.setEnabled(False)
 
     @Slot(object)
     def _on_plan_ready(self, plan: object) -> None:
@@ -855,6 +904,11 @@ class ChronicleWindow(QMainWindow):
     def _on_application_completed(
         self, operation: str, success: bool, message: str
     ) -> None:
+        progress_snapshot = (
+            self.progress.minimum(),
+            self.progress.maximum(),
+            self.progress.value(),
+        )
         self._set_running(False)
         self.result_label.setText(message)
         self._append_output(f"\n{message}\n")
@@ -903,8 +957,25 @@ class ChronicleWindow(QMainWindow):
                 self.progress.setValue(0)
             return
 
-        self.status_label.setText("Экспорт завершён" if success else "Экспорт не выполнен")
-        self.progress.setValue(1 if success else 0)
+        terminal_state = (
+            self._adapter.last_terminal_state
+            if isinstance(self._adapter, ApplicationServiceAdapter)
+            else None
+        )
+        if terminal_state == "cancelled":
+            self.status_label.setText("Экспорт отменён")
+        elif terminal_state == "failed":
+            self.status_label.setText("Ошибка экспорта")
+        else:
+            self.status_label.setText(
+                "Экспорт завершён" if success else "Экспорт не выполнен"
+            )
+        if success:
+            self.progress.setRange(0, 1)
+            self.progress.setValue(1)
+        else:
+            self.progress.setRange(progress_snapshot[0], progress_snapshot[1])
+            self.progress.setValue(progress_snapshot[2])
         self.run_button.setEnabled(self._plan is not None)
 
     @Slot()
@@ -1075,13 +1146,20 @@ class ChronicleWindow(QMainWindow):
             self.progress.setRange(0, 0)
         else:
             self.progress.setRange(0, 1)
+            self.progress.setTextVisible(False)
+        self.cancel_button.setEnabled(
+            running
+            and self._cancel_ui_enabled
+            and isinstance(self._adapter, ApplicationServiceAdapter)
+            and self._adapter.current_operation == "export"
+        )
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt API
         if self._adapter.is_running:
             QMessageBox.warning(
                 self,
                 "Экспорт ещё выполняется",
-                "Дождитесь завершения экспорта. Безопасная отмена будет добавлена отдельно.",
+                "Дождитесь завершения операции или сначала отмените активный экспорт.",
             )
             event.ignore()
             return

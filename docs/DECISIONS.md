@@ -181,3 +181,16 @@
 - Последствия: CLI без `--mode` и `--mode chronicle` сохраняют прежний результат;
   `--mode join` — новый opt-in. GUI default Chronicle объясняет различие и
   инвалидирует plan при переключении, не изменяя сохранённый overlay checkbox.
+
+## 2026-08-14 — EXEC-001: progress и platform-owned process tree
+
+- Решение: использовать один Qt-free `ExecutionContext` и существующий
+  `JobState`; считать export progress как accepted items + concat + publication;
+  владеть каждым tool tree через Windows Job Object или POSIX process group.
+- Причина: GUI должен оставаться отзывчивым и отменять весь FFmpeg tree, не
+  публикуя partial result и не выдавая parent-only kill за успешную отмену.
+- Альтернативы: `taskkill`, `psutil`/`pywin32`, kill только root, отдельный
+  QProcess pipeline и парсинг FFmpeg ETA.
+- Последствия: cancel принимается только до atomic publication commit; grace
+  2 секунды и force/reap budget 3 секунды; source identity и workspace cleanup
+  подтверждаются; unsafe/legacy backend не показывает кнопку отмены.

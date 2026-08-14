@@ -82,6 +82,28 @@ class DateDecision:
 
 
 @dataclass(frozen=True)
+class SourceFingerprint:
+    """Immutable local file identity captured after successful inspection."""
+
+    device: int
+    inode: int
+    size: int
+    mtime_ns: int
+    ctime_ns: int
+
+    @classmethod
+    def capture(cls, path: Path) -> "SourceFingerprint":
+        stat_result = path.stat()
+        return cls(
+            device=stat_result.st_dev,
+            inode=stat_result.st_ino,
+            size=stat_result.st_size,
+            mtime_ns=stat_result.st_mtime_ns,
+            ctime_ns=stat_result.st_ctime_ns,
+        )
+
+
+@dataclass(frozen=True)
 class MediaItem:
     """An inspected source accepted by the current media pipeline."""
 
@@ -91,6 +113,7 @@ class MediaItem:
     has_audio: bool
     date_source: str
     date_decision: DateDecision | None = None
+    source_fingerprint: SourceFingerprint | None = None
 
 
 @dataclass(frozen=True)

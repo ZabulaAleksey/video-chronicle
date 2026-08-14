@@ -2,14 +2,14 @@
 
 ## Текущий этап
 
-Этапы 00–08 завершены. Текущий этап — 09, structured export progress и safe
-process-tree cancel; EXEC-001 утверждён, production-реализация ещё не начата. Default PySide6 GUI
+Этапы 00–09 завершены. Текущий этап — 10, совместимые resume и cache;
+identity/key schema и storage policy ещё проходят decision gate. Default PySide6 GUI
 строит plan и representative overlay preview через application services и
 запускает тот же immutable plan вне UI thread. Whole-CLI `QProcess` сохранён
 только как явный диагностический fallback. Runtime-очередь, durable storage и
 кэш отсутствуют.
 
-Подготовленный ограниченный срез этапа 09 хранится в `docs/AI_PLAN.md`. Этапы 01–17
+Текущий ограниченный срез этапа 10 хранится в `docs/AI_PLAN.md`. Этапы 01–17
 разделены на самостоятельные project prompts в `prompts/stages/`; они
 загружаются по одному и не заменяют SPEC или текущий план.
 
@@ -31,6 +31,11 @@ process-tree cancel; EXEC-001 утверждён, production-реализаци�
 - `src/video_chronicle/gui_services.py` управляет `QThread` workers для
   `plan_export`/`execute_plan`, а `video_chronicle_gui.py` показывает preview,
   не копируя медиалогику;
+- `src/video_chronicle/execution.py` задаёт typed lifecycle/progress и atomic
+  publication commit point, а `process_control.py` подтверждённо завершает
+  Windows Job Object или POSIX process group;
+- canonical plan фиксирует source fingerprint до/после inspection и проверяет
+  его перед каждым export tool boundary;
 - `docs/ARCHITECTURE.md` и `docs/DESIGN.md` описывают только реализованное;
 - целевое развитие Timeline Builder описано отдельно в
   `specs/features/timeline-builder.spec.md` и не считается готовой функцией;
@@ -63,12 +68,16 @@ process-tree cancel; EXEC-001 утверждён, production-реализаци�
   переключении и показывает mode в plan summary;
 - CLI без `--mode` эквивалентен legacy Chronicle; новый `--mode join` проходит
   тот же mixed photo/video production path без `drawtext`;
+- GUI показывает determinate progress и безопасно отменяет default export;
+  cancel/timeout/output-limit завершают всё дерево процессов в bounded time;
+- cancellation/publication race, strict private-workspace cleanup и terminal
+  states `succeeded/failed/cancelled` имеют явный Qt-free контракт;
 - завершённый characterization baseline дат, сортировки, FFmpeg argv, ошибок,
   partial success, коллизий и неизменности исходников;
 - синтетический mixed photo/video smoke на FFmpeg/FFprobe 9.0.1;
 - устанавливаемый пакет версии 0.2.0 с console/GUI entry points и группой
   зависимостей `dev`;
-- 173 успешно пройденных unit/contract/GUI/integration теста, включая реальный
+- 197 успешно пройденных unit/contract/GUI/integration тестов, включая реальный
   FFmpeg smoke;
 - два symlink/reparse-specific теста корректно пропущены в текущем
   Windows-окружении без права на создание symbolic link;
@@ -88,14 +97,13 @@ process-tree cancel; EXEC-001 утверждён, production-реализаци�
 - после нового клонирования FFmpeg необходимо установить отдельно;
 - версии FFmpeg/FFprobe старше 9.0.1 могут работать, но не входят в
   подтверждённый baseline;
-- безопасная отмена GUI отсутствует, потому что остановка родительского Python
-  пока не гарантирует остановку дочернего FFmpeg на Windows;
+- resume/cache и durable storage ещё отсутствуют; повторный экспорт начинает
+  чистую нормализацию всех элементов;
 - SQLite, ExifTool, Pydantic и OTIO остаются неутверждёнными кандидатами;
   PySide6 принят только для GUI.
 
 ## Следующая задача
 
-Начать этап 09: до кода утвердить progress denominator/events, bounded
-cancel timeout/escalation, Windows process-tree ownership, terminal states и
-cleanup/finalization semantics. Подготовленный срез находится в
-`docs/AI_PLAN.md` и `prompts/stages/09-export-progress-cancel.md`.
+Начать decision gate этапа 10: утвердить cache identity/key schema, manifest
+versioning/integrity, retention/purge и безопасный clean fallback. Текущий срез
+находится в `docs/AI_PLAN.md` и `prompts/stages/10-resume-cache.md`.

@@ -44,6 +44,8 @@ export и реальными FFmpeg preview/normalize с включённой и
 | GUI application preview, async lifecycle, Unicode, stale plan и overwrite | GUI/contract | `tests/test_gui_application.py` | `GUI-APP-AC-001–003`, `AC-001/002/010` |
 | Единый overlay config, escaping шрифта, preview и multi-item export | unit/GUI/integration | `tests/test_overlay.py` | `OVERLAY-AC-001–003`, `AC-004/010` |
 | Join/Chronicle invariant, CLI parity, GUI round-trip и оба real exports | matrix/GUI/integration | `tests/test_modes.py`, `tests/test_gui_application.py`, `tests/test_ffmpeg_smoke.py` | `MODE-AC-001–003`, `AC-003/004/008` |
+| Structured progress, cancel checkpoints, publication race и cleanup | unit/integration/GUI | `tests/test_execution.py`, `tests/test_gui_application.py` | `EXEC-AC-001/003/004`, `AC-003/005/009/010` |
+| Windows Job/POSIX group, descendants, timeout/output-limit и real FFmpeg cancel | platform/integration/security | `tests/test_process_control.py` | `EXEC-AC-002`, `AC-006` |
 
 Synthetic smoke создаёт короткие BMP и MP4 во временном каталоге с пробелом,
 апострофом и Unicode, запускает CLI list-argv без shell, проверяет итоговые
@@ -76,8 +78,8 @@ ffprobe version 9.0.1-essentials_build-www.gyan.dev
 - Contract: процессы получают argv-списки; CLI и будущий GUI используют один
   и тот же наблюдаемый план и правила ошибок.
 - GUI: loading/error/empty/populated/stale preview, Unicode, worker cleanup,
-  repeat-run guard, responsive scrolling и отсутствие блокировки event loop;
-  structured progress/cancel добавляются на этапе 09.
+  repeat-run guard, responsive scrolling, structured progress/cancel и
+  отсутствие блокировки event loop.
 - Resume/cache (когда появится): повторный запуск, изменение входа, параметров
   или версии инструмента, повреждённое и устаревшее состояние.
 - Packaging (когда появится): запуск на чистой Windows-машине, обнаружение

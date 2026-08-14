@@ -23,6 +23,7 @@ from video_chronicle.domain import (
 )
 from video_chronicle.gui_services import ApplicationServiceAdapter
 from video_chronicle.overlay import OverlayConfig
+from video_chronicle.ports import PipelinePorts
 from video_chronicle_gui import ChronicleWindow, CliProcessAdapter
 
 
@@ -375,6 +376,100 @@ def test_minimum_window_keeps_full_form_accessible_via_scroll(qapp) -> None:
     qapp.processEvents()
     assert scroll.verticalScrollBar().value() > 0
     window.close()
+
+
+def test_application_export_progress_cancel_is_responsive_and_terminal(
+    qapp, tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.delenv("VIDEO_CHRONICLE_CANCEL_UI", raising=False)
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    output = tmp_path / "output.mp4"
+    canonical = _canonical_request(input_dir, output)
+    entered = threading.Event()
+    release = threading.Event()
+    workspace = tmp_path / "work"
+
+    def normalize(item, destination, *args):
+        entered.set()
+        release.wait(2)
+        destination.write_bytes(b"clip")
+
+    ports = PipelinePorts(
+        command_runner=lambda *args, **kwargs: None,
+        probe_media=lambda *args: {},
+        inspect_item=lambda *args: None,  # type: ignore[arg-type]
+        normalize_item=normalize,
+        concatenate=lambda clips, manifest, temporary, *args: temporary.write_bytes(b"movie"),
+        publish_output=lambda temporary, final, overwrite: temporary.replace(final),
+        collect_source_paths=lambda *args: [],
+        create_workspace=lambda parent: (workspace.mkdir(), workspace)[1],
+        cleanup_workspace=lambda path: __import__("shutil").rmtree(path),
+        validate_source=lambda *args: None,
+    )
+    adapter = ApplicationServiceAdapter(
+        plan_service=lambda request, ports, logger: _preview_plan(request),
+        preview_service=_fake_preview,
+        ports_factory=lambda: ports,
+        request_factory=lambda gui: canonical,
+        cancel_capable=True,
+    )
+    window = ChronicleWindow(application_adapter=adapter)
+    window.input_edit.setText(str(input_dir))
+    window.output_edit.setText(str(output))
+    window.analyze_button.click()
+    _wait_until(qapp, lambda: not adapter.is_running)
+    window.preview_button.click()
+    _wait_until(qapp, lambda: not adapter.is_running)
+
+    window.run_button.click()
+    _wait_until(qapp, entered.is_set)
+    ticks: list[bool] = []
+    QTimer.singleShot(0, lambda: ticks.append(True))
+    qapp.processEvents()
+    assert ticks == [True]
+    assert window.cancel_button.isHidden() is False
+    assert window.cancel_button.isEnabled() is True
+    window.cancel_button.click()
+    assert window.status_label.text() == "Отмена экспорта…"
+    release.set()
+    _wait_until(qapp, lambda: not adapter.is_running)
+
+    assert adapter.last_terminal_state == "cancelled"
+    assert window.status_label.text() == "Экспорт отменён"
+    assert output.exists() is False
+    assert workspace.exists() is False
+    window.close()
+
+
+def test_cancel_ui_flag_and_legacy_execute_fallback_hide_button(
+    qapp, monkeypatch
+) -> None:
+    monkeypatch.setenv("VIDEO_CHRONICLE_CANCEL_UI", "0")
+    flagged = ChronicleWindow(application_adapter=ApplicationServiceAdapter())
+    assert flagged.cancel_button.isHidden() is True
+    flagged.close()
+
+    monkeypatch.delenv("VIDEO_CHRONICLE_CANCEL_UI", raising=False)
+    fallback = ChronicleWindow(
+        application_adapter=ApplicationServiceAdapter(
+            execute_service=lambda plan, logger, ports: 0
+        )
+    )
+    assert fallback.cancel_button.isHidden() is True
+    fallback.close()
+
+    injected_backend = ChronicleWindow(
+        application_adapter=ApplicationServiceAdapter(
+            ports_factory=lambda: object(),  # type: ignore[arg-type]
+        )
+    )
+    assert injected_backend.cancel_button.isHidden() is True
+    assert (
+        isinstance(injected_backend._adapter, ApplicationServiceAdapter)
+        and injected_backend._adapter.supports_cancel is False
+    )
+    injected_backend.close()
 
 
 def test_overlay_only_change_keeps_plan_and_preview_temp_is_cleaned(

@@ -84,14 +84,20 @@ Whole-CLI `QProcess` сохранён только как явный диагн�
 legacy overlay semantics, Join явно отключает подпись, а оба режима используют
 одни application/pipeline adapters и проходят mixed-media smoke.
 
-## Запланированный MVP — этапы 09–10
+## Выполненный этап — 09. Export/progress/cancel
+
+Самостоятельный prompt: [`09-export-progress-cancel.md`](../prompts/stages/09-export-progress-cancel.md).
+
+Этап завершён: typed progress и `JobState` lifecycle управляют одним export;
+Windows Job Object/POSIX process group обеспечивают bounded whole-tree cancel,
+а source identity, cleanup и atomic publication race подтверждены тестами.
+
+## Текущий MVP — этап 10
 
 Этапы выполняются последовательно и только после критериев завершения
 предыдущего этапа.
 
-1. **Следующий — [09 — Export/progress/cancel](../prompts/stages/09-export-progress-cancel.md):** план экспорта, прогресс, безопасная отмена,
-   проверка коллизий и атомарная финализация.
-2. **[10 — Resume/cache](../prompts/stages/10-resume-cache.md):** совместимые ключи, инвалидирование и безопасное
+1. **Следующий — [10 — Resume/cache](../prompts/stages/10-resume-cache.md):** совместимые ключи, инвалидирование и безопасное
    возобновление. Этот этап завершает целевой MVP.
 
 ## Позже — целевой v1, этапы 11–16

@@ -217,3 +217,28 @@ def test_command_runner_enforces_output_limit_while_process_runs() -> None:
             timeout=10,
             max_output_bytes=1024,
         )
+
+
+def test_production_workspace_cleanup_is_scoped_and_confirmed(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from video_chronicle import pipeline
+
+    workspace = pipeline.create_workspace(tmp_path)
+    (workspace / "clip.mp4").write_bytes(b"temporary")
+    pipeline.cleanup_workspace(workspace)
+    assert not workspace.exists()
+
+    unrelated = tmp_path / "unrelated"
+    unrelated.mkdir()
+    sentinel = unrelated / "keep.txt"
+    sentinel.write_text("keep", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="unrecognized workspace"):
+        pipeline.cleanup_workspace(unrelated)
+    assert sentinel.read_text(encoding="utf-8") == "keep"
+
+    not_removed = pipeline.create_workspace(tmp_path)
+    monkeypatch.setattr(pipeline.shutil, "rmtree", lambda path: None)
+    with pytest.raises(RuntimeError, match="cleanup was not confirmed"):
+        pipeline.cleanup_workspace(not_removed)
+    assert not_removed.is_dir() is True
