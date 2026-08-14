@@ -2,8 +2,8 @@
 
 ## Текущий этап
 
-Этапы 00–08 завершены. Следующий этап — 09, structured export progress и safe
-process-tree cancel; его decision gate ещё не утверждён. Default PySide6 GUI
+Этапы 00–08 завершены. Текущий этап — 09, structured export progress и safe
+process-tree cancel; EXEC-001 утверждён, production-реализация ещё не начата. Default PySide6 GUI
 строит plan и representative overlay preview через application services и
 запускает тот же immutable plan вне UI thread. Whole-CLI `QProcess` сохранён
 только как явный диагностический fallback. Runtime-очередь, durable storage и

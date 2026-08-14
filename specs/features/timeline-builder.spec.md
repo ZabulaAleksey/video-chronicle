@@ -186,6 +186,87 @@ execution path, но сохраняет GUI-001 как временный диа
 - разные codecs/normalization для Join и Chronicle;
 - trim/reorder, progress/cancel, cache/resume и persistence.
 
+## Утверждённый срез EXEC-001 — progress и safe cancel
+
+Этот срез утверждён прямой командой пользователя от 2026-08-14 последовательно
+выполнить оставшиеся этапы. Он добавляет runtime lifecycle к одному
+application/pipeline path и не меняет CLI argv или атомарную publication policy.
+
+- **EXEC-001 — Typed lifecycle.** Qt-free execution context использует
+  существующие `JobState`: `planned → running → cancel-requested → cancelled`
+  либо `running → succeeded/failed`. `Succeeded` возможен только после
+  publication; `cancelled` — только после подтверждённой остановки process tree
+  и выполнения workspace cleanup policy. Неподтверждённая остановка означает
+  `failed`, а не ложный `cancelled`.
+- **EXEC-002 — Progress events.** Immutable event содержит operation, phase,
+  `completed_units`, optional `total_units`, optional item index/path и outcome
+  completed/skipped. Analysis total становится числом найденных source paths;
+  каждый inspected/skipped source завершает одну единицу. Export total равен
+  `len(plan.items) + 2`: каждый normalized/skipped item, concat и успешная
+  publication завершают по одной единице. Preflight/cleanup не входят в total.
+  Процент вычисляет consumer как `completed/total`; это не ETA и не оценка
+  длительности. Failure/cancel не принудительно показываются как 100%.
+- **EXEC-003 — Cooperative boundary.** Thread-safe cancellation request
+  принимается только в running state до publication commit point. Checkpoint
+  выполняется до workspace, между items, до concat и непосредственно перед
+  publication. После начала атомарной publication request возвращает «слишком
+  поздно», и terminal outcome определяется фактической publication.
+- **EXEC-004 — Process-tree ownership.** Каждый tool process запускается без
+  shell внутри platform-owned tree. Windows использует unnamed Job Object с
+  `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, немедленный
+  `AssignProcessToJobObject` и `TerminateJobObject` после cooperative grace.
+  POSIX использует новую session/process group, `SIGTERM`, затем `SIGKILL`.
+  Все процессы reaped; parent-only kill запрещён. Допустимое окно между Windows
+  `Popen` и assignment ограничено доверенными tool binaries; assignment failure
+  немедленно завершает root и делает safe cancel недоступным для операции.
+- **EXEC-005 — Bounded cancellation.** Сначала tool получает cooperative
+  остановку через закрываемый stdin (`q` для FFmpeg), grace — 2 секунды. Затем
+  platform tree принудительно завершается; kill/reap budget — ещё 3 секунды,
+  polling не реже 100 мс. Общий acceptance bound — 5.5 секунды. Timeout и
+  output-limit используют тот же tree termination, а не `Popen.kill()` root.
+- **EXEC-006 — Preflight и cleanup.** До encode повторно проверяются immutable
+  plan, output/error-log collision, tool availability/version, source/font
+  identity и возможность создать private workspace. Свободное место доступно
+  как диагностика, но не имеет произвольного hard threshold без надёжной оценки
+  размера. По умолчанию cancel/failure удаляет workspace; `--keep-work`
+  сохраняет только диагностические intermediates и никогда не публикует их.
+- **EXEC-007 — GUI и fallback.** Default GUI получает typed events через Qt
+  signals, показывает determinate progress после появления total и разрешает
+  cancel только активного export. `VIDEO_CHRONICLE_CANCEL_UI=0` отключает
+  кнопку. Legacy `QProcess` fallback и неподдерживаемый backend сохраняют
+  безопасное поведение «дождаться завершения»; окно остаётся заблокированным до
+  terminal state.
+- **EXEC-008 — Compatibility.** `execute_plan` сохраняет legacy success `int`,
+  а новые execution/progress параметры optional. CLI argv, exit codes и
+  существующие diagnostics не меняются; cancel является GUI application-service
+  capability, а не скрытым завершением CLI parent.
+
+### Критерии приёмки среза
+
+- **EXEC-AC-001 (EXEC-001/002, FR-005/006/009, AC-003/009).** Progress events
+  монотонны для success/skip/failure, следуют утверждённому denominator и
+  достигают 100% только после подтверждённой publication; GUI event loop
+  остаётся отзывчивым.
+- **EXEC-AC-002 (EXEC-003–005, FR-009, AC-006).** Cancel до workspace, во время
+  normalize, между items и во время concat завершается не дольше 5.5 секунды;
+  helper process tree не оставляет живых child/grandchild, а failure
+  подтверждения tree termination различим как failed.
+- **EXEC-AC-003 (EXEC-003/006, FR-008, SEC-001/003, AC-005/010).** Cancel race
+  до publication сохраняет sources/existing output и не публикует partial;
+  cancel после commit не отменяет уже начатую атомарную publication. Default
+  workspace очищается, `--keep-work` остаётся только диагностическим.
+- **EXEC-AC-004 (EXEC-007/008, FR-011/012).** Feature-flag fallback не
+  показывает небезопасную кнопку, GUI различает cancelled/failed/succeeded,
+  legacy CLI characterization остаётся без изменения.
+
+### Не входит в срез
+
+- duration-weighted ETA и парсинг FFmpeg stderr/progress protocol;
+- resume/cache, durable/background queue и parallel exports;
+- `taskkill`, `psutil`, `pywin32` или второй subprocess pipeline;
+- cancel analysis/representative preview: они остаются текущими bounded tool
+  calls, а safe cancel в этом срезе относится к export.
+
 ## Утверждённый срез DATE-001 — metadata/date engine
 
 Этот раздел утверждён в рамках прямой команды пользователя от 2026-08-14

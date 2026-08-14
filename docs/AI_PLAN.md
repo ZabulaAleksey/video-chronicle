@@ -3,7 +3,7 @@
 ## Срез
 
 - Этап: **09 — Export, progress и safe cancel**
-- Статус: подготовка decision gate; реализация не начата
+- Статус: EXEC-001 утверждён; реализация в работе
 - Prompt: `prompts/stages/09-export-progress-cancel.md`
 - Зависимости: этапы 01–08 завершены; Join/Chronicle используют один
   application/pipeline path и immutable plan
@@ -16,15 +16,18 @@
 отменой всего принадлежащего заданию process tree и неизменной атомарной
 финализацией.
 
-## Decision gate до кода
+## Утверждённый contract
 
-- определить typed progress events и denominator для inspection, normalization
-  и concat без ложных процентов;
-- утвердить cooperative cancellation token, Windows process-group/job ownership,
-  timeout и escalation terminate→kill;
-- зафиксировать terminal states, bounded cancel time и cleanup workspaces;
-- определить preflight tools/paths/space, насколько проверка надёжна до encode;
-- утвердить feature flag cancel UI и безопасный fallback «дождаться завершения».
+- analysis total — source count; export total — accepted items + concat + publish;
+- progress показывает completed units, не ETA, и достигает 100% только после
+  publication;
+- cancellation token принимает запрос только до atomic publication commit;
+- Windows: Job Object; POSIX: process group; cooperative grace 2 с, forced
+  tree termination/reap ещё 3 с, acceptance bound 5.5 с;
+- terminal state использует существующий `JobState`; неподтверждённая остановка
+  означает failed;
+- `VIDEO_CHRONICLE_CANCEL_UI=0` и unsupported/legacy backend оставляют только
+  безопасный fallback «дождаться завершения».
 
 ## Scope
 
