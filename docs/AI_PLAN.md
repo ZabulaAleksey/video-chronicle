@@ -3,10 +3,11 @@
 ## Срез
 
 - Этап: **12 — Optional timeline interchange и scene analysis**
-- Статус: experiment/specification gate; adapter-код до решения SCENE-001 не писать
+- Статус: INTEROP-001 утверждён; bounded experiment implementation в работе
 - Prompt: `prompts/stages/12-timeline-interchange-scene.md`
 - Зависимости: этапы 01–11 завершены; project schema v2 и editing snapshot стабильны
-- SPEC/AC: будут созданы только после выбора формата, corpus и метрик
+- SPEC: `specs/features/timeline-interchange-scene.spec.md`
+- AC: `INTEROP-AC-001–003`, `SCENE-AC-001/002`, `OPTIONAL-AC-001`, `LICENSE-AC-001`
 
 ## Цель текущего среза
 
@@ -14,16 +15,14 @@
 detector, который создаёт только предложения edits. Core project schema,
 legacy export и ручной editor не должны зависеть от optional формата/библиотеки.
 
-## Experiment gate
+## Утверждённый experiment
 
-До implementation необходимо:
-
-- сравнить доступные interchange formats/versions и выбрать ровно один;
-- определить явную обработку unknown fields, rates и timebase;
-- создать bounded golden fixtures и malformed/large negative corpus;
-- определить scene benchmark corpus, ground truth и метрики качества/скорости;
-- провести dependency/license/security review и определить clean fallback;
-- зафиксировать feature flag, критерии continue/drop и удаляемость adapter.
+- native `.otio` bounded subset, optional `opentimelineio==0.18.1`/Apache-2.0;
+- integer-µs native export и explicit rational-time import rounding;
+- FFmpeg `scdet=10.0` выдаёт suggestions, но никогда не auto-edits;
+- flags default off и clean fallback без dependency;
+- synthetic corpus и численные precision/recall/FP/error/runtime gates;
+- adapters удаляются без migration schema v2.
 
 ## Non-goals
 

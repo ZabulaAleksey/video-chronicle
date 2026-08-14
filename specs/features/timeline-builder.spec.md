@@ -5,6 +5,8 @@
 - Область: построение одного видео по набору фотографий и видеозаписей
 - Утверждённый contract этапа 11 вынесен в
   `specs/features/nondestructive-editing.spec.md` и дополняет эту SPEC.
+- Утверждённый optional experiment этапа 12 вынесен в
+  `specs/features/timeline-interchange-scene.spec.md`.
 
 ## Утверждённый срез GUI-001 — оболочка legacy CLI
 

@@ -221,3 +221,17 @@
 - Последствия: trim использует integer microseconds и exact filters; schema v2
   читает v1 через чистую миграцию и сохраняет backup до первого replace;
   full-source cache v1 совместим, edited clip получает cache v2 identity.
+
+## 2026-08-14 — INTEROP-001: native OTIO и FFmpeg scdet как removable adapters
+
+- Решение: выбрать native `.otio` JSON через optional
+  `opentimelineio==0.18.1` и scene suggestions через существующий FFmpeg 9.0.1
+  `scdet`; оба выключены feature flags по умолчанию.
+- Причина: OTIO сохраняет rational time/single-track cuts лучше frame-based
+  CMX3600, а `scdet` позволяет измерить полезность без NumPy/OpenCV/ML downloads.
+- Альтернативы: CMX3600, FCPXML, PySceneDetect, собственный interchange format,
+  автоматическое применение cuts.
+- Последствия: bounded subset/parser и benchmark обязательны; импорт создаёт
+  proposal, не edit; adapters не входят в project schema. OTIO Apache-2.0
+  совместим как optional extra, но release заблокирован до project license и
+  отдельного FFmpeg redistribution review.
