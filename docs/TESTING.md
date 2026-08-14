@@ -18,7 +18,8 @@
 дат, все поддерживаемые filename patterns, приоритет метаданных, сортировка,
 фильтрация исходников, FFmpeg normalize/concat argv, пустой и повреждённый
 входы, частичный успех, коллизии результата, неизменность источников,
-построение GUI argv, реальный `QProcess` и основные состояния окна.
+построение GUI argv, реальный legacy `QProcess`, application-service worker,
+preview states, invalidation, overwrite timing и responsive scrolling.
 
 ## Матрица baseline этапа 01
 
@@ -38,6 +39,7 @@
 | Реальный mixed photo/video экспорт и проверка A/V streams | integration smoke | `test_synthetic_photo_video_cli_smoke_preserves_sources` | `SYS-AC-001`, `SYS-AC-005`, `AC-008`, `AC-010` |
 | DATE-001 priority, raw provenance, timezone и conflicts | unit/table | `tests/test_metadata_date_engine.py` | `DATE-AC-001–003`, `AC-002` |
 | MODEL-001 IDs/order, job transitions, schema v1 и repository | unit/table | `tests/test_project_queue_model.py` | `MODEL-AC-001–003` |
+| GUI application preview, async lifecycle, Unicode, stale plan и overwrite | GUI/contract | `tests/test_gui_application.py` | `GUI-APP-AC-001–003`, `AC-001/002/010` |
 
 Synthetic smoke создаёт короткие BMP и MP4 во временном каталоге с пробелом,
 апострофом и Unicode, запускает CLI list-argv без shell, проверяет итоговые
@@ -69,8 +71,9 @@ ffprobe version 9.0.1-essentials_build-www.gyan.dev
   корректность длительности и воспроизводимость результата.
 - Contract: процессы получают argv-списки; CLI и будущий GUI используют один
   и тот же наблюдаемый план и правила ошибок.
-- GUI (когда появится): загрузка/ошибка/пустое состояние, изменение порядка,
-  прогресс, отмена и отсутствие блокировки event loop.
+- GUI: loading/error/empty/populated/stale preview, Unicode, worker cleanup,
+  repeat-run guard, responsive scrolling и отсутствие блокировки event loop;
+  structured progress/cancel добавляются на этапе 09.
 - Resume/cache (когда появится): повторный запуск, изменение входа, параметров
   или версии инструмента, повреждённое и устаревшее состояние.
 - Packaging (когда появится): запуск на чистой Windows-машине, обнаружение

@@ -138,3 +138,19 @@
 - Последствия: domain API и тестовый round-trip стабилизируются без зависимости
   от Qt/FFmpeg/БД. Сериализуемый state не содержит tool commands. Выбор
   file/SQLite, транзакций и миграций остаётся отдельным решением этапа 10.
+
+## 2026-08-14 — GUI по умолчанию использует application services
+
+- Решение: строить `ExportPlan` и выполнять `execute_plan` в отдельных
+  `QThread` workers; widgets только валидируют форму, показывают immutable plan
+  и подтверждают overwrite. Whole-CLI `QProcess` доступен временно только через
+  `VIDEO_CHRONICLE_GUI_ADAPTER=legacy-cli`.
+- Причина: пользователь должен проверить состав и порядок до длительного
+  экспорта, а CLI и GUI обязаны сходиться в одном application path без
+  блокировки event loop.
+- Альтернативы: продолжить парсить stderr whole CLI; перенести FFmpeg
+  orchestration в widgets; удалить fallback сразу.
+- Последствия: изменение формы инвалидирует preview, анализ/экспорт имеют явный
+  worker lifecycle, а legacy fallback можно удалить после стабилизации. До
+  этапа 09 окно по-прежнему нельзя закрыть во время активного worker, потому
+  что process-tree cancellation ещё не реализована.

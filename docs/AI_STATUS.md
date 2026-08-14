@@ -2,14 +2,13 @@
 
 ## Текущий этап
 
-Этапы 00–05 завершены. Следующий этап — 06, GUI поверх application services; он
-подготовлен, но ещё не начат. По прямому запросу
-пользователя вне очереди реализован ограниченный GUI-срез GUI-001: PySide6
-оболочка запускает совместимый legacy CLI через `QProcess`. Устанавливаемый
-package, entry points и application service готовы; MODEL-001 описывает
-состояния будущих заданий, но runtime-очередь, durable storage и кэш отсутствуют.
+Этапы 00–06 завершены. Следующий этап — 07, overlay editor; он подготовлен, но
+ещё не начат. Default PySide6 GUI строит preview через application services и
+запускает тот же immutable plan вне UI thread. Whole-CLI `QProcess` сохранён
+только как явный диагностический fallback. Runtime-очередь, durable storage и
+кэш отсутствуют.
 
-Подготовленный ограниченный срез этапа 06 хранится в `docs/AI_PLAN.md`. Этапы 01–17
+Подготовленный ограниченный срез этапа 07 хранится в `docs/AI_PLAN.md`. Этапы 01–17
 разделены на самостоятельные project prompts в `prompts/stages/`; они
 загружаются по одному и не заменяют SPEC или текущий план.
 
@@ -23,9 +22,10 @@ package, entry points и application service готовы; MODEL-001 описы�
   реализуют MODEL-001: stable timeline IDs/order, immutable export snapshot,
   job transitions, strict schema v1 и in-memory repository;
 - `join_media.py` — тонкий compatibility shim и direct-source entry point;
-- доступны прямой CLI и переходная GUI-оболочка без сервера и базы данных;
-- `gui_contract.py` строит argv, а `video_chronicle_gui.py` управляет формой и
-  асинхронным процессом, не копируя медиалогику;
+- доступны прямой CLI и application-service GUI без сервера и базы данных;
+- `src/video_chronicle/gui_services.py` управляет `QThread` workers для
+  `plan_export`/`execute_plan`, а `video_chronicle_gui.py` показывает preview,
+  не копируя медиалогику;
 - `docs/ARCHITECTURE.md` и `docs/DESIGN.md` описывают только реализованное;
 - целевое развитие Timeline Builder описано отдельно в
   `specs/features/timeline-builder.spec.md` и не считается готовой функцией;
@@ -46,12 +46,16 @@ package, entry points и application service готовы; MODEL-001 описы�
 - GUI-выбор входа/результата и параметров FFmpeg/FFprobe, CRF и preset;
 - явное подтверждение перезаписи, объединённый журнал процесса и проверка
   результата после кода завершения;
+- асинхронный preview accepted/skipped items с порядком, выбранной датой,
+  provenance, timezone, conflicts и причинами пропуска;
+- invalidation preview при изменении формы, loading/empty/error/populated/stale
+  состояния и доступный layout 820×660 через прокрутку;
 - завершённый characterization baseline дат, сортировки, FFmpeg argv, ошибок,
   partial success, коллизий и неизменности исходников;
 - синтетический mixed photo/video smoke на FFmpeg/FFprobe 9.0.1;
 - устанавливаемый пакет версии 0.2.0 с console/GUI entry points и группой
   зависимостей `dev`;
-- 115 успешно пройденных unit/contract/GUI/integration тестов, включая реальный
+- 122 успешно пройденных unit/contract/GUI/integration теста, включая реальный
   FFmpeg smoke;
 - один symlink-specific тест корректно пропущен в текущем Windows-окружении,
   где создание symbolic link недоступно без дополнительных прав;
@@ -78,7 +82,8 @@ package, entry points и application service готовы; MODEL-001 описы�
 
 ## Следующая задача
 
-После отдельной команды начать этап 06: утвердить preview contract и перевести
-PySide6 GUI с whole-CLI subprocess adapter на application services, сохранив
-анализ/экспорт вне UI thread и legacy CLI parity. Подготовленный срез находится
-в `docs/AI_PLAN.md` и `prompts/stages/06-gui-application-services.md`.
+Начать этап 07: утвердить единый typed overlay contract (format, enabled,
+position, font fallback, colors, ranges и missing-font policy), затем связать
+его с быстрым representative-frame preview и финальным FFmpeg filter path.
+Подготовленный срез находится в `docs/AI_PLAN.md` и
+`prompts/stages/07-overlay-editor.md`.

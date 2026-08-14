@@ -8,4 +8,4 @@
 | Уровень | SPEC | Статус |
 | --- | --- | --- |
 | Система | [Системные инварианты](system.spec.md) | Утверждённый baseline |
-| Feature | [Timeline Builder](features/timeline-builder.spec.md) | Черновик; срез GUI-001 утверждён |
+| Feature | [Timeline Builder](features/timeline-builder.spec.md) | Черновик; срезы GUI-001, GUI-APP-001, DATE-001 и MODEL-001 утверждены |

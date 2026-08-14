@@ -60,21 +60,28 @@ groups, console/GUI entry points и временные compatibility modules б�
 snapshot, job transitions, strict schema v1 и заменяемый repository port с
 in-memory reference adapter.
 
-## Следующий этап — 06. GUI поверх application services
+## Выполненный этап — 06. GUI поверх application services
 
 Самостоятельный prompt: [`06-gui-application-services.md`](../prompts/stages/06-gui-application-services.md).
 
-## Запланированный MVP — этапы 07–10
+Этап завершён: default GUI строит и показывает immutable `ExportPlan`, а анализ
+и экспорт вызывают канонические application services через `QThread` worker.
+Whole-CLI `QProcess` сохранён только как явный диагностический fallback.
+
+## Следующий этап — 07. Overlay editor
+
+Самостоятельный prompt: [`07-overlay-editor.md`](../prompts/stages/07-overlay-editor.md).
+
+## Запланированный MVP — этапы 08–10
 
 Этапы выполняются последовательно и только после критериев завершения
 предыдущего этапа.
 
-1. **[07 — Overlay editor](../prompts/stages/07-overlay-editor.md):** единая конфигурация подписи даты и предпросмотр.
-2. **[08 — Join/Chronicle modes](../prompts/stages/08-join-chronicle-modes.md):** понятные режимы без дублирования
+1. **[08 — Join/Chronicle modes](../prompts/stages/08-join-chronicle-modes.md):** понятные режимы без дублирования
    медиаконвейера и с сохранением legacy join.
-3. **[09 — Export/progress/cancel](../prompts/stages/09-export-progress-cancel.md):** план экспорта, прогресс, безопасная отмена,
+2. **[09 — Export/progress/cancel](../prompts/stages/09-export-progress-cancel.md):** план экспорта, прогресс, безопасная отмена,
    проверка коллизий и атомарная финализация.
-4. **[10 — Resume/cache](../prompts/stages/10-resume-cache.md):** совместимые ключи, инвалидирование и безопасное
+3. **[10 — Resume/cache](../prompts/stages/10-resume-cache.md):** совместимые ключи, инвалидирование и безопасное
    возобновление. Этот этап завершает целевой MVP.
 
 ## Позже — целевой v1, этапы 11–16
