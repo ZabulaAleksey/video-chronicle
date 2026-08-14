@@ -8,4 +8,5 @@
 | Уровень | SPEC | Статус |
 | --- | --- | --- |
 | Система | [Системные инварианты](system.spec.md) | Утверждённый baseline |
-| Feature | [Timeline Builder](features/timeline-builder.spec.md) | Черновик; срезы GUI-001, GUI-APP-001, DATE-001 и MODEL-001 утверждены |
+| Feature | [Timeline Builder](features/timeline-builder.spec.md) | Черновик; срезы GUI-001, GUI-APP-001, OVERLAY-001, MODE-001, EXEC-001, CACHE-001, DATE-001 и MODEL-001 утверждены |
+| Feature | [Неразрушающее редактирование](features/nondestructive-editing.spec.md) | EDIT-001 утверждён для этапа 11 |

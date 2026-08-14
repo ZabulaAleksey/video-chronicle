@@ -208,3 +208,16 @@
   ошибки дают clean fallback, content/tool/edit identity инвалидирует запись,
   storage ограничен 10 GiB/30 днями и имеет explicit protected purge. Same-user
   attacker остаётся вне гарантии аутентичности локального desktop cache.
+
+## 2026-08-14 — EDIT-001: layout поверх baseline timeline и schema v2
+
+- Решение: сохранить date-sorted MODEL-001 `Timeline` как каталог источников,
+  а reorder/trim/groups хранить в отдельном immutable `TimelineLayout`; export
+  фиксирует resolved editing snapshot `plan-v2` и versioned render preset.
+- Причина: legacy/MVP остаётся детерминированным, а preview, export, persistence
+  и cache получают один и тот же edit state без третьего timeline engine.
+- Альтернативы: менять порядок `Timeline.items`; хранить edits только в widgets;
+  редактировать FFmpeg argv; SQLite/event sourcing; nested groups/multi-track.
+- Последствия: trim использует integer microseconds и exact filters; schema v2
+  читает v1 через чистую миграцию и сохраняет backup до первого replace;
+  full-source cache v1 совместим, edited clip получает cache v2 identity.
