@@ -26,3 +26,21 @@
 - После завершения этапа обнови фактический `AI_STATUS`, переключи `AI_PLAN`
   на ближайший утверждённый этап и не меняй roadmap без реального изменения
   порядка или scope.
+
+
+## Локальные правила тестирования
+
+### Тестовый контракт
+- После принятия тестов/fixtures/golden-сценариев они становятся контрактом и в этом цикле только запускаются для проверки.
+- Переопределение или удаление разрешается только отдельным explicit-требованием.
+
+### Unit / integration / component
+- Unit + integration: `python -m pytest`
+- Component/contract smoke: `python -m pytest tests/test_cli_characterization.py tests/test_gui_contract.py tests/test_gui_application.py`
+
+### E2E (критические)
+1. Пайплайн `join_media` для набора тестовых файлов.
+2. Генерация таймлайна/overlay и сохранение проекта в корректном формате.
+3. Ненарушающее редактирование (non-destructive edit) и смена режима после ручного отката.
+
+- Если FFmpeg/внешние бинарники недоступны в CI: `BLOCKED_BY_INFRASTRUCTURE_FFMPEG`.
