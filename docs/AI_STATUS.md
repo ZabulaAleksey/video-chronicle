@@ -1,5 +1,11 @@
 # Состояние проекта для AI
 
+## Governance migration — 2026-08-24
+
+- 17 stage-файлов объединены в `prompts/STAGES.md`, старые workspace paths обновлены; overlay — PASS.
+- Полный Python gate: 294 tests PASS, 6 SKIPPED по доступности внешних компонентов.
+- Репозиторий находится в `~/codex-workspace/video-chronicle`; push/merge не выполнялись.
+
 ## Текущий этап
 
 Этапы 00–12 завершены; целевой MVP, non-destructive editor и optional

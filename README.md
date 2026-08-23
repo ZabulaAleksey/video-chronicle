@@ -7,12 +7,12 @@
 PySide6 GUI анализирует и показывает immutable plan, representative overlay
 preview и выполняет те же application services, что CLI, вне UI thread.
 
-Рабочий репозиторий располагается в `~/codex-workspace/projects/video-chronicle`.
+Рабочий репозиторий располагается в `~/codex-workspace/video-chronicle`.
 
 ## Установка
 
 ```powershell
-cd ~/codex-workspace/projects/video-chronicle
+cd ~/codex-workspace/video-chronicle
 python -m venv .venv
 .venv/Scripts/python -m pip install -e ".[dev]"
 ```
@@ -101,13 +101,13 @@ OTIO import возвращает proposal, а `scdet` — предложения
 ## Пример запуска
 
 ```powershell
-python ~/codex-workspace/projects/video-chronicle/join_media.py --input-dir ~/Input --output ~/Input/preview.mp4 --ffmpeg ~/codex-workspace/projects/video-chronicle/ffmpeg1/bin/ffmpeg.exe --ffprobe ~/codex-workspace/projects/video-chronicle/ffmpeg1/bin/ffprobe.exe --overwrite
+python ~/codex-workspace/video-chronicle/join_media.py --input-dir ~/Input --output ~/Input/preview.mp4 --ffmpeg ~/codex-workspace/video-chronicle/ffmpeg1/bin/ffmpeg.exe --ffprobe ~/codex-workspace/video-chronicle/ffmpeg1/bin/ffprobe.exe --overwrite
 ```
 
 ## Запуск GUI
 
 ```powershell
-cd ~/codex-workspace/projects/video-chronicle
+cd ~/codex-workspace/video-chronicle
 python -m venv .venv
 .venv/Scripts/python -m pip install -e ".[dev]"
 .venv/Scripts/video-chronicle-gui
