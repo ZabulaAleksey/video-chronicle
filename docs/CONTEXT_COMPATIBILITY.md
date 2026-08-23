@@ -16,7 +16,7 @@
 | QA / тестирование | Общие test/review-роли и SDLC-правила | Media/date/FFmpeg characterization и negative cases | `EXTEND` | Проектные сценарии хранятся в `docs/TESTING.md` |
 | Безопасность | Общий security review | Недоверенные медиа, subprocess, пути, результат и кэш | `EXTEND` | Инварианты хранятся в `docs/SECURITY.md` |
 | Review | Общий reviewer | Отдельной специализации нет | `INHERITED` | Локальный generic reviewer не создаётся |
-| Git workflow | `~/codex-workspace/AGENTS.md` и прямые инструкции пользователя | Специального потока проекта нет | `INHERITED` | Локальный дубликат Git workflow не создаётся |
+| Git workflow | `~/.codex/AGENTS.md` и прямые инструкции пользователя | Специального потока проекта нет | `INHERITED` | Локальный дубликат Git workflow не создаётся |
 | Hooks | Активная конфигурация Codex / workspace | Подтверждённого локального пробела нет | `INHERITED` | Не устанавливать второй hook runner; локальный hook добавлять только под проверенный риск |
 | MCP | Активная конфигурация Codex | Начальным этапам project MCP не нужен | `INHERITED` | Локальный MCP не создаётся; будущие tools должны вызывать application services, а не копировать бизнес-логику |
 | Skills | Общая библиотека Codex и AI Dev Team | Проектного Skill пока не требуется | `INHERITED` | Не копировать глобальные Skills в репозиторий |

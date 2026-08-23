@@ -161,7 +161,7 @@ acceptance artifacts и rollback. Затем выбранный срез ста�
 ### Команды и проверки
 
 ```powershell
-py -3 ~/codex-workspace/tools/validate_project_overlay.py ~/codex-workspace/projects/video-chronicle
+py -3 ~/.codex/tools/validate_project_overlay.py ~/codex-workspace/projects/video-chronicle
 rg --files prompts/stages
 git diff --check
 ```
