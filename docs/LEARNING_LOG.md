@@ -4,7 +4,7 @@
 
 ### Задача
 
-Перенести приложение, локальные FFmpeg-зависимости и Git-историю из общей директории в `~/codex-workspace/projects/video-chronicle`, устранить конфликты и подготовить отдельную публикацию.
+Перенести приложение, локальные FFmpeg-зависимости и Git-историю из общей директории в `~/codex-workspace/video-chronicle`, устранить конфликты и подготовить отдельную публикацию.
 
 ### Что исследовали
 
@@ -30,7 +30,7 @@ Git-метаданные проекта находились на уровне �
 
 ### Что изменили
 
-Код, `.gitignore`, Git-история и оба FFmpeg-каталога перенесены в `~/codex-workspace/projects/video-chronicle`. Старый remote сохранён как `legacy`, новый GitHub-репозиторий назначен `origin`.
+Код, `.gitignore`, Git-история и оба FFmpeg-каталога перенесены в `~/codex-workspace/video-chronicle`. Старый remote сохранён как `legacy`, новый GitHub-репозиторий назначен `origin`.
 
 ### Почему выбран такой подход
 
@@ -48,7 +48,7 @@ Windows дважды отказал в прямом `Move-Item` для ката�
 
 1. Проверить `git status -sb` и список remote.
 2. Создать рабочую ветку.
-3. Переместить проект в `~/codex-workspace/projects/<project>`.
+3. Разместить независимый project repository непосредственно в `~/codex-workspace/<project>`.
 4. При отказе Windows скопировать каталог и проверить каждый файл по SHA-256.
 5. Удалять исходник только после нулевого числа расхождений.
 6. Проверить новый корень через `git rev-parse --show-toplevel`.
@@ -161,7 +161,7 @@ acceptance artifacts и rollback. Затем выбранный срез ста�
 ### Команды и проверки
 
 ```powershell
-py -3 ~/codex-workspace/tools/validate_project_overlay.py ~/codex-workspace/projects/video-chronicle
+py -3 ~/.codex/tools/validate_project_overlay.py ~/codex-workspace/video-chronicle
 rg --files prompts/stages
 git diff --check
 ```

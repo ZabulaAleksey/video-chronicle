@@ -1,7 +1,7 @@
 # Правила проекта Video Chronicle
 
-- Перед существенной задачей прочитай общие правила AI Dev Team из `~/codex-workspace/AGENTS.md`, затем применяй этот файл как более локальное уточнение.
-- Работай с Git из корня `~/codex-workspace/projects/video-chronicle`; родительский репозиторий `codex-workspace` не должен отслеживать этот проект.
+- Перед существенной задачей прочитай общие правила AI Dev Team из `~/.codex/AGENTS.md`, затем применяй этот файл как более локальное уточнение.
+- Работай с Git из корня `~/codex-workspace/video-chronicle`; родительский репозиторий `codex-workspace` не должен отслеживать этот проект.
 - Каталог `ffmpeg/` является отдельным upstream Git-репозиторием. Не изменяй, не обновляй и не публикуй его без отдельного явного запроса.
 - Используй переносимые пути от `~` в документации и примерах.
 - Перед изменениями проверяй `git status`; после изменений выполняй относящиеся к задаче проверки Python/FFmpeg и `git diff --check`.
@@ -35,8 +35,9 @@
 - Переопределение или удаление разрешается только отдельным explicit-требованием.
 
 ### Unit / integration / component
-- Unit + integration: `python -m pytest`
-- Component/contract smoke: `python -m pytest tests/test_cli_characterization.py tests/test_gui_contract.py tests/test_gui_application.py`
+- Unit + integration: `uv run --locked --extra dev --extra otio python -m pytest`
+- Component/contract smoke: `uv run --locked --extra dev --extra otio python -m pytest tests/test_cli_characterization.py tests/test_gui_contract.py tests/test_gui_application.py`
+- Канонический менеджер Python-зависимостей — uv, source of truth — `pyproject.toml` + `uv.lock`. Restore выполняй через `uv sync --locked --extra dev --extra otio`; общий uv cache разрешён, `.venv` disposable. `ffmpeg/` и `ffmpeg1/` являются отдельными runtime/upstream assets и не относятся к dependency cleanup.
 
 ### E2E (критические)
 1. Пайплайн `join_media` для набора тестовых файлов.

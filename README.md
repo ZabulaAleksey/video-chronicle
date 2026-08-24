@@ -7,21 +7,20 @@
 PySide6 GUI анализирует и показывает immutable plan, representative overlay
 preview и выполняет те же application services, что CLI, вне UI thread.
 
-Рабочий репозиторий располагается в `~/codex-workspace/projects/video-chronicle`.
+Рабочий репозиторий располагается в `~/codex-workspace/video-chronicle`.
 
 ## Установка
 
 ```powershell
-cd ~/codex-workspace/projects/video-chronicle
-python -m venv .venv
-.venv/Scripts/python -m pip install -e ".[dev]"
+cd ~/codex-workspace/video-chronicle
+uv sync --locked --extra dev
 ```
 
 Optional native OTIO interchange устанавливается отдельно и не нужен обычному
 CLI/GUI экспорту:
 
 ```powershell
-.venv/Scripts/python -m pip install -e ".[dev,otio]"
+uv sync --locked --extra dev --extra otio
 $env:VIDEO_CHRONICLE_EXPERIMENTAL_OTIO = "1"
 ```
 
@@ -39,9 +38,9 @@ OTIO import возвращает proposal, а `scdet` — предложения
 После установки доступны единые entry points:
 
 ```powershell
-.venv/Scripts/video-chronicle --help
-.venv/Scripts/video-chronicle-gui
-.venv/Scripts/python -m video_chronicle --help
+uv run --locked --extra dev --extra otio video-chronicle --help
+uv run --locked --extra dev --extra otio video-chronicle-gui
+uv run --locked --extra dev --extra otio python -m video_chronicle --help
 ```
 
 Совместимые `join_media.py` и `video_chronicle_gui.py` пока сохраняются.
@@ -101,16 +100,15 @@ OTIO import возвращает proposal, а `scdet` — предложения
 ## Пример запуска
 
 ```powershell
-python ~/codex-workspace/projects/video-chronicle/join_media.py --input-dir ~/Input --output ~/Input/preview.mp4 --ffmpeg ~/codex-workspace/projects/video-chronicle/ffmpeg1/bin/ffmpeg.exe --ffprobe ~/codex-workspace/projects/video-chronicle/ffmpeg1/bin/ffprobe.exe --overwrite
+python ~/codex-workspace/video-chronicle/join_media.py --input-dir ~/Input --output ~/Input/preview.mp4 --ffmpeg ~/codex-workspace/video-chronicle/ffmpeg1/bin/ffmpeg.exe --ffprobe ~/codex-workspace/video-chronicle/ffmpeg1/bin/ffprobe.exe --overwrite
 ```
 
 ## Запуск GUI
 
 ```powershell
-cd ~/codex-workspace/projects/video-chronicle
-python -m venv .venv
-.venv/Scripts/python -m pip install -e ".[dev]"
-.venv/Scripts/video-chronicle-gui
+cd ~/codex-workspace/video-chronicle
+uv sync --locked --extra dev
+uv run --locked --extra dev video-chronicle-gui
 ```
 
 В окне можно выбрать Chronicle/Join, входную папку, итоговый MP4,

@@ -120,19 +120,18 @@ ffprobe version 9.0.1-essentials_build-www.gyan.dev
 ## Локальный запуск текущих тестов
 
 ```powershell
-python -m venv .venv
-.venv/Scripts/python -m pip install -e ".[dev,otio]"
+uv sync --locked --extra dev --extra otio
 $env:QT_QPA_PLATFORM = "offscreen"
-.venv/Scripts/python -m pytest -q
+uv run --locked --extra dev --extra otio python -m pytest -q
 ```
 
 Только CLI-characterization и synthetic smoke:
 
 ```powershell
-.venv/Scripts/python -m pytest -q tests/test_cli_characterization.py
+uv run --locked --extra dev --extra otio python -m pytest -q tests/test_cli_characterization.py
 $env:VIDEO_CHRONICLE_FFMPEG = "C:/tools/ffmpeg/bin/ffmpeg.exe"
 $env:VIDEO_CHRONICLE_FFPROBE = "C:/tools/ffmpeg/bin/ffprobe.exe"
-.venv/Scripts/python -m pytest -q -rs tests/test_ffmpeg_smoke.py
+uv run --locked --extra dev --extra otio python -m pytest -q -rs tests/test_ffmpeg_smoke.py
 ```
 
 Если переменные не заданы и инструменты отсутствуют в `PATH`, smoke-test

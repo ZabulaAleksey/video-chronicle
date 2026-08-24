@@ -1,5 +1,7 @@
 # Текущий план для AI
 
+Инфраструктурный срез 2026-08-24: заменить дублирующие requirements/pip setup на uv lock/sync, доказать clean restore и полный Python/CLI gate без изменения FFmpeg runtime assets — `DONE`.
+
 ## Срез
 
 - Этап: **12 — Optional timeline interchange и scene analysis**

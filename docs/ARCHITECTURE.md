@@ -130,3 +130,11 @@ backend либо явно объявленному совместимому back
 OTIO extra и scene adapter выключены по умолчанию, не входят в schema v2/cache
 authority и удаляются без migration. Любой imported proposal или scene
 suggestion остаётся недоверенным transient data до явной проверки/применения.
+
+## Контракт зависимостей
+
+- Источник истины (Source of truth): `pyproject.toml` и единственный `uv.lock`; канонический менеджер — uv.
+- Чистое восстановление (Clean restore): удалить только disposable `.venv`, затем выполнить `uv sync --locked --extra dev --extra otio`.
+- Общий machine-level uv cache разрешён; `.venv`, pytest temp и tool caches можно безопасно пересоздать после locked restore.
+- `ffmpeg/` и `ffmpeg1/` — отдельные runtime/upstream assets, а не disposable dependency cache; media, project JSON и пользовательские outputs также не удаляются.
+- Locked gates: `uv run --locked --extra dev --extra otio python -m pytest` и smoke для `video-chronicle --help`/`python -m video_chronicle --help`.

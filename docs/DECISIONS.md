@@ -1,8 +1,14 @@
 # Технические решения
 
+## 2026-08-24 — uv lock является каноническим dependency contract
+
+- Решение: использовать `pyproject.toml` + `uv.lock` и `uv sync --locked`; общий uv cache разрешён, `.venv` считается disposable projection.
+- Причина: `requirements.txt` и `requirements-dev.txt` дублировали диапазоны из `pyproject.toml` и не фиксировали полный transitive graph.
+- Последствие: после подтверждённого clean restore requirements-файлы удаляются; `ffmpeg/` и `ffmpeg1/` остаются нетронутыми runtime/upstream assets.
+
 ## 2026-08-11 — отдельный рабочий репозиторий
 
-- Решение: хранить проект в `~/codex-workspace/projects/video-chronicle` и публиковать его в отдельный GitHub-репозиторий.
+- Решение: хранить проект в `~/codex-workspace/video-chronicle` и публиковать его в отдельный GitHub-репозиторий.
 - Причина: код проекта больше не должен смешиваться с глобальной рабочей областью `htdocs`.
 - Последствие: история прежнего `Join_Media` сохранена, а старый remote доступен под именем `legacy`.
 
