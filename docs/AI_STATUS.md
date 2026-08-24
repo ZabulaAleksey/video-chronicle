@@ -4,7 +4,7 @@
 
 - 17 stage-файлов объединены в `prompts/STAGES.md`, старые workspace paths обновлены; overlay — PASS.
 - Полный Python gate: 294 tests PASS, 6 SKIPPED по доступности внешних компонентов.
-- Репозиторий находится в `~/codex-workspace/video-chronicle`; push/merge не выполнялись.
+- Репозиторий находится в `~/codex-workspace/video-chronicle`; dependency-manager migration локально интегрирована в `main`, push не выполнялся.
 
 ## Dependency manager migration — 2026-08-24
 
