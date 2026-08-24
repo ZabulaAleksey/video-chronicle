@@ -35,8 +35,9 @@
 - Переопределение или удаление разрешается только отдельным explicit-требованием.
 
 ### Unit / integration / component
-- Unit + integration: `python -m pytest`
-- Component/contract smoke: `python -m pytest tests/test_cli_characterization.py tests/test_gui_contract.py tests/test_gui_application.py`
+- Unit + integration: `uv run --locked --extra dev --extra otio python -m pytest`
+- Component/contract smoke: `uv run --locked --extra dev --extra otio python -m pytest tests/test_cli_characterization.py tests/test_gui_contract.py tests/test_gui_application.py`
+- Канонический менеджер Python-зависимостей — uv, source of truth — `pyproject.toml` + `uv.lock`. Restore выполняй через `uv sync --locked --extra dev --extra otio`; общий uv cache разрешён, `.venv` disposable. `ffmpeg/` и `ffmpeg1/` являются отдельными runtime/upstream assets и не относятся к dependency cleanup.
 
 ### E2E (критические)
 1. Пайплайн `join_media` для набора тестовых файлов.

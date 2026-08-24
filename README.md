@@ -13,15 +13,14 @@ preview и выполняет те же application services, что CLI, вне
 
 ```powershell
 cd ~/codex-workspace/video-chronicle
-python -m venv .venv
-.venv/Scripts/python -m pip install -e ".[dev]"
+uv sync --locked --extra dev
 ```
 
 Optional native OTIO interchange устанавливается отдельно и не нужен обычному
 CLI/GUI экспорту:
 
 ```powershell
-.venv/Scripts/python -m pip install -e ".[dev,otio]"
+uv sync --locked --extra dev --extra otio
 $env:VIDEO_CHRONICLE_EXPERIMENTAL_OTIO = "1"
 ```
 
@@ -39,9 +38,9 @@ OTIO import возвращает proposal, а `scdet` — предложения
 После установки доступны единые entry points:
 
 ```powershell
-.venv/Scripts/video-chronicle --help
-.venv/Scripts/video-chronicle-gui
-.venv/Scripts/python -m video_chronicle --help
+uv run --locked --extra dev --extra otio video-chronicle --help
+uv run --locked --extra dev --extra otio video-chronicle-gui
+uv run --locked --extra dev --extra otio python -m video_chronicle --help
 ```
 
 Совместимые `join_media.py` и `video_chronicle_gui.py` пока сохраняются.
@@ -108,9 +107,8 @@ python ~/codex-workspace/video-chronicle/join_media.py --input-dir ~/Input --out
 
 ```powershell
 cd ~/codex-workspace/video-chronicle
-python -m venv .venv
-.venv/Scripts/python -m pip install -e ".[dev]"
-.venv/Scripts/video-chronicle-gui
+uv sync --locked --extra dev
+uv run --locked --extra dev video-chronicle-gui
 ```
 
 В окне можно выбрать Chronicle/Join, входную папку, итоговый MP4,
