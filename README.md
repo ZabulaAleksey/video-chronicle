@@ -7,12 +7,12 @@
 PySide6 GUI анализирует и показывает immutable plan, representative overlay
 preview и выполняет те же application services, что CLI, вне UI thread.
 
-Рабочий репозиторий располагается в `~/codex-workspace/video-chronicle`.
+Рабочий репозиторий располагается в `${PROJECTS_ROOT}/video-chronicle`.
 
 ## Установка
 
 ```powershell
-cd ~/codex-workspace/video-chronicle
+cd "$env:PROJECTS_ROOT\video-chronicle"
 uv sync --locked --extra dev
 ```
 
@@ -100,13 +100,13 @@ uv run --locked --extra dev --extra otio python -m video_chronicle --help
 ## Пример запуска
 
 ```powershell
-python ~/codex-workspace/video-chronicle/join_media.py --input-dir ~/Input --output ~/Input/preview.mp4 --ffmpeg ~/codex-workspace/video-chronicle/ffmpeg1/bin/ffmpeg.exe --ffprobe ~/codex-workspace/video-chronicle/ffmpeg1/bin/ffprobe.exe --overwrite
+python "$env:PROJECTS_ROOT\video-chronicle\join_media.py" --input-dir ~/Input --output ~/Input/preview.mp4 --ffmpeg "$env:PROJECTS_ROOT\video-chronicle\ffmpeg1\bin\ffmpeg.exe" --ffprobe "$env:PROJECTS_ROOT\video-chronicle\ffmpeg1\bin\ffprobe.exe" --overwrite
 ```
 
 ## Запуск GUI
 
 ```powershell
-cd ~/codex-workspace/video-chronicle
+cd "$env:PROJECTS_ROOT\video-chronicle"
 uv sync --locked --extra dev
 uv run --locked --extra dev video-chronicle-gui
 ```
