@@ -318,12 +318,14 @@ class ChronicleWindow(QMainWindow):
         paths.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
 
         self.input_edit = QLineEdit(str(default_input))
+        self._allow_widget_to_shrink_horizontally(self.input_edit)
         self.input_edit.setAccessibleName("Папка с исходными медиафайлами")
         self.input_button = QPushButton("Выбрать…")
         self.input_button.clicked.connect(self._browse_input)
         paths.addRow("Исходники", self._path_row(self.input_edit, self.input_button))
 
         self.output_edit = QLineEdit(str(self._suggested_output))
+        self._allow_widget_to_shrink_horizontally(self.output_edit)
         self.output_edit.setAccessibleName("Путь итогового MP4-файла")
         self.output_button = QPushButton("Выбрать…")
         self.output_button.clicked.connect(self._browse_output)
@@ -339,6 +341,7 @@ class ChronicleWindow(QMainWindow):
         advanced_layout.setVerticalSpacing(10)
 
         self.ffmpeg_edit = QLineEdit(default_tool_value("ffmpeg"))
+        self._allow_widget_to_shrink_horizontally(self.ffmpeg_edit)
         self.ffmpeg_button = QPushButton("Файл…")
         self.ffmpeg_button.clicked.connect(
             lambda: self._browse_tool(self.ffmpeg_edit, "FFmpeg")
@@ -348,6 +351,7 @@ class ChronicleWindow(QMainWindow):
         advanced_layout.addWidget(self.ffmpeg_button, 0, 2)
 
         self.ffprobe_edit = QLineEdit(default_tool_value("ffprobe"))
+        self._allow_widget_to_shrink_horizontally(self.ffprobe_edit)
         self.ffprobe_button = QPushButton("Файл…")
         self.ffprobe_button.clicked.connect(
             lambda: self._browse_tool(self.ffprobe_edit, "FFprobe")
@@ -392,6 +396,7 @@ class ChronicleWindow(QMainWindow):
         self.cache_enabled.setChecked(False)
         self.cache_enabled.setToolTip("Повторно использовать только проверенные нормализованные клипы")
         self.cache_dir_edit = QLineEdit("")
+        self._allow_widget_to_shrink_horizontally(self.cache_dir_edit)
         self.cache_dir_edit.setPlaceholderText("Системная папка кэша")
         self.cache_dir_button = QPushButton("Папка…")
         self.cache_dir_button.clicked.connect(self._browse_cache_dir)
@@ -431,6 +436,7 @@ class ChronicleWindow(QMainWindow):
         for format_id in DATE_FORMATS:
             self.overlay_format_combo.addItem(date_examples[format_id], format_id)
         self.overlay_custom_date_format = QLineEdit("")
+        self._allow_widget_to_shrink_horizontally(self.overlay_custom_date_format)
         self.overlay_custom_date_format.setPlaceholderText("Например: YYYY/MM/DD")
         self.overlay_custom_date_format.setMaxLength(64)
         self.overlay_time_format_combo = QComboBox()
@@ -450,10 +456,18 @@ class ChronicleWindow(QMainWindow):
         ):
             self.overlay_layout_combo.addItem(label, layout_id)
         self.overlay_separator = QLineEdit(" • ")
+        self._allow_widget_to_shrink_horizontally(self.overlay_separator)
         self.overlay_separator.setMaxLength(8)
         self.overlay_position_combo = QComboBox()
         self.overlay_position_combo.addItems(list(OVERLAY_POSITIONS))
         self.overlay_position_combo.setCurrentText("bottom-left")
+        for widget in (
+            self.overlay_format_combo,
+            self.overlay_time_format_combo,
+            self.overlay_layout_combo,
+            self.overlay_position_combo,
+        ):
+            self._allow_widget_to_shrink_horizontally(widget)
         overlay_layout.addWidget(QLabel("Формат даты"), 1, 0)
         overlay_layout.addWidget(self.overlay_format_combo, 1, 1)
         overlay_layout.addWidget(self.overlay_custom_date_format, 1, 2, 1, 2)
@@ -487,6 +501,7 @@ class ChronicleWindow(QMainWindow):
         self.overlay_font_combo.addItem("Автоматически (legacy fallback)", None)
         for family in available_overlay_font_families():
             self.overlay_font_combo.addItem(family, family)
+        self._allow_widget_to_shrink_horizontally(self.overlay_font_combo)
         overlay_layout.addWidget(QLabel("Системный шрифт"), 5, 0)
         overlay_layout.addWidget(self.overlay_font_combo, 5, 1, 1, 3)
 
@@ -498,6 +513,7 @@ class ChronicleWindow(QMainWindow):
         overlay_layout.addWidget(self.overlay_italic, 6, 3)
 
         self.overlay_text_color = QLineEdit("#000000")
+        self._allow_widget_to_shrink_horizontally(self.overlay_text_color)
         self.overlay_text_color.setMaxLength(7)
         self.overlay_opacity = QSpinBox()
         self.overlay_opacity.setRange(0, 100)
@@ -506,6 +522,7 @@ class ChronicleWindow(QMainWindow):
         self.overlay_outline_enabled = QCheckBox("Обводка")
         self.overlay_outline_enabled.setChecked(True)
         self.overlay_outline_color = QLineEdit("#FFFFFF")
+        self._allow_widget_to_shrink_horizontally(self.overlay_outline_color)
         self.overlay_outline_color.setMaxLength(7)
         overlay_layout.addWidget(QLabel("Цвет текста"), 7, 0)
         overlay_layout.addWidget(self.overlay_text_color, 7, 1)
@@ -533,6 +550,7 @@ class ChronicleWindow(QMainWindow):
         overlay_layout.addWidget(self.overlay_shadow_y, 9, 3)
 
         self.overlay_font_edit = QLineEdit("")
+        self._allow_widget_to_shrink_horizontally(self.overlay_font_edit)
         self.overlay_font_edit.setPlaceholderText("Необязательно: точный файл .ttf/.otf")
         self.overlay_font_button = QPushButton("Файл…")
         self.overlay_font_button.clicked.connect(self._browse_overlay_font)
@@ -544,6 +562,7 @@ class ChronicleWindow(QMainWindow):
         settings_tabs = QTabWidget()
         settings_tabs.setObjectName("settingsTabs")
         settings_tabs.setMinimumHeight(520)
+        self._allow_widget_to_shrink_horizontally(settings_tabs)
         advanced.setTitle("")
         self.overlay_group.setTitle("")
         settings_tabs.addTab(advanced, "Кодирование")
@@ -554,6 +573,8 @@ class ChronicleWindow(QMainWindow):
         action_row = QHBoxLayout()
         self.status_label = QLabel("Настройте параметры и запустите анализ")
         self.status_label.setObjectName("status")
+        self.status_label.setWordWrap(True)
+        self._allow_widget_to_shrink_horizontally(self.status_label)
         self.analyze_button = QPushButton("Анализировать")
         self.analyze_button.setMinimumHeight(42)
         self.analyze_button.clicked.connect(self._start_analysis)
@@ -590,6 +611,7 @@ class ChronicleWindow(QMainWindow):
         self.preview_state_label = QLabel("План ещё не построен")
         self.preview_state_label.setObjectName("previewState")
         self.preview_state_label.setAccessibleName("Состояние анализа")
+        self.preview_state_label.setWordWrap(True)
         preview_header.addWidget(preview_title)
         preview_header.addStretch(1)
         preview_header.addWidget(self.preview_state_label)
@@ -605,7 +627,9 @@ class ChronicleWindow(QMainWindow):
         )
         preview_layout.addWidget(self.plan_summary_label)
 
-        editor_actions = QHBoxLayout()
+        editor_actions = QGridLayout()
+        editor_actions.setHorizontalSpacing(8)
+        editor_actions.setVerticalSpacing(8)
         self.project_open_button = QPushButton("Открыть проект…")
         self.project_save_button = QPushButton("Сохранить проект…")
         self.move_up_button = QPushButton("↑")
@@ -617,8 +641,22 @@ class ChronicleWindow(QMainWindow):
         self.trim_in_spin = QSpinBox(); self.trim_in_spin.setRange(0, 2_147_483_647); self.trim_in_spin.setSuffix(" ms")
         self.trim_out_spin = QSpinBox(); self.trim_out_spin.setRange(0, 2_147_483_647); self.trim_out_spin.setSuffix(" ms")
         self.trim_apply_button = QPushButton("Trim")
-        for widget in (self.project_open_button, self.project_save_button, self.move_up_button, self.move_down_button, self.group_button, self.ungroup_button, self.preset_save_version_button, self.preset_apply_button, self.trim_in_spin, self.trim_out_spin, self.trim_apply_button):
-            editor_actions.addWidget(widget)
+        for widget, row, column, column_span in (
+            (self.project_open_button, 0, 0, 2),
+            (self.project_save_button, 1, 0, 2),
+            (self.move_up_button, 2, 0, 1),
+            (self.move_down_button, 2, 1, 1),
+            (self.group_button, 3, 0, 1),
+            (self.ungroup_button, 3, 1, 1),
+            (self.preset_save_version_button, 4, 0, 2),
+            (self.preset_apply_button, 5, 0, 2),
+            (self.trim_in_spin, 6, 0, 1),
+            (self.trim_out_spin, 6, 1, 1),
+            (self.trim_apply_button, 7, 0, 2),
+        ):
+            editor_actions.addWidget(widget, row, column, 1, column_span)
+        editor_actions.setColumnStretch(0, 1)
+        editor_actions.setColumnStretch(1, 1)
         self.project_open_button.clicked.connect(self._open_project)
         self.project_save_button.clicked.connect(self._save_project)
         self.move_up_button.clicked.connect(lambda: self._move_selected(-1))
@@ -645,7 +683,7 @@ class ChronicleWindow(QMainWindow):
         self.preview_tree.setMinimumHeight(165)
         preview_layout.addWidget(self.preview_tree, 1)
 
-        visual_header = QHBoxLayout()
+        visual_header = QGridLayout()
         visual_title = QLabel("Кадр с подписью")
         visual_title.setObjectName("sectionTitle")
         self.visual_preview_state_label = QLabel("Предпросмотр не построен")
@@ -653,10 +691,10 @@ class ChronicleWindow(QMainWindow):
         self.preview_button = QPushButton("Обновить предпросмотр")
         self.preview_button.setEnabled(False)
         self.preview_button.clicked.connect(self._start_visual_preview)
-        visual_header.addWidget(visual_title)
-        visual_header.addStretch(1)
-        visual_header.addWidget(self.visual_preview_state_label)
-        visual_header.addWidget(self.preview_button)
+        visual_header.addWidget(visual_title, 0, 0)
+        visual_header.addWidget(self.visual_preview_state_label, 1, 0)
+        visual_header.addWidget(self.preview_button, 2, 0)
+        visual_header.setColumnStretch(0, 1)
         preview_layout.addLayout(visual_header)
         self.visual_preview_label = QLabel("640 × 360")
         self.visual_preview_label.setObjectName("visualPreview")
@@ -773,6 +811,13 @@ class ChronicleWindow(QMainWindow):
         self.overlay_shadow_y.valueChanged.connect(self._invalidate_overlay)
         self.overlay_font_edit.textChanged.connect(self._invalidate_overlay)
         self._update_overlay_control_state()
+
+    @staticmethod
+    def _allow_widget_to_shrink_horizontally(widget: QWidget) -> None:
+        policy = widget.sizePolicy()
+        policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
+        widget.setSizePolicy(policy)
+        widget.setMinimumWidth(0)
 
     @staticmethod
     def _path_row(line_edit: QLineEdit, button: QPushButton) -> QWidget:

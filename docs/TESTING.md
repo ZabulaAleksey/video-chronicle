@@ -92,8 +92,9 @@ ffprobe version 9.0.1-essentials_build-www.gyan.dev
 - Contract: процессы получают argv-списки; CLI и будущий GUI используют один
   и тот же наблюдаемый план и правила ошибок.
 - GUI: loading/error/empty/populated/stale preview, Unicode, worker cleanup,
-  repeat-run guard, responsive scrolling, structured progress/cancel и
-  отсутствие блокировки event loop.
+  repeat-run guard, отсутствие horizontal scroll при 820×660, видимость правых
+  browse/editor buttons, structured progress/cancel и отсутствие блокировки
+  event loop.
 - Resume/cache: повторный запуск, прерывание, изменение content/provenance/font/
   параметров/tool version, повреждённое состояние, bounded I/O, cap/retention,
   protected purge и межпроцессная сериализация мутаций.

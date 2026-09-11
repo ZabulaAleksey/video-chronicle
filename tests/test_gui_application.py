@@ -13,6 +13,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QMessageBox
 from PySide6.QtWidgets import QScrollArea
+from PySide6.QtWidgets import QTabWidget
 
 from gui_contract import GuiRunRequest, build_cli_arguments
 from video_chronicle.domain import (
@@ -446,8 +447,30 @@ def test_minimum_window_keeps_full_form_accessible_via_scroll(qapp) -> None:
     scroll = window.findChild(QScrollArea, "mainScroll")
     assert scroll is not None
     assert scroll.verticalScrollBar().maximum() > 0
+    assert scroll.horizontalScrollBar().maximum() == 0
     assert window.crf_spin.isVisible() is True
     assert window.preset_combo.isVisible() is True
+    viewport_width = scroll.viewport().width()
+    for button in (
+        window.input_button,
+        window.output_button,
+        window.ffmpeg_button,
+        window.ffprobe_button,
+        window.cache_dir_button,
+        window.project_save_button,
+        window.preset_apply_button,
+        window.trim_apply_button,
+    ):
+        button_right = button.mapTo(scroll.viewport(), button.rect().bottomRight()).x()
+        assert 0 <= button_right < viewport_width
+    settings_tabs = window.findChild(QTabWidget, "settingsTabs")
+    assert settings_tabs is not None
+    settings_tabs.setCurrentWidget(window.overlay_group)
+    qapp.processEvents()
+    font_button_right = window.overlay_font_button.mapTo(
+        scroll.viewport(), window.overlay_font_button.rect().bottomRight()
+    ).x()
+    assert 0 <= font_button_right < viewport_width
     scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
     qapp.processEvents()
     assert scroll.verticalScrollBar().value() > 0
