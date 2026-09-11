@@ -15,7 +15,7 @@ import video_chronicle.repository as repository_module
 from video_chronicle.application import apply_project_state
 from video_chronicle.cache import build_clip_identity, cache_key
 from video_chronicle.domain import ExportMode, ExportPlan, ExportRequest, MediaItem, SourceFingerprint
-from video_chronicle.overlay import OverlayConfig
+from video_chronicle.overlay import OverlayConfig, resolve_overlay_font
 from video_chronicle.pipeline import make_video_filter, normalize_item, render_overlay_preview, source_duration_us
 from video_chronicle.project import (
     PHOTO_DURATION_US,
@@ -115,6 +115,92 @@ def test_v2_round_trip_is_strict_and_repository_revision_backup_rollback(tmp_pat
     restored = repository.restore_backup(state.project_id, expected_revision=2)
     assert restored.revision == 3
     assert tuple(entry.item_id for entry in restored.layout.entries) == state.timeline.item_ids  # type: ignore[union-attr]
+
+
+def test_overlay_v2_settings_round_trip_and_legacy_overlay_defaults(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    overlay = OverlayConfig(
+        format=None,
+        show_date=True,
+        show_time=True,
+        date_format="YYYY-MM-DD",
+        time_format="hh:mm:ss A",
+        layout="separator",
+        separator=" | ",
+        font_family="Portable Missing Family",
+        font_size=32,
+        bold=True,
+        italic=True,
+        opacity=0.75,
+        outline_enabled=False,
+        shadow_enabled=True,
+        shadow_opacity=0.25,
+        shadow_offset_x=3,
+        shadow_offset_y=4,
+    )
+    preset = RenderPreset(
+        "preset-main", 1, "Main", RenderSettings(ExportMode.CHRONICLE, overlay, 20, "fast")
+    )
+    configured = replace(state, presets=(preset,), active_preset=preset.ref)
+    payload = project_to_mapping(configured, force_v2=True)
+    stored = payload["project"]["presets"][0]["settings"]["overlay"]
+    assert stored["version"] == 2
+    assert stored["font_family"] == "Portable Missing Family"
+    assert stored["font_file"] is None
+    assert project_from_mapping(json.loads(json.dumps(payload))) == configured
+
+    legacy_payload = project_to_mapping(state, force_v2=True)
+    legacy_overlay = legacy_payload["project"]["presets"][0]["settings"]["overlay"]
+    assert set(legacy_overlay) == {
+        "enabled", "format", "position", "horizontal_margin", "vertical_margin",
+        "font_size", "text_color", "outline_color", "outline_width",
+        "font_file", "font_identity",
+    }
+    loaded = project_from_mapping(json.loads(json.dumps(legacy_payload)))
+    assert loaded.resolve_active_preset().settings.overlay == OverlayConfig(enabled=False)
+
+
+def test_corrupted_new_overlay_settings_fail_before_render(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    overlay = OverlayConfig(format=None, date_format="DD.MM.YYYY")
+    preset = RenderPreset(
+        "preset-main", 1, "Main", RenderSettings(ExportMode.CHRONICLE, overlay, 20, "fast")
+    )
+    payload = project_to_mapping(
+        replace(state, presets=(preset,), active_preset=preset.ref), force_v2=True
+    )
+    payload["project"]["presets"][0]["settings"]["overlay"]["date_format"] = "%Y"
+    with pytest.raises(ProjectSerializationError, match="date format"):
+        project_from_mapping(payload)
+
+
+def test_loaded_portable_font_family_reuses_current_resolved_request(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    portable = OverlayConfig(format=None, font_family="Unavailable on saved machine")
+    preset = RenderPreset(
+        "preset-main", 1, "Main", RenderSettings(ExportMode.CHRONICLE, portable, 20, "fast")
+    )
+    state = replace(state, presets=(preset,), active_preset=preset.ref)
+    fallback = tmp_path / "fallback.ttf"
+    fallback.write_bytes(b"font")
+    resolved = resolve_overlay_font(portable, fallback, fonts=())
+    request = replace(
+        _request(tmp_path), mode=ExportMode.CHRONICLE, overlay=resolved
+    )
+    inspected = tuple(
+        MediaItem(
+            item.source_path,
+            item.taken_at,
+            item.media_kind == "photo",
+            False,
+            item.date_source,
+            source_duration_us=item.source_duration_us,
+        )
+        for item in state.timeline.items
+    )
+    plan = apply_project_state(ExportPlan(request, inspected), state)
+    assert plan.request.overlay is resolved
+    assert plan.project_snapshot.settings.overlay is resolved
 
 
 def test_repository_fault_before_commit_preserves_current_bytes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

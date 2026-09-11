@@ -27,6 +27,7 @@ from video_chronicle.gui_services import ApplicationServiceAdapter
 from video_chronicle.execution import ProgressEvent
 from video_chronicle.overlay import OverlayConfig
 from video_chronicle.ports import PipelinePorts
+from video_chronicle.project import RenderSettings
 from video_chronicle_gui import ChronicleWindow, CliProcessAdapter
 
 
@@ -563,7 +564,7 @@ def test_overlay_only_change_keeps_plan_and_preview_temp_is_cleaned(
         return _preview_plan(request)
 
     def preview_service(item, overlay, ffmpeg, destination, runner):
-        assert overlay.enabled is False
+        assert overlay.enabled is True
         preview_configs.append(overlay)
         preview_paths.append(destination)
         destination.write_bytes(_PNG_1X1)
@@ -581,7 +582,19 @@ def test_overlay_only_change_keeps_plan_and_preview_temp_is_cleaned(
     _wait_until(qapp, lambda: not adapter.is_running)
     original_items = window._plan.items
 
-    window.overlay_enabled.setChecked(False)
+    window.overlay_show_time.setChecked(True)
+    window.overlay_format_combo.setCurrentIndex(
+        window.overlay_format_combo.findData("YYYY-MM-DD")
+    )
+    window.overlay_time_format_combo.setCurrentIndex(
+        window.overlay_time_format_combo.findData("hh:mm:ss A")
+    )
+    window.overlay_layout_combo.setCurrentIndex(
+        window.overlay_layout_combo.findData("multiline")
+    )
+    window.overlay_font_size.setValue(32)
+    window.overlay_outline_enabled.setChecked(False)
+    window.overlay_shadow_enabled.setChecked(True)
     qapp.processEvents()
     assert analysis_calls == [True]
     assert window._plan.items is original_items
@@ -592,10 +605,16 @@ def test_overlay_only_change_keeps_plan_and_preview_temp_is_cleaned(
     _wait_until(qapp, lambda: not adapter.is_running)
     assert preview_paths and all(not path.exists() for path in preview_paths)
     assert window._plan.request.overlay is not canonical.overlay
-    assert window._plan.request.overlay.enabled is False
+    assert window._plan.request.overlay.show_time is True
+    assert window._plan.request.overlay.date_format == "YYYY-MM-DD"
+    assert window._plan.request.overlay.time_format == "hh:mm:ss A"
+    assert window._plan.request.overlay.layout == "multiline"
+    assert window._plan.request.overlay.font_size == 32
+    assert window._plan.request.overlay.outline_enabled is False
+    assert window._plan.request.overlay.shadow_enabled is True
     assert preview_configs == [window._plan.request.overlay]
     assert preview_configs[0] is window._plan.request.overlay
-    assert window.visual_preview_state_label.text() == "Подпись выключена"
+    assert window.visual_preview_state_label.text() == "Готов"
     assert window.run_button.isEnabled() is True
     window.close()
 
@@ -703,4 +722,39 @@ def test_legacy_mode_round_trip_preserves_chronicle_default_and_cli_parity(
     assert request.overlay.enabled is True
     assert window.mode_combo.currentText() == "Chronicle"
     assert "--mode" not in arguments
+    window.close()
+
+
+def test_loaded_overlay_settings_populate_every_gui_control(qapp) -> None:
+    window = ChronicleWindow(application_adapter=ApplicationServiceAdapter())
+    overlay = OverlayConfig(
+        format=None,
+        show_date=True,
+        show_time=True,
+        date_format="DD MMMM YYYY",
+        time_format="hh:mm:ss A",
+        layout="separator",
+        separator=" | ",
+        position="top-right",
+        horizontal_margin=11,
+        vertical_margin=13,
+        font_family="Unavailable Saved Family",
+        font_size=32,
+        bold=True,
+        italic=True,
+        text_color="#123456",
+        opacity=0.72,
+        outline_enabled=False,
+        outline_color="#ABCDEF",
+        outline_width=6,
+        shadow_enabled=True,
+        shadow_opacity=0.38,
+        shadow_offset_x=-4,
+        shadow_offset_y=7,
+    )
+    window._apply_render_settings_to_form(
+        RenderSettings(ExportMode.CHRONICLE, overlay, 24, "slow")
+    )
+    assert window._form_overlay_config(resolve_fallback=False) == overlay
+    assert "fallback" in window.overlay_font_combo.currentText()
     window.close()

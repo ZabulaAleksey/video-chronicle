@@ -1,44 +1,27 @@
 # Текущий план для AI
 
-Инфраструктурный срез 2026-08-24: заменить дублирующие requirements/pip setup на uv lock/sync, доказать clean restore и полный Python/CLI gate без изменения FFmpeg runtime assets — `DONE`.
+## Срез 2026-09-12 — configurable date/time overlay
 
-## Срез
+- Статус: **реализован и валидирован локально в feature-ветке**
+- Ветка: `feature/configurable-datetime-overlay`
+- SPEC: `OVERLAY-007–009` в `specs/features/timeline-builder.spec.md`
+- Scope: семантические форматы даты/времени, visibility/layout, system font
+  family resolution/fallback, practical typography, project persistence и
+  общий formatter для preview/export.
 
-- Этап: **12 — Optional timeline interchange и scene analysis**
-- Статус: **завершён; дальнейшая реализация приостановлена по указанию пользователя**
-- Prompt: `prompts/stages/12-timeline-interchange-scene.md`
-- SPEC: `specs/features/timeline-interchange-scene.spec.md`, версия 1.1
-- Acceptance: `INTEROP-AC-001–003`, `SCENE-AC-001/002`,
-  `OPTIONAL-AC-001`, `LICENSE-AC-001` выполнены
+## Acceptance evidence
 
-## Принятый результат
+- focused overlay/project/GUI gate: `87 passed, 6 skipped`;
+- полный Python gate: `313 passed, 12 skipped`;
+- локальный system font inventory: `284` family / `437` file-backed faces;
+- skips относятся к недоступным FFmpeg/FFprobe и platform privilege tests;
+  новый real FFmpeg multiline/typography test добавлен, но локально не выполнен.
 
-- native `.otio` реализован как removable optional adapter с exact pin
-  `opentimelineio==0.18.1`;
-- import создаёт immutable proposal и требует явного применения к новой
-  project revision;
-- strict preflight ограничивает schemas, поля, local refs, JSON resources и
-  не вызывает ambient OTIO plugins/hooks/media linker;
-- `ffmpeg-scdet-v1` возвращает только source-relative предложения сцен и
-  использует managed process/cancel/tool-identity boundary;
-- synthetic benchmark прошёл continue-gate: P/R/F1 `1.0/1.0/1.0`, FP/min `0`,
-  p95 `0 µs`, timestamps `3/3`, wall/media `0.080509`;
-- feature flags по умолчанию выключены, schema v2 и обычный export не зависят
-  от OTIO или scene adapter.
+## NEXT
 
-## Проверки acceptance
-
-- focused: `34 passed`;
-- full: `298 passed, 2 skipped`;
-- correctness review: READY;
-- security review: READY;
-- `compileall`/CLI help/`git diff --check`: пройдены.
-
-## Точка продолжения
-
-Следующим по roadmap является этап 13 — optional local transcription, но он
-**не начат**, его prompt не выбран как текущий срез и новые зависимости не
-исследуются. Возобновлять его только по новой команде пользователя.
+Работа ожидает пользовательской проверки либо явного разрешения merge.
+Этап 13 optional local transcription остаётся приостановленным и не входит в
+этот срез.
 
 ## Сохраняющиеся release blockers
 

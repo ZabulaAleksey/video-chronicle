@@ -175,6 +175,22 @@
   overlay-only change сохраняет inspection plan, но требует нового visual
   preview. Video playback, keyframes и arbitrary expressions остаются вне scope.
 
+## 2026-09-12 — semantic date/time formatter и portable font family
+
+- Решение: расширить существующий `OverlayConfig`, сохранив legacy `format` как
+  compatibility input; новые presets хранят независимые date/time/layout/style
+  поля во вложенной overlay schema v2. Форматирование принадлежит Qt-free
+  `overlay.py`, а FFmpeg adapter получает готовый текст и typography.
+- Причина: preview, export, cache identity и project persistence должны
+  интерпретировать одну модель; готовая timestamp string не является setting.
+- Font resolution: сохраняется family name либо explicit local file. Family
+  выбирает file-backed face с нужным bold/italic и runtime-only identity;
+  неизвестное family использует проверенный legacy fallback. Exact file остаётся
+  exact-face override и сам задаёт style.
+- Последствия: внешний project schema v2 читает оба exact nested shapes;
+  legacy overlay сохраняет прежний plan digest, новый overlay имеет собственную
+  `version: 2`. Custom date tokens bounded и не открывают FFmpeg expressions.
+
 ## 2026-08-14 — Join и Chronicle как policy одного плана
 
 - Решение: хранить `ExportMode` в immutable `ExportRequest`; Join использует

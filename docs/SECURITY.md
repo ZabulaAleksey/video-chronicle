@@ -50,6 +50,11 @@ release gate для будущего пакетирования, но ещё н�
   UNC и symlink/reparse отвергаются, а identity повторно проверяется перед
   preview и каждым FFmpeg normalize. Экранирование `fontfile` выполняется в
   pipeline adapter на двух уровнях FFmpeg parser, без shell.
+- Список системных шрифтов строится только из file-backed Windows registry или
+  стандартных platform font directories. Сохранённое family name не становится
+  путём: resolver выбирает проверенный face, а неизвестное семейство деградирует
+  к тому же bounded fallback. Custom date format ограничен 64 символами,
+  разрешёнными tokens и безопасными literal separators до FFmpeg boundary.
 - Каждый tool process запускается в принадлежащем операции дереве: unnamed
   Windows Job Object с `KILL_ON_JOB_CLOSE` и проверкой `ActiveProcesses == 0`
   либо новая POSIX session/process group. Cancel сначала отправляет FFmpeg `q`,

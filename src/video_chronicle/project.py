@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Iterable
 
 from .domain import ExportMode, MediaItem
-from .overlay import DEFAULT_OVERLAY_CONFIG, OverlayConfig
+from .overlay import DEFAULT_OVERLAY_CONFIG, OverlayConfig, overlay_settings_mapping
 
 
 ITEM_ID_PREFIX = "item-v1-"
@@ -504,8 +504,12 @@ class EditingExportSnapshot:
 
 
 def _render_settings_mapping(settings: RenderSettings) -> dict[str, object]:
-    overlay = settings.overlay
-    return {"mode": settings.mode.value, "overlay": {"enabled": overlay.enabled, "format": overlay.format, "position": overlay.position, "horizontal_margin": overlay.horizontal_margin, "vertical_margin": overlay.vertical_margin, "font_size": overlay.font_size, "text_color": overlay.text_color, "outline_color": overlay.outline_color, "outline_width": overlay.outline_width, "font_file": None if overlay.font_file is None else str(overlay.font_file), "font_identity": None if overlay.font_identity is None else list(overlay.font_identity)}, "crf": settings.crf, "encoder_preset": settings.encoder_preset}
+    return {
+        "mode": settings.mode.value,
+        "overlay": overlay_settings_mapping(settings.overlay),
+        "crf": settings.crf,
+        "encoder_preset": settings.encoder_preset,
+    }
 
 
 class JobState(str, Enum):

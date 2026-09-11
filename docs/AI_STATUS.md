@@ -1,5 +1,18 @@
 # Состояние проекта для AI
 
+## Configurable date/time overlay — 2026-09-12
+
+- В `feature/configurable-datetime-overlay` существующий OVERLAY-001 расширен
+  semantic date/time/layout и practical typography без второго renderer path.
+- `overlay.py` владеет единым formatter, custom token validation и file-backed
+  system font resolution; неизвестное family использует проверенный fallback.
+- Project schema v2 читает legacy exact overlay shape и новый nested overlay
+  `version: 2`; family сохраняется переносимо, resolved path остаётся runtime-only.
+- Representative preview и export используют один immutable config и один
+  FFmpeg filter adapter; overlay-only edit по-прежнему требует обновить preview.
+- Полный локальный gate: `313 passed, 12 skipped`; skips включают недоступный
+  FFmpeg/FFprobe runtime, поэтому real multiline typography остаётся `NOT VERIFIED`.
+
 ## Governance migration — 2026-08-24
 
 - 17 stage-файлов объединены в `prompts/STAGES.md`, старые workspace paths обновлены; overlay — PASS.
@@ -34,8 +47,9 @@ project schema v2 и opt-in normalized-clip cache являются разным�
   `domain → ports → application → pipeline adapters`;
 - `src/video_chronicle/metadata.py` реализует утверждённую DATE-001 policy и
   отдаёт typed provenance/conflict/timezone result;
-- `src/video_chronicle/overlay.py` реализует immutable OVERLAY-001 config,
-  font identity policy и approved formats/positions/ranges;
+- `src/video_chronicle/overlay.py` реализует immutable OVERLAY-001/002 config,
+  canonical date/time formatter, font inventory/identity/fallback и approved
+  formats/layout/positions/typography ranges;
 - `ExportMode` входит в immutable request/plan: Join требует disabled overlay,
   Chronicle сохраняет configurable OVERLAY-001;
 - `src/video_chronicle/project.py`, `repository.py` и `serialization.py`
@@ -121,9 +135,9 @@ project schema v2 и opt-in normalized-clip cache являются разным�
   возвращает proposal, неизвестные/неоднозначные local refs не auto-bind;
 - synthetic scene benchmark на FFmpeg 9.0.1 дал P/R/F1 `1.0/1.0/1.0`,
   `0` FP/min, p95 `0 µs`, deterministic `3/3` и wall/media `0.080509`;
-- 298 тестов проходят, включая interchange/parser/security/scene benchmark;
-  два
-  Windows symlink/reparse теста пропущены из-за WinError 1314.
+- 313 тестов проходят, включая configurable overlay,
+  interchange/parser/security/scene benchmark; 12 platform/runtime checks
+  пропущены в текущем worktree, включая недоступные FFmpeg/FFprobe.
 
 ## Локальные зависимости
 

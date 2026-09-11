@@ -20,8 +20,10 @@
 входы, частичный успех, коллизии результата, неизменность источников,
 построение GUI argv, реальный legacy `QProcess`, application-service worker,
 preview states, invalidation, overwrite timing и responsive scrolling.
-Overlay покрыт validation/golden tests, preview lifecycle, synthetic multi-item
-export и реальными FFmpeg preview/normalize с включённой и выключенной подписью.
+Overlay покрыт validation/golden tests всех date/time/visibility/layout
+вариантов, invalid custom values, font family/style/fallback, project
+persistence, preview lifecycle, synthetic multi-item export и реальными FFmpeg
+preview/normalize, включая multiline typography при доступном runtime.
 
 ## Матрица baseline этапа 01
 
@@ -42,7 +44,7 @@ export и реальными FFmpeg preview/normalize с включённой и
 | DATE-001 priority, raw provenance, timezone и conflicts | unit/table | `tests/test_metadata_date_engine.py` | `DATE-AC-001–003`, `AC-002` |
 | MODEL-001 IDs/order, job transitions, schema v1 и repository | unit/table | `tests/test_project_queue_model.py` | `MODEL-AC-001–003` |
 | GUI application preview, async lifecycle, Unicode, stale plan и overwrite | GUI/contract | `tests/test_gui_application.py` | `GUI-APP-AC-001–003`, `AC-001/002/010` |
-| Единый overlay config, escaping шрифта, preview и multi-item export | unit/GUI/integration | `tests/test_overlay.py` | `OVERLAY-AC-001–003`, `AC-004/010` |
+| Единый date/time formatter, typography, font fallback, preview и multi-item export | unit/GUI/integration | `tests/test_overlay.py`, `tests/test_gui_application.py`, `tests/test_nondestructive_editing.py` | `OVERLAY-AC-001–003`, `OVERLAY-007–009`, `AC-004/010` |
 | Join/Chronicle invariant, CLI parity, GUI round-trip и оба real exports | matrix/GUI/integration | `tests/test_modes.py`, `tests/test_gui_application.py`, `tests/test_ffmpeg_smoke.py` | `MODE-AC-001–003`, `AC-003/004/008` |
 | Structured progress, cancel checkpoints, publication race и cleanup | unit/integration/GUI | `tests/test_execution.py`, `tests/test_gui_application.py` | `EXEC-AC-001/003/004`, `AC-003/005/009/010` |
 | Windows Job/POSIX group, descendants, timeout/output-limit и real FFmpeg cancel | platform/integration/security | `tests/test_process_control.py` | `EXEC-AC-002`, `AC-006` |

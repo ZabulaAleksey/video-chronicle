@@ -1,7 +1,7 @@
 # Timeline Builder / Video Chronicle
 
 - Статус: черновик product SPEC; требования требуют утверждения до реализации
-- Версия: 0.2
+- Версия: 0.3
 - Область: построение одного видео по набору фотографий и видеозаписей
 - Утверждённый contract этапа 11 вынесен в
   `specs/features/nondestructive-editing.spec.md` и дополняет эту SPEC.
@@ -142,6 +142,61 @@ execution path, но сохраняет GUI-001 как временный диа
 - произвольный текст/FFmpeg expression, animation/keyframes и templates;
 - полноценное воспроизведение видео или timeline editor;
 - аппаратный preview acceleration, cache и persistence.
+
+## Утверждённое расширение OVERLAY-002 — configurable date/time typography
+
+Этот раздел утверждён прямым запросом пользователя от 2026-09-12. Он расширяет
+существующий OVERLAY-001 и обязан использовать тот же immutable config,
+formatter, representative preview и FFmpeg export path.
+
+- **OVERLAY-007 — Семантическая дата и время.** Config хранит независимо
+  `show_date`, `show_time`, стабильные date/time format IDs, layout и separator,
+  а не готовую строку. Разрешены date formats `DD.MM.YYYY`, `DD/MM/YYYY`,
+  `YYYY-MM-DD`, `MM/DD/YYYY`, `DD MMM YYYY`, `DD MMMM YYYY` и legacy
+  `DD.MM.YY ddd`; time formats `HH:mm`, `HH:mm:ss`, `hh:mm A`,
+  `hh:mm:ss A`. При включённом overlay видима хотя бы дата или время.
+- **OVERLAY-008 — Layout и custom format.** Совместная дата/время выводится
+  inline через пробел, через проверенный пользовательский separator либо в две
+  строки. Optional custom date format принимает только документированные date
+  tokens и безопасные literal separators, имеет bounded length и отклоняется до
+  FFmpeg boundary.
+- **OVERLAY-009 — Typography.** Config хранит переносимое system font family,
+  size, bold/italic, text color/opacity, outline on/off/color/width и shadow
+  on/off/opacity/offset. Явный font file остаётся поддержанным exact-face
+  override. System family резолвится в локальный `.ttf`/`.otf` face с учётом
+  bold/italic; неизвестное/исчезнувшее family безопасно переходит к проверенному
+  default font, а отсутствие любого допустимого fallback даёт явную ошибку.
+- **OVERLAY-010 — Единый formatter.** Один Qt-free formatter преобразует
+  wall-clock `datetime` и `OverlayConfig` в текст. Preview и export получают
+  один и тот же config object и строят один drawtext contract, включая newline,
+  font face, size, opacity, outline, shadow и position.
+- **OVERLAY-011 — Persistence compatibility.** Project preset сохраняет
+  семантические поля и family, но не готовую timestamp string. Legacy overlay
+  mapping без новых полей загружается с прежним appearance; повреждённые поля
+  отклоняются как диагностируемая project validation error. Отсутствующее
+  system family не мешает открыть проект и использует runtime fallback.
+
+### Критерии приёмки расширения
+
+- **OVERLAY-AC-004 (OVERLAY-007/008).** Unit matrix покрывает обязательные date
+  и time formats, date-only/time-only/date+time, inline/custom separator/
+  multiline и invalid custom formats.
+- **OVERLAY-AC-005 (OVERLAY-009/011).** Font inventory/resolution выбирает
+  requested regular/bold/italic face, неизвестное family использует fallback,
+  typography round-trip сохраняется, а legacy mapping загружается без ручной
+  миграции.
+- **OVERLAY-AC-006 (OVERLAY-010, NFR-003/004).** Component/integration tests
+  подтверждают, что GUI invalidation, preview и export используют один config;
+  generated drawtext содержит тот же formatted text, font face, size, stroke,
+  shadow и position.
+
+### Не входит в расширение
+
+- arbitrary FFmpeg expressions и locale-driven implicit format switching;
+- загрузка web fonts, встраивание font files в project и полноценный typography
+  editor;
+- синтетическое начертание для explicit custom font file: такой файл считается
+  exact face, а bold/italic выбирают варианты только для system family.
 
 ## Утверждённый срез MODE-001 — Join и Chronicle
 

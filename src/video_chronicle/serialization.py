@@ -25,7 +25,7 @@ from .project import (
     TrimRange,
 )
 from .domain import ExportMode
-from .overlay import OverlayConfig
+from .overlay import OverlayConfig, overlay_settings_mapping
 
 
 SCHEMA_NAME = "video-chronicle-project"
@@ -281,19 +281,7 @@ def project_from_mapping(payload: Any, *, migrate: bool = False) -> ProjectState
 
 
 def _overlay_to_mapping(value: OverlayConfig) -> dict[str, Any]:
-    return {
-        "enabled": value.enabled,
-        "format": value.format,
-        "position": value.position,
-        "horizontal_margin": value.horizontal_margin,
-        "vertical_margin": value.vertical_margin,
-        "font_size": value.font_size,
-        "text_color": value.text_color,
-        "outline_color": value.outline_color,
-        "outline_width": value.outline_width,
-        "font_file": None if value.font_file is None else str(value.font_file),
-        "font_identity": None if value.font_identity is None else list(value.font_identity),
-    }
+    return overlay_settings_mapping(value)
 
 
 def _settings_to_mapping(value: RenderSettings) -> dict[str, Any]:
@@ -330,15 +318,79 @@ def _strict_int(value: Any, label: str, *, minimum: int = 0) -> int:
     return value
 
 
+def _number(value: Any, label: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        _fail(f"{label} must be a number")
+    return float(value)
+
+
+def _strict_signed_int(value: Any, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        _fail(f"{label} must be an integer")
+    return value
+
+
 def _overlay_from_mapping(raw: Any) -> OverlayConfig:
-    fields = {"enabled", "format", "position", "horizontal_margin", "vertical_margin", "font_size", "text_color", "outline_color", "outline_width", "font_file", "font_identity"}
+    legacy_fields = {"enabled", "format", "position", "horizontal_margin", "vertical_margin", "font_size", "text_color", "outline_color", "outline_width", "font_file", "font_identity"}
+    fields = {
+        "version", "enabled", "show_date", "show_time", "date_format",
+        "custom_date_format", "time_format", "layout", "separator",
+        "position", "horizontal_margin", "vertical_margin", "font_family",
+        "font_size", "bold", "italic", "text_color", "opacity",
+        "outline_enabled", "outline_color", "outline_width",
+        "shadow_enabled", "shadow_opacity", "shadow_offset_x",
+        "shadow_offset_y", "font_file", "font_identity",
+    }
+    if isinstance(raw, Mapping) and set(raw) == legacy_fields:
+        value = _object(raw, legacy_fields, "overlay")
+        if not isinstance(value["enabled"], bool):
+            _fail("overlay.enabled must be bool")
+        identity = value["font_identity"]
+        if identity is not None and (not isinstance(identity, list) or len(identity) != 4 or any(type(part) is not int for part in identity)):
+            _fail("overlay.font_identity must be four integers or null")
+        config = OverlayConfig(enabled=value["enabled"], format=_string(value["format"], "overlay.format") or "", position=_string(value["position"], "overlay.position") or "", horizontal_margin=_strict_int(value["horizontal_margin"], "horizontal_margin"), vertical_margin=_strict_int(value["vertical_margin"], "vertical_margin"), font_size=_strict_int(value["font_size"], "font_size", minimum=1), text_color=_string(value["text_color"], "text_color") or "", outline_color=_string(value["outline_color"], "outline_color") or "", outline_width=_strict_int(value["outline_width"], "outline_width"), font_file=_path(value["font_file"], "font_file", nullable=True))
+        if identity is not None and config.font_identity != tuple(identity):
+            _fail("overlay font identity does not match the current regular file")
+        return config
     value = _object(raw, fields, "overlay")
+    if value["version"] != 2:
+        _fail("unknown overlay settings version")
     if not isinstance(value["enabled"], bool):
         _fail("overlay.enabled must be bool")
+    for key in ("show_date", "show_time", "bold", "italic", "outline_enabled", "shadow_enabled"):
+        if not isinstance(value[key], bool):
+            _fail(f"overlay.{key} must be bool")
     identity = value["font_identity"]
     if identity is not None and (not isinstance(identity, list) or len(identity) != 4 or any(type(part) is not int for part in identity)):
         _fail("overlay.font_identity must be four integers or null")
-    config = OverlayConfig(enabled=value["enabled"], format=_string(value["format"], "overlay.format") or "", position=_string(value["position"], "overlay.position") or "", horizontal_margin=_strict_int(value["horizontal_margin"], "horizontal_margin"), vertical_margin=_strict_int(value["vertical_margin"], "vertical_margin"), font_size=_strict_int(value["font_size"], "font_size", minimum=1), text_color=_string(value["text_color"], "text_color") or "", outline_color=_string(value["outline_color"], "outline_color") or "", outline_width=_strict_int(value["outline_width"], "outline_width"), font_file=_path(value["font_file"], "font_file", nullable=True))
+    config = OverlayConfig(
+        enabled=value["enabled"],
+        format=None,
+        show_date=value["show_date"],
+        show_time=value["show_time"],
+        date_format=_string(value["date_format"], "overlay.date_format") or "",
+        custom_date_format=_string(value["custom_date_format"], "overlay.custom_date_format", nullable=True),
+        time_format=_string(value["time_format"], "overlay.time_format") or "",
+        layout=_string(value["layout"], "overlay.layout") or "",
+        separator=_string(value["separator"], "overlay.separator") or "",
+        position=_string(value["position"], "overlay.position") or "",
+        horizontal_margin=_strict_int(value["horizontal_margin"], "horizontal_margin"),
+        vertical_margin=_strict_int(value["vertical_margin"], "vertical_margin"),
+        font_family=_string(value["font_family"], "overlay.font_family", nullable=True),
+        font_size=_strict_int(value["font_size"], "font_size", minimum=1),
+        bold=value["bold"],
+        italic=value["italic"],
+        text_color=_string(value["text_color"], "text_color") or "",
+        opacity=_number(value["opacity"], "overlay.opacity"),
+        outline_enabled=value["outline_enabled"],
+        outline_color=_string(value["outline_color"], "outline_color") or "",
+        outline_width=_strict_int(value["outline_width"], "outline_width"),
+        shadow_enabled=value["shadow_enabled"],
+        shadow_opacity=_number(value["shadow_opacity"], "overlay.shadow_opacity"),
+        shadow_offset_x=_strict_signed_int(value["shadow_offset_x"], "shadow_offset_x"),
+        shadow_offset_y=_strict_signed_int(value["shadow_offset_y"], "shadow_offset_y"),
+        font_file=_path(value["font_file"], "font_file", nullable=True),
+    )
     if identity is not None and config.font_identity != tuple(identity):
         _fail("overlay font identity does not match the current regular file")
     return config

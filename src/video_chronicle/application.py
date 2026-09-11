@@ -205,6 +205,11 @@ def apply_project_state(analyzed_plan: ExportPlan, project_state: ProjectState) 
         raise ValueError("project contains no currently usable media")
     preset = project_state.resolve_active_preset()
     settings = preset.settings
+    if settings.overlay == analyzed_plan.request.overlay:
+        # Family resolution is runtime-only and deliberately omitted from the
+        # portable project preset. Reuse the semantically identical resolved
+        # config produced by the current analysis request.
+        settings = replace(settings, overlay=analyzed_plan.request.overlay)
     request = replace(
         analyzed_plan.request,
         mode=settings.mode,

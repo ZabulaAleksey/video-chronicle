@@ -9,10 +9,13 @@ services и сохраняется прямой CLI-интерфейс.
 - selector режима до input-полей: Chronicle по умолчанию разрешает подпись
   даты, Join явно создаёт хронологический MP4 без неё;
 - отдельная группа параметров FFmpeg, FFprobe, CRF и preset;
-- вкладки «Кодирование» и «Подпись даты» сохраняют компактность формы;
-- подпись даты имеет явный переключатель, три утверждённых format preset,
-  четыре угловых position, margins, font size, text/outline colors, outline
-  width и выбор локального `.ttf`/`.otf`;
+- вкладки «Кодирование» и «Дата и время» сохраняют компактность формы;
+- overlay имеет независимые переключатели даты/времени, понятные примеры date
+  и 12/24-hour time formats, inline/custom-separator/multiline layout;
+- typography содержит список file-backed системных семейств, optional exact
+  `.ttf`/`.otf` override, size, bold/italic, text color/opacity, outline и
+  shadow с opacity/offset; отсутствующее сохранённое семейство при рендере
+  использует fallback;
 - отдельное действие «Анализировать» строит immutable preview до экспорта;
 - accepted/skipped элементы показаны в детерминированном порядке с выбранной
   датой, provenance, timezone, конфликтом или причиной пропуска;
@@ -53,8 +56,9 @@ GUI пока не поддерживает воспроизведение timeli
 multi-track, transitions или nested groups. Cache хранит только проверенные
 normalized clips и не является persistence проекта. Cancel скрыт для
 legacy/injected backend без явной safe capability и через
-`VIDEO_CHRONICLE_CANCEL_UI=0`. Overlay ограничен
-утверждёнными presets: arbitrary FFmpeg expressions и keyframes отсутствуют.
+`VIDEO_CHRONICLE_CANCEL_UI=0`. Overlay ограничен утверждёнными token formats;
+custom date не принимает `strftime`/FFmpeg expressions, animation и keyframes
+отсутствуют.
 
 ## CLI
 
