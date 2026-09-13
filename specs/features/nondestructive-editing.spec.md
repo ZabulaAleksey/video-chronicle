@@ -87,15 +87,20 @@ Runtime `ExportPlan` содержит effective reordered `MediaItem` и тот 
 третья timeline/plan модель не создаётся.
 
 `apply_project_state(analyzed_plan, project_state)` связывает сохранённые IDs с
-текущим inspection, разрешает trims/settings и создаёт snapshot. Новые файлы не
-добавляются молча; отсутствующие/повреждённые известные источники остаются
-диагностикой, но edits не теряются.
+текущим inspection, разрешает trims/settings и создаёт snapshot. После явно
+запущенного delta-analysis новые принятые файлы добавляются в timeline и в
+конец layout как full-source entries, не меняя reorder/trim/group edits старых
+IDs; отсутствующие/повреждённые известные источники остаются
+диагностикой, но edits не теряются. Фактическое изменение timeline/layout
+атомарно очищает прежние `current_plan` и `jobs`: они относятся к старой
+revision и не переносятся на обновлённые metadata/source set.
 
 ## 4. Preview/export/cache parity
 
 - Preview и `execute_plan` получают один объект с одним `plan_id`.
 - Любой reorder/trim/group/preset edit создаёт новый snapshot и делает старый
-  preview stale; export блокируется до актуального preview.
+  preview stale; при неизменных source fingerprints export остаётся доступен,
+  а preview обновляется независимо.
 - Representative preview использует первый effective item и кадр на `in_us`.
 - Full-source trim сохраняет `clip-v1`/manifest-v1/`normalize-v1` reuse.
   Реальный trim использует `clip-v2`/manifest-v2/`normalize-v2` и включает
@@ -166,7 +171,8 @@ files запрещены. `InMemoryProjectRepository` остаётся reference
 - После analysis редактор показывает effective order и per-item duration/trim.
 - Доступны move up/down, group/ungroup, trim start/end и save/apply versioned preset.
 - Save/Open работают вне UI thread и показывают conflict/migration/rollback error.
-- Изменение layout/settings инвалидирует representative preview и export.
+- Изменение layout/settings инвалидирует representative preview, но при
+  неизменных source fingerprints не блокирует export.
 - Project save не требует export и не меняет source bytes.
 - Legacy GUI/CLI без открытого проекта используют прежний date-sorted план и
   legacy settings; новые project/edit CLI flags в этом этапе не вводятся.
@@ -186,9 +192,9 @@ adapter без shell. Для видео/фото используется effect
 tooltip, не удаляя остальные карточки. Все временные PNG удаляются после
 синхронной загрузки `QPixmap` либо при failure.
 После thumbnail batch режим Chronicle автоматически строит актуальный
-representative preview с выбранной подписью. Кнопка экспорта включается только
-после его успешной загрузки; ошибка оставляет экспорт disabled и сохраняет
-ручное действие повторного preview. В Join отдельный preview не требуется.
+representative preview с выбранной подписью. Export доступен по актуальному
+source analysis независимо от результата preview; ошибка сохраняет ручное
+действие повторного preview. В Join отдельный preview не требуется.
 
 ### EDIT-010 — Drag-and-drop reorder
 
@@ -196,7 +202,8 @@ representative preview с выбранной подписью. Кнопка эк
 `move_items(item_ids, before_item_id)` и не хранит второй widget-local порядок.
 Невалидный partial-group move отклоняется, после чего grid восстанавливает
 канонический effective order. Успешный drop увеличивает project revision ровно
-на один и делает representative preview/export stale.
+на один и делает representative preview stale, сохраняя export доступным при
+неизменных исходниках.
 
 ### EDIT-011 — Grid/table parity
 
@@ -245,12 +252,11 @@ order и selection. Button move и drag-and-drop дают один доменн�
 - **EDIT-AC-009 (EDIT-010/011).** Component drag одной и нескольких cards
   создаёт точный EDIT-001 order в grid/table/project snapshot; invalid group
   drop восстанавливает прежний order, а source bytes остаются неизменны.
-- **EDIT-AC-010 (EDIT-009).** Успешный analysis → thumbnails → representative
-  preview автоматически включает export в Chronicle; preview failure сохраняет
-  export disabled, а Join становится доступен без representative preview.
-  Простой выбор timeline item не создаёт project snapshot; после изменения
-  date/time format повторный analysis снова доходит до актуального preview и
-  включает export без зависимости от известной длительности выбранного item.
+- **EDIT-AC-010 (EDIT-009).** Успешный analysis включает export в Chronicle и
+  запускает automatic thumbnails/representative preview независимо; preview
+  failure не блокирует export. Простой выбор timeline item не создаёт project
+  snapshot; изменение date/time format обновляет plan без повторного source
+  analysis и без зависимости от известной длительности выбранного item.
 
 ## 9. Rollback
 

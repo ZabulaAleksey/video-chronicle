@@ -24,12 +24,13 @@ from video_chronicle.domain import (
     ExportMode,
     ExportRequest,
     MediaItem,
+    SourceFingerprint,
 )
 from video_chronicle.gui_services import ApplicationServiceAdapter
 from video_chronicle.execution import ProgressEvent
 from video_chronicle.overlay import OverlayConfig
 from video_chronicle.ports import PipelinePorts
-from video_chronicle.project import RenderSettings, TimelineItem
+from video_chronicle.project import RenderSettings, TimelineItem, TrimRange
 import video_chronicle_gui as gui_module
 from video_chronicle_gui import ChronicleWindow, CliProcessAdapter, STYLE_SHEET
 
@@ -47,6 +48,12 @@ def _preview_ports():
     return SimpleNamespace(
         command_runner=lambda *args: None,
         validate_source=lambda input_dir, source: None,
+        collect_source_paths=lambda input_dir, output, error_log: sorted(
+            path
+            for path in input_dir.iterdir()
+            if path.suffix.casefold() in {".mp4", ".jpg"}
+            and path not in {output, error_log}
+        ),
     )
 
 
@@ -100,33 +107,52 @@ def _preview_plan(request: ExportRequest) -> ExportPlan:
         conflicts=(conflict,),
         policy_version="date-v1",
     )
+    accepted_path = request.input_dir / "семейное видео 01.mp4"
+    failed_path = request.input_dir / "повреждённое фото.jpg"
+    if not accepted_path.exists():
+        accepted_path.write_bytes(b"accepted source")
+    if not failed_path.exists():
+        failed_path.write_bytes(b"failed source")
     item = MediaItem(
-        path=request.input_dir / "семейное видео 01.mp4",
+        path=accepted_path,
         taken_at=selected.wall_time,
         is_photo=False,
         has_audio=True,
         date_source=selected.source,
         date_decision=decision,
+        source_fingerprint=SourceFingerprint.capture(accepted_path),
     )
     return ExportPlan(
         request=request,
         items=(item,),
-        inspection_failures=((request.input_dir / "повреждённое фото.jpg", "bad media"),),
+        inspection_failures=((failed_path, "bad media"),),
+        inspection_failure_fingerprints=(
+            (failed_path, SourceFingerprint.capture(failed_path)),
+        ),
     )
 
 
 def _multi_item_plan(request: ExportRequest, count: int = 3) -> ExportPlan:
-    base = _preview_plan(request).items[0]
-    items = tuple(
-        replace(
-            base,
-            path=request.input_dir / f"clip-{index}.mp4",
-            taken_at=base.taken_at.replace(minute=index),
-            source_duration_us=1_000_000,
+    preview = _preview_plan(request)
+    base = preview.items[0]
+    base.path.unlink()
+    for failed_path, _error in preview.inspection_failures:
+        failed_path.unlink()
+    items = []
+    for index in range(1, count + 1):
+        path = request.input_dir / f"clip-{index}.mp4"
+        if not path.exists():
+            path.write_bytes(f"clip-{index}".encode())
+        items.append(
+            replace(
+                base,
+                path=path,
+                taken_at=base.taken_at.replace(minute=index),
+                source_fingerprint=SourceFingerprint.capture(path),
+                source_duration_us=1_000_000,
+            )
         )
-        for index in range(1, count + 1)
-    )
-    return ExportPlan(request=request, items=items)
+    return ExportPlan(request=request, items=tuple(items))
 
 
 def _gui_request(input_dir: Path, output: Path) -> GuiRunRequest:
@@ -256,7 +282,7 @@ def test_thumbnail_grid_reorders_domain_and_table_without_touching_sources(
         for index in range(len(plan.items))
     ) == expected
     assert tuple(entry.item_id for entry in window._project_state.layout.entries) == expected
-    assert window.run_button.isEnabled() is False
+    assert window.run_button.isEnabled() is True
     assert {path: path.read_bytes() for path in original_bytes} == original_bytes
 
     window._apply_thumbnail_move(expected[:2], None)
@@ -431,7 +457,53 @@ def test_window_renders_cache_hit_and_miss_progress(qapp, tmp_path: Path) -> Non
     assert "miss" in window.status_label.text()
 
 
-def test_window_renders_plan_and_invalidates_it_on_any_form_change(
+def test_plan_ready_does_not_publish_reconciled_state_when_rebind_fails(
+    qapp, tmp_path: Path, monkeypatch
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    canonical = _canonical_request(input_dir, tmp_path / "output.mp4")
+    source = input_dir / "clip.mp4"
+    source.write_bytes(b"source")
+    item = replace(
+        _preview_plan(canonical).items[0],
+        path=source,
+        source_duration_us=1_000_000,
+        source_fingerprint=SourceFingerprint.capture(source),
+    )
+    analyzed = ExportPlan(canonical, (item,))
+    adapter = ApplicationServiceAdapter(ports_factory=lambda: object())  # type: ignore[arg-type]
+    window = ChronicleWindow(application_adapter=adapter)
+    window._active_request = _gui_request(input_dir, canonical.output)
+    window._analyzed_plan = analyzed
+    state = window._build_project_state()
+    item_id = TimelineItem.from_media_item(item).stable_id
+    state = state.set_trim(item_id, TrimRange(0, 900_000))
+    old_plan = gui_module.apply_project_state(analyzed, state)
+    window._project_state = state
+    window._plan = old_plan
+    added_path = input_dir / "new.mp4"
+    added_path.write_bytes(b"new")
+    changed = replace(item, source_duration_us=500_000)
+    added = replace(
+        item,
+        path=added_path,
+        source_duration_us=1_000_000,
+        source_fingerprint=SourceFingerprint.capture(added_path),
+    )
+    candidate = ExportPlan(canonical, (changed, added))
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args, **kwargs: None)
+
+    window._on_plan_ready(candidate)
+
+    assert window._project_state is state
+    assert window._project_state.revision == state.revision
+    assert window._plan is old_plan
+    assert window._analyzed_plan is analyzed
+    window.close()
+
+
+def test_window_renders_plan_and_reuses_it_on_setting_change(
     qapp, tmp_path: Path
 ) -> None:
     input_dir = tmp_path / "входные медиа"
@@ -464,14 +536,119 @@ def test_window_renders_plan_and_invalidates_it_on_any_form_change(
     assert skipped.text(1) == "Пропущен"
     assert skipped.text(6) == "bad media"
     assert "принято: 1, пропущено: 1" in window.plan_summary_label.text()
-    assert window.run_button.isEnabled() is False
+    assert window.run_button.isEnabled() is True
     assert window.preview_button.isEnabled() is True
+    watched_files = {Path(path) for path in window._source_watcher.files()}
+    assert canonical.input_dir / "семейное видео 01.mp4" in watched_files
+    assert canonical.input_dir / "повреждённое фото.jpg" in watched_files
 
     window.preset_combo.setCurrentText("slow")
     qapp.processEvents()
-    assert window.preview_tree.topLevelItemCount() == 0
-    assert window.preview_state_label.text() == "План устарел — повторите анализ"
+    assert window.preview_tree.topLevelItemCount() == 2
+    assert window.preview_state_label.text() == "План обновлён без повторного анализа"
+    assert window.run_button.isEnabled() is True
+    window.close()
+
+
+def test_valid_setting_changes_keep_analyzed_plan_and_export_enabled(
+    qapp, tmp_path: Path
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    source = input_dir / "20240506_070809.mp4"
+    source.write_bytes(b"source")
+    output = tmp_path / "output.mp4"
+    canonical = _canonical_request(input_dir, output)
+    exported: list[ExportPlan] = []
+    collector_calls = 0
+
+    def request_factory(gui):
+        return replace(
+            canonical,
+            output=gui.output.resolve(),
+            error_log=(gui.output.parent / "errors.log").resolve(),
+            ffmpeg=gui.ffmpeg,
+            ffprobe=gui.ffprobe,
+            crf=gui.crf,
+            preset=gui.preset,
+            overlay=gui.overlay,
+            mode=gui.mode,
+        )
+
+    def execute_service(plan, logger, ports):
+        exported.append(plan)
+        plan.request.output.write_bytes(b"exported")
+        return 0
+
+    def collect_sources(directory, output_path, error_log):
+        nonlocal collector_calls
+        collector_calls += 1
+        return sorted(directory.glob("*.mp4"))
+
+    adapter = ApplicationServiceAdapter(
+        execute_service=execute_service,
+        ports_factory=lambda: SimpleNamespace(
+            collect_source_paths=collect_sources,
+            validate_source=lambda *args: None,
+        ),  # type: ignore[arg-type]
+        request_factory=request_factory,
+    )
+    window = ChronicleWindow(application_adapter=adapter)
+    window.input_edit.setText(str(input_dir))
+    window.output_edit.setText(str(output))
+    item = MediaItem(
+        path=source,
+        taken_at=datetime(2024, 5, 6, 7, 8, 9),
+        is_photo=False,
+        has_audio=True,
+        date_source="filename",
+        source_fingerprint=SourceFingerprint.capture(source),
+        source_duration_us=1_000_000,
+    )
+    plan = ExportPlan(canonical, (item,))
+    window._analyzed_plan = plan
+    window._plan = plan
+    window._visual_preview_current = True
+    window._populate_preview(plan)
+    window.run_button.setEnabled(True)
+
+    window.crf_spin.setValue(18)
+    qapp.processEvents()
+    assert window._plan is not None
+    assert window._plan.items[0] is item
+    assert window._plan.request.crf == 18
+    assert window.run_button.isEnabled() is True
+    assert collector_calls == 0
+
+    next_output = tmp_path / "renamed.mp4"
+    window.output_edit.setText(str(next_output))
+    qapp.processEvents()
+    assert window._plan is not None
+    assert window._plan.request.output == next_output.resolve()
+    assert window.run_button.isEnabled() is True
+    assert collector_calls == 0
+
+    window.mode_combo.setCurrentIndex(1)
+    qapp.processEvents()
+    assert window._plan is not None
+    assert window._plan.request.mode is ExportMode.JOIN
+    assert window.run_button.isEnabled() is True
+    assert collector_calls == 0
+
+    window.run_button.click()
+    _wait_until(qapp, lambda: not adapter.is_running)
+    assert exported
+    assert collector_calls == 1
+    assert exported[0].request.output == next_output.resolve()
+    assert exported[0].request.crf == 18
+    assert exported[0].request.mode is ExportMode.JOIN
+
+    added = input_dir / "20240507_070809.mp4"
+    added.write_bytes(b"added")
+    window._on_source_files_changed(str(input_dir))
+    _wait_until(qapp, lambda: window._plan is None)
     assert window.run_button.isEnabled() is False
+    assert window.preview_state_label.text() == "План устарел — повторите анализ"
     window.close()
 
 
@@ -685,7 +862,12 @@ def test_application_export_progress_cancel_is_responsive_and_terminal(
         normalize_item=normalize,
         concatenate=lambda clips, manifest, temporary, *args: temporary.write_bytes(b"movie"),
         publish_output=lambda temporary, final, overwrite: temporary.replace(final),
-        collect_source_paths=lambda *args: [],
+        collect_source_paths=lambda input_dir, output, error_log: sorted(
+            path
+            for path in input_dir.iterdir()
+            if path.suffix.casefold() in {".mp4", ".jpg"}
+            and path not in {output, error_log}
+        ),
         create_workspace=lambda parent: (workspace.mkdir(), workspace)[1],
         cleanup_workspace=lambda path: __import__("shutil").rmtree(path),
         validate_source=lambda *args: None,
@@ -822,8 +1004,10 @@ def test_timeline_reorder_buttons_follow_selection_and_boundaries(
     assert window.preview_tree.topLevelItem(2).text(2).endswith("clip-1.mp4")
     assert window.move_up_button.isEnabled() is True
     assert window.move_down_button.isEnabled() is False
-    assert window.run_button.isEnabled() is False
-    assert window.preview_state_label.text() == "План изменён; обновите preview"
+    assert window.run_button.isEnabled() is True
+    assert window.preview_state_label.text() == (
+        "План изменён; preview можно обновить отдельно"
+    )
 
     window.preview_tree.clearSelection()
     window.preview_tree.topLevelItem(0).setSelected(True)
@@ -951,7 +1135,7 @@ def test_overlay_only_change_keeps_plan_and_preview_temp_is_cleaned(
         plan_service=plan_service,
         preview_service=preview_service,
         ports_factory=_preview_ports,  # type: ignore[arg-type]
-        request_factory=lambda gui: canonical,
+        request_factory=lambda gui: replace(canonical, overlay=gui.overlay),
     )
     window = ChronicleWindow(application_adapter=adapter)
     window.input_edit.setText(str(input_dir))
@@ -976,7 +1160,7 @@ def test_overlay_only_change_keeps_plan_and_preview_temp_is_cleaned(
     qapp.processEvents()
     assert analysis_calls == [True]
     assert window._plan.items is original_items
-    assert window.run_button.isEnabled() is False
+    assert window.run_button.isEnabled() is True
     assert window.visual_preview_state_label.text() == "Предпросмотр устарел"
 
     window.preview_button.click()
@@ -1041,7 +1225,7 @@ def test_reanalysis_after_datetime_format_change_reenables_export(
         window.overlay_time_format_combo.findData("hh:mm:ss A")
     )
     qapp.processEvents()
-    assert window.run_button.isEnabled() is False
+    assert window.run_button.isEnabled() is True
 
     window.analyze_button.click()
     _wait_until(
@@ -1056,7 +1240,7 @@ def test_reanalysis_after_datetime_format_change_reenables_export(
     window.close()
 
 
-def test_preview_error_is_visible_and_export_stays_disabled(qapp, tmp_path: Path) -> None:
+def test_preview_error_is_visible_without_disabling_export(qapp, tmp_path: Path) -> None:
     input_dir = tmp_path / "input"
     input_dir.mkdir()
     output = tmp_path / "output.mp4"
@@ -1077,14 +1261,14 @@ def test_preview_error_is_visible_and_export_stays_disabled(qapp, tmp_path: Path
     window.analyze_button.click()
     _wait_until(qapp, lambda: not adapter.is_running)
     assert window.visual_preview_state_label.text() == "Ошибка предпросмотра"
-    assert window.run_button.isEnabled() is False
+    assert window.run_button.isEnabled() is True
     window.overlay_enabled.setChecked(False)
     window.preview_button.click()
     _wait_until(qapp, lambda: not adapter.is_running)
 
     assert window.visual_preview_state_label.text() == "Ошибка предпросмотра"
     assert "synthetic diagnostic" in window.visual_preview_label.text()
-    assert window.run_button.isEnabled() is False
+    assert window.run_button.isEnabled() is True
     window.close()
 
 
@@ -1134,8 +1318,9 @@ def test_gui_mode_switch_invalidates_plan_and_join_skips_visual_preview(
 
     window.mode_combo.setCurrentIndex(0)
     qapp.processEvents()
-    assert window._plan is None
-    assert window.run_button.isEnabled() is False
+    assert window._plan is not None
+    assert window._plan.request.mode is ExportMode.CHRONICLE
+    assert window.run_button.isEnabled() is True
     assert window.overlay_enabled.isChecked() is False
     window.close()
 

@@ -10,7 +10,17 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, QSize, Qt, QTimer, Signal, Slot
+from PySide6.QtCore import (
+    QFileSystemWatcher,
+    QObject,
+    QProcess,
+    QProcessEnvironment,
+    QSize,
+    Qt,
+    QTimer,
+    Signal,
+    Slot,
+)
 from PySide6.QtGui import QCloseEvent, QColor, QIcon, QPainter, QPixmap, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
@@ -52,7 +62,7 @@ from video_chronicle.domain import ExportMode, ExportPlan
 from video_chronicle.execution import ProgressEvent
 from video_chronicle.gui_services import ApplicationServiceAdapter, ThumbnailBatch
 from video_chronicle.gui_services import replace_plan_overlay
-from video_chronicle.application import apply_project_state
+from video_chronicle.application import apply_project_state, reconcile_project_sources
 from video_chronicle.project import (
     ProjectState,
     RenderPreset,
@@ -84,6 +94,7 @@ from video_chronicle.overlay import (
 PROJECT_DIR = Path(__file__).resolve().parent
 CLI_SCRIPT = PROJECT_DIR / "join_media.py"
 MAX_LOG_CHARACTERS = 500_000
+MAX_WATCHED_SOURCE_FILES = 4096
 
 
 class TimelineThumbnailList(QListWidget):
@@ -287,6 +298,13 @@ class ChronicleWindow(QMainWindow):
         self._visual_preview_current = False
         self._thumbnail_pixmaps: dict[str, QPixmap] = {}
         self._thumbnail_failures: dict[str, str] = {}
+        self._source_watcher = QFileSystemWatcher(self)
+        self._source_change_timer = QTimer(self)
+        self._source_change_timer.setSingleShot(True)
+        self._source_change_timer.setInterval(150)
+        self._source_change_timer.timeout.connect(self._check_source_freshness)
+        self._source_watcher.directoryChanged.connect(self._on_source_files_changed)
+        self._source_watcher.fileChanged.connect(self._on_source_files_changed)
         self._syncing_timeline_selection = False
         self._tool_setup_process: QProcess | None = None
         self._tool_setup_started = False
@@ -1232,6 +1250,61 @@ class ChronicleWindow(QMainWindow):
     def _invalidate_plan(self, *_args: object) -> None:
         if self._building_ui or self._legacy_mode:
             return
+        if self._analyzed_plan is not None and isinstance(
+            self._adapter, ApplicationServiceAdapter
+        ):
+            try:
+                request = self._form_request()
+                reconfigured = self._adapter.rebind_plan(
+                    request, self._analyzed_plan
+                )
+            except (RequestValidationError, RuntimeError, OSError, ValueError):
+                reconfigured = None
+            if reconfigured is not None:
+                previous_request = self._plan.request if self._plan is not None else None
+                self._active_request = request
+                self._analyzed_plan = reconfigured
+                if self._project_state is not None:
+                    active = self._project_state.resolve_active_preset()
+                    settings = RenderSettings(
+                        reconfigured.request.mode,
+                        reconfigured.request.overlay,
+                        reconfigured.request.crf,
+                        reconfigured.request.preset,
+                    )
+                    if active.settings != settings:
+                        self._project_state = self._project_state.save_preset(
+                            active.preset_id, active.name, settings
+                        )
+                    self._plan = apply_project_state(
+                        self._analyzed_plan, self._project_state
+                    )
+                else:
+                    self._plan = reconfigured
+                visual_changed = (
+                    previous_request is None
+                    or previous_request.mode is not self._plan.request.mode
+                    or previous_request.overlay != self._plan.request.overlay
+                )
+                if visual_changed:
+                    self._visual_preview_current = False
+                    self.visual_preview_state_label.setText("Предпросмотр устарел")
+                    self.visual_preview_label.setText(
+                        "Настройки обновлены; кадр можно обновить отдельно"
+                    )
+                self.preview_button.setEnabled(
+                    self._plan.request.mode is not ExportMode.JOIN
+                    and not self._adapter.is_running
+                )
+                self._update_plan_summary(self._plan)
+                self.preview_state_label.setText("План обновлён без повторного анализа")
+                self.status_label.setText("Настройки применены — экспорт доступен")
+                self.run_button.setEnabled(not self._adapter.is_running)
+                self._update_action_states()
+                return
+        self._mark_source_analysis_stale()
+
+    def _mark_source_analysis_stale(self) -> None:
         self._plan = None
         self._active_request = None
         self._visual_preview_current = False
@@ -1250,48 +1323,53 @@ class ChronicleWindow(QMainWindow):
             self.run_button.setEnabled(False)
             self.status_label.setText("Требуется повторный анализ")
 
+    @Slot(str)
+    def _on_source_files_changed(self, _path: str) -> None:
+        if self._building_ui or self._legacy_mode or self._adapter.is_running:
+            return
+        self._source_change_timer.start()
+
+    def _check_source_freshness(self) -> bool:
+        if (
+            self._building_ui
+            or self._legacy_mode
+            or self._adapter.is_running
+            or self._analyzed_plan is None
+            or not isinstance(self._adapter, ApplicationServiceAdapter)
+        ):
+            return False
+        try:
+            request = self._form_request()
+            fresh = self._adapter.reconfigure_plan(request, self._analyzed_plan)
+        except (RequestValidationError, RuntimeError, OSError, ValueError):
+            fresh = None
+        if fresh is None:
+            self._mark_source_analysis_stale()
+            return False
+        self._active_request = request
+        self._analyzed_plan = fresh
+        return True
+
+    def _watch_analyzed_sources(self, plan: ExportPlan) -> None:
+        watched = self._source_watcher.files() + self._source_watcher.directories()
+        if watched:
+            self._source_watcher.removePaths(watched)
+        source_paths = [item.path for item in plan.items]
+        source_paths.extend(path for path, _reason in plan.inspection_failures)
+        paths = [str(plan.request.input_dir)]
+        paths.extend(
+            str(path)
+            for path in source_paths[:MAX_WATCHED_SOURCE_FILES]
+            if path.is_file()
+        )
+        self._source_watcher.addPaths(paths)
+
     @Slot()
     def _invalidate_overlay(self, *_args: object) -> None:
         self._update_overlay_control_state()
         if self._building_ui or self._legacy_mode:
             return
-        self._visual_preview_current = False
-        self.visual_preview_label.clear()
-        self.run_button.setEnabled(False)
-        try:
-            overlay = self._form_overlay_config(resolve_fallback=True)
-        except RequestValidationError as exc:
-            self.visual_preview_state_label.setText("Ошибка параметров подписи")
-            self.visual_preview_label.setText(str(exc))
-            self.preview_button.setEnabled(False)
-            self.status_label.setText("Исправьте параметры подписи")
-            return
-        if self._plan is None:
-            self.visual_preview_state_label.setText("Предпросмотр не построен")
-            self.preview_button.setEnabled(False)
-            return
-        if self._project_state is not None:
-            active = self._project_state.resolve_active_preset()
-            settings = RenderSettings(
-                self._selected_mode(),
-                overlay,
-                self.crf_spin.value(),
-                self.preset_combo.currentText().strip(),
-            )
-            self._project_state = self._project_state.save_preset(
-                active.preset_id,
-                active.name,
-                settings,
-            )
-            self._refresh_edited_plan()
-            return
-        self._plan = replace_plan_overlay(self._plan, overlay)
-        if self._active_request is not None:
-            self._active_request = replace(self._active_request, overlay=overlay)
-        self.visual_preview_state_label.setText("Предпросмотр устарел")
-        self.visual_preview_label.setText("Обновите кадр перед экспортом")
-        self.preview_button.setEnabled(not self._adapter.is_running)
-        self.status_label.setText("Подпись изменена — обновите предпросмотр")
+        self._invalidate_plan()
 
     @Slot()
     def _start_analysis(self) -> None:
@@ -1322,7 +1400,9 @@ class ChronicleWindow(QMainWindow):
         self._set_running(True)
         try:
             assert isinstance(self._adapter, ApplicationServiceAdapter)
-            self._adapter.start_analysis(request)
+            self._adapter.start_analysis(
+                request, previous_plan=self._analyzed_plan
+            )
         except RuntimeError as exc:
             self._on_application_completed("analysis", False, str(exc))
 
@@ -1411,17 +1491,23 @@ class ChronicleWindow(QMainWindow):
             or plan.request.mode is not active.mode
         ):
             return
-        self._analyzed_plan = plan
+        candidate_state = self._project_state
+        candidate_plan = plan
         if self._project_state is not None:
             try:
-                plan = apply_project_state(plan, self._project_state)
+                candidate_state = reconcile_project_sources(
+                    self._project_state, plan
+                )
+                candidate_plan = apply_project_state(plan, candidate_state)
             except ValueError as exc:
-                self._plan = None
                 QMessageBox.warning(self, "Проект", str(exc))
                 return
-        self._plan = plan
+        self._analyzed_plan = plan
+        self._project_state = candidate_state
+        self._plan = candidate_plan
         self._visual_preview_current = False
-        self._populate_preview(plan)
+        self._populate_preview(candidate_plan)
+        self._watch_analyzed_sources(self._analyzed_plan)
 
     def _ensure_project_state(self) -> ProjectState:
         if self._project_state is not None:
@@ -1471,8 +1557,8 @@ class ChronicleWindow(QMainWindow):
         self._visual_preview_current = False
         self.visual_preview_state_label.setText("Предпросмотр устарел")
         self.preview_button.setEnabled(True)
-        self.preview_state_label.setText("План изменён; обновите preview")
-        self.run_button.setEnabled(False)
+        self.preview_state_label.setText("План изменён; preview можно обновить отдельно")
+        self.run_button.setEnabled(not self._adapter.is_running)
         self._update_action_states()
 
     def _selected_item_ids(self) -> tuple[str, ...]:
@@ -1887,13 +1973,17 @@ class ChronicleWindow(QMainWindow):
             self.visual_preview_state_label.setText("Требуется предпросмотр")
             self.visual_preview_label.setText("Обновите кадр перед экспортом")
             self.preview_button.setEnabled(True)
+        self._update_plan_summary(plan)
+        self._update_action_states()
+
+    def _update_plan_summary(self, plan: ExportPlan) -> None:
+        request = plan.request
         self.plan_summary_label.setText(
             f"Режим: {request.mode.value} | Вход: {request.input_dir} | Выход: {request.output} | "
             f"принято: {len(plan.items)}, пропущено: {len(plan.inspection_failures)} | "
             f"CRF {request.crf}, preset {request.preset} | "
             "overwrite: только после отдельного подтверждения"
         )
-        self._update_action_states()
 
     @staticmethod
     def _thumbnail_placeholder(*, failed: bool = False) -> QPixmap:
@@ -1997,7 +2087,7 @@ class ChronicleWindow(QMainWindow):
                 self._start_visual_preview()
                 return
             self.run_button.setEnabled(
-                self._plan is not None and self._visual_preview_current
+                self._plan is not None
             )
             self.preview_button.setEnabled(
                 self._plan is not None
@@ -2019,7 +2109,7 @@ class ChronicleWindow(QMainWindow):
                 self.visual_preview_state_label.setText("Ошибка предпросмотра")
                 self.visual_preview_label.setText(message)
                 self.status_label.setText("Предпросмотр не обновлён")
-                self.run_button.setEnabled(False)
+                self.run_button.setEnabled(self._plan is not None)
                 self.progress.setValue(0)
             return
 
@@ -2036,7 +2126,7 @@ class ChronicleWindow(QMainWindow):
             self.progress.setRange(0, 1)
             self.progress.setValue(1 if success else 0)
             self.run_button.setEnabled(
-                self._plan is not None and self._visual_preview_current
+                self._plan is not None
             )
             return
 
@@ -2097,11 +2187,11 @@ class ChronicleWindow(QMainWindow):
             self._on_completed(False, str(exc))
 
     def _start_application_export(self) -> None:
-        if (
-            self._adapter.is_running
-            or self._plan is None
-            or not self._visual_preview_current
-        ):
+        if self._adapter.is_running:
+            return
+        # Re-check the watched source set immediately before export so a file
+        # change cannot race the passive QFileSystemWatcher notification.
+        if not self._check_source_freshness() or self._plan is None:
             return
         overwrite = False
         output = self._plan.request.output
@@ -2150,13 +2240,13 @@ class ChronicleWindow(QMainWindow):
         except RequestValidationError as exc:
             self.visual_preview_state_label.setText("Ошибка параметров подписи")
             self.visual_preview_label.setText(str(exc))
-            self.run_button.setEnabled(False)
+            self.run_button.setEnabled(self._plan is not None)
             return
         if self._plan.project_snapshot is None:
             self._plan = replace_plan_overlay(self._plan, overlay)
         elif overlay != self._plan.request.overlay:
             self.visual_preview_state_label.setText("Preset проекта изменился")
-            self.run_button.setEnabled(False)
+            self.run_button.setEnabled(self._plan is not None)
             return
         self._visual_preview_current = False
         self.visual_preview_state_label.setText("Загрузка…")
@@ -2239,7 +2329,6 @@ class ChronicleWindow(QMainWindow):
             self.run_button.setEnabled(
                 not running
                 and self._plan is not None
-                and self._visual_preview_current
             )
         if running:
             self.progress.setRange(0, 0)

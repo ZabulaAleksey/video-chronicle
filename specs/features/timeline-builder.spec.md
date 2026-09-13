@@ -102,7 +102,8 @@ GUI-001 для desktop-запуска на Windows.
 - **GUI-NAV-003 — Изменение порядка.** После анализа пользователь выбирает один
   или несколько accepted clips и перемещает их кнопками «Выше»/«Ниже» через
   EDIT-001. Новый порядок немедленно отображается; skipped rows не участвуют в
-  reorder; preview и export становятся stale до обновления preview.
+  reorder; preview становится stale, а export остаётся доступным при неизменных
+  source fingerprints.
 - **GUI-NAV-004 — Meaningful actions.** Кнопка действия disabled, если в
   текущем состоянии её нажатие не может вызвать допустимый переход: нет
   подходящего выбора, элемент уже на границе, отсутствует plan/project state
@@ -140,9 +141,10 @@ execution path, но сохраняет GUI-001 как временный диа
   плане, имя/путь, выбранная wall-clock дата, date provenance, timezone и признак
   конфликта. Для skipped item отображаются путь и диагностическая причина.
 - **GUI-APP-003 — Актуальный snapshot.** Preview содержит входную папку,
-  выходной MP4, число accepted/skipped, CRF, preset и overwrite policy. Изменение
-  любого поля формы инвалидирует preview; экспорт доступен только для актуального
-  непустого плана.
+  выходной MP4, число accepted/skipped, CRF, preset и overwrite policy. Валидное
+  изменение source-independent settings пересобирает immutable plan поверх
+  прежнего inspection; экспорт доступен для непустого плана с неизменными
+  source fingerprints.
 - **GUI-APP-004 — Единый application path.** GUI вызывает `plan_export` и
   `execute_plan` через worker boundary; widgets не выполняют FFprobe/FFmpeg и не
   повторяют date/order/publish policy. CLI продолжает использовать те же
@@ -150,6 +152,15 @@ execution path, но сохраняет GUI-001 как временный диа
 - **GUI-APP-005 — Lifecycle и safe cancel.** Повторный анализ/экспорт и закрытие
   окна блокируются, пока worker активен. Реализованные process-tree guarantees
   и раздельные stop actions определены в EXEC-001/002.
+- **GUI-APP-006 — Reuse анализа.** Изменение output, tools, CRF, preset, mode,
+  overlay или timeline edits не повторяет source inspection и не выключает
+  export, пока состав и fingerprints исходников не изменились. При новой папке,
+  добавленном, удалённом или изменённом файле export блокируется до анализа;
+  повторный анализ той же папки вызывает FFprobe только для новых/изменённых
+  источников и переиспользует результаты неизменившихся, включая неизменившиеся
+  skipped sources. План хранит fingerprint как accepted, так и skipped source;
+  отсутствие любого ожидаемого fingerprint считается stale (fail closed). Для
+  другой папки reuse не применяется.
 
 ### Критерии приёмки среза
 
@@ -157,12 +168,19 @@ execution path, но сохраняет GUI-001 как временный диа
   повреждённых и undated файлов дважды даёт одинаковый видимый порядок,
   provenance и причины пропуска, не изменяя источники.
 - **GUI-APP-AC-002 (GUI-APP-003, FR-005, NFR-003).** Unicode/space paths
-  сохраняются как `Path`, изменение формы инвалидирует plan, а overwrite не
-  включается без отдельного подтверждения непосредственно перед экспортом.
+  сохраняются как `Path`, source-independent form changes сохраняют inspected
+  items и доступность export, а overwrite не включается без отдельного
+  подтверждения непосредственно перед экспортом.
 - **GUI-APP-AC-003 (GUI-APP-004/005, FR-012, NFR-004).** Анализ и экспорт идут
   вне UI thread, повторный запуск и закрытие во время работы запрещены, worker и
   thread освобождаются после успеха и ошибки; legacy CLI characterization остаётся
   зелёной.
+- **GUI-APP-AC-004 (GUI-APP-006, FR-001/005).** Component/unit regression
+  подтверждает, что валидное изменение settings сохраняет export enabled, а
+  добавление/изменение source при следующем анализе вызывает inspection только
+  для дельты; изменённый ранее skipped source инспектируется снова, отсутствие
+  fingerprint блокирует reuse/export, а смена input folder не переиспользует
+  старые результаты.
 
 ### Не входит в срез
 
@@ -194,10 +212,11 @@ execution path, но сохраняет GUI-001 как временный диа
   Для видео используется начало media, для фото — исходный кадр. Loading, error,
   ready и disabled-overlay состояния различимы; временный preview удаляется после
   загрузки в GUI.
-- **OVERLAY-006 — Plan update.** Изменение только overlay controls не повторяет
-  FFprobe: GUI создаёт новый immutable request внутри текущего plan, инвалидирует
-  старый visual preview и требует обновить его перед export. Изменение input,
-  output, tools или encoding settings по-прежнему требует полного анализа.
+- **OVERLAY-006 — Plan update.** Изменение overlay controls не повторяет FFprobe:
+  GUI создаёт новый immutable request внутри текущего plan и помечает visual
+  preview устаревшим, но не блокирует export при неизменных исходниках. Preview
+  можно обновить отдельно; его актуальность не является export gate. Остальные
+  settings используют тот же GUI-APP-006 reuse/delta contract.
 
 ### Критерии приёмки среза
 
@@ -208,8 +227,8 @@ execution path, но сохраняет GUI-001 как временный диа
   representative media дают preview без shell; missing font и FFmpeg error
   отображаются, UI остаётся отзывчивым, временный PNG очищается.
 - **OVERLAY-AC-003 (OVERLAY-006, FR-005/007).** Preview и export используют
-  один и тот же config object; overlay-only change сохраняет accepted order, но
-  export недоступен до обновления visual preview.
+  один и тот же config object; overlay-only change сохраняет accepted order и
+  доступность export, а отдельное обновление preview показывает новый config.
 
 ### Не входит в срез
 
@@ -507,9 +526,11 @@ EXEC-001 без ослабления process-tree и publication guarantees.
 существующую политику, не добавляя новый metadata tool.
 
 - **DATE-001 — Приоритет metadata.** Сначала рассматриваются ключи FFprobe
-  `creation_time`, `com.apple.quicktime.creationdate`, `date_time_original`,
-  `datetimeoriginal`, `media_create_date`, `create_date`, `encoded_date`,
-  `date` именно в этом порядке, без учёта регистра ключа. Для одного ключа
+  `com.apple.quicktime.creationdate`, `date_time_original`, `datetimeoriginal`,
+  `media_create_date`, `create_date`, `encoded_date`, `date`, а затем общий
+  `creation_time` именно в этом порядке, без учёта регистра ключа. Такой порядок
+  предпочитает явно записанное camera/QuickTime wall-clock значение общему
+  FFprobe-normalized UTC timestamp. Для одного ключа
   первым выбирается первое валидное значение в порядке format tags, затем
   stream tags.
 - **DATE-002 — Filename fallback.** Валидная дата из имени используется только
@@ -537,6 +558,10 @@ EXEC-001 без ослабления process-tree и publication guarantees.
   наличие/отсутствие offset различимо в результате.
 - **DATE-AC-003 (DATE-006, FR-004, NFR-001).** Равные даты сортируются по
   стабильному filename tie-breaker; missing item получает явную ошибку.
+- **DATE-AC-004 (DATE-001/005, FR-002/003).** Если source одновременно содержит
+  общий `creation_time` в `Z` и `com.apple.quicktime.creationdate` с локальным
+  offset, overlay использует записанные wall-clock поля QuickTime-тега без
+  пересчёта в UTC; общий timestamp остаётся в conflicts/provenance.
 
 ### Не входит в срез
 

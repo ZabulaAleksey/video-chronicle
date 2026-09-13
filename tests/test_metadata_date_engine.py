@@ -31,12 +31,12 @@ def test_priority_is_case_insensitive_and_skips_invalid_occurrences() -> None:
     candidates = metadata_candidates(probe)
 
     assert [candidate.key for candidate in candidates] == [
-        "creation_time",
         "date_time_original",
+        "creation_time",
     ]
-    assert candidates[0].raw_key == "CREATION_TIME"
-    assert candidates[0].location == "stream:0"
-    assert candidates[0].timezone == "Z"
+    assert candidates[0].raw_key == "DATE_TIME_ORIGINAL"
+    assert candidates[0].location == "format"
+    assert candidates[1].timezone == "Z"
 
 
 @pytest.mark.parametrize(
@@ -61,6 +61,27 @@ def test_timezone_is_retained_without_wall_clock_conversion(
     assert candidate.timezone == expected_timezone
     assert candidate.raw_value == raw
     assert parse_datetime_text(raw) == candidate.wall_time
+
+
+def test_explicit_quicktime_wall_clock_wins_over_generic_utc_creation_time() -> None:
+    probe = {
+        "format": {
+            "tags": {
+                "creation_time": "2024-06-01T07:15:30Z",
+                "com.apple.quicktime.creationdate": "2024-06-01T10:15:30+03:00",
+            }
+        }
+    }
+
+    decision = decide_date(probe, Path("clip.mp4"))
+
+    assert decision is not None
+    assert decision.selected.source == "metadata:com.apple.quicktime.creationdate"
+    assert decision.selected.wall_time == datetime(2024, 6, 1, 10, 15, 30)
+    assert decision.selected.timezone == "+03:00"
+    assert decision.selected.raw_value == "2024-06-01T10:15:30+03:00"
+    assert decision.conflicts[0].source == "metadata:creation_time"
+    assert decision.conflicts[0].wall_time == datetime(2024, 6, 1, 7, 15, 30)
 
 
 def test_decision_retains_filename_and_timezone_conflicts() -> None:

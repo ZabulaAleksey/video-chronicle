@@ -1,24 +1,33 @@
 # Текущий план для AI
 
-## Maintenance slice — export после смены date/time format
+## Maintenance slice — export reuse, delta-analysis и metadata wall time
 
-- Статус: **validated locally; ожидает merge approval**
-- Ветка: `fix/export-after-overlay-change`
-- Scope: убрать неявное создание project snapshot при простом выборе item и
-  восстановить цепочку повторный analysis → representative preview → export.
+- Статус: **validated locally; independent review passed; ожидает merge approval**
+- Ветка: `fix/export-delta-and-metadata-wall-time`
+- Scope: сохранить export доступным после source-independent settings/edits,
+  инспектировать только source delta и предпочитать явно записанное metadata
+  wall time общему UTC `creation_time`.
 
 ## Acceptance evidence
 
-- PASS: regression воспроизводит первый analysis, выбор item с неизвестной
-  duration, смену date/time format и повторный analysis;
-- PASS: после automatic representative preview кнопка export активна;
-- PASS: реальные reorder/group/trim paths по-прежнему создают `ProjectState`;
-- focused GUI/editing gate: `48 passed, 1 skipped`;
-- полный локальный gate: `341 passed, 12 skipped`.
+- PASS: output/CRF/mode change пересобирает plan без inspection, оставляет
+  export enabled и запускает export с новыми settings без обновления preview;
+- PASS: repeat analysis той же папки переиспользует unchanged item и вызывает
+  inspection только для changed/added, включая изменившийся skipped source;
+  fingerprintless plan fail closed, другая папка получает полный analysis;
+- PASS: project layout сохраняет старые edits и добавляет новый full-source item;
+- PASS: changed known source обновляет metadata/duration в durable timeline, а
+  невалидный rebound не публикует частично reconciled state; изменившийся
+  timeline атомарно очищает stale `current_plan`/`jobs` и валидно round-trip'ится;
+- PASS: QuickTime wall-clock `10:15:30+03:00` выбирается вместо общего
+  `creation_time=07:15:30Z` без timezone conversion;
+- focused acceptance gate: `12 passed`;
+- focused subsystem gate: `126 passed, 7 skipped`;
+- полный локальный gate: `350 passed, 12 skipped`.
 
 ## NEXT
 
-После ручной проверки получить merge approval для fix-ветки. Независимо от
+Получить merge approval для fix-ветки. Независимо от
 этого release track остаётся заблокирован: нужен independent security review
 без high findings перед этапом 16; merge, push и publication approval-gated.
 

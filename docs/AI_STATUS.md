@@ -1,13 +1,38 @@
 # Состояние проекта для AI
 
+## Export reuse, delta-analysis и metadata wall time — 2026-09-14
+
+- Валидные изменения output/tools/CRF/preset/mode/overlay и timeline edits
+  пересобирают immutable plan без повторного FFprobe и не блокируют export при
+  неизменном source set/fingerprints; visual preview остаётся независимым.
+- `QFileSystemWatcher` отслеживает input folder и до 4096 accepted/skipped
+  source files, а export boundary повторно проверяет source set/fingerprints.
+  Missing fingerprint считается stale. После изменения источников repeat
+  analysis переиспользует unchanged accepted/skipped items и инспектирует
+  только new/changed; другая папка не использует reuse.
+- Form signals выполняют pure settings rebind без filesystem scan и без
+  перестроения timeline widgets. Delta reuse использует stat identity, а
+  полный SHA-256 остаётся обязательным на FFmpeg boundary.
+- Delta-analysis добавляет новые принятые sources в конец project layout как
+  full-source entries, не меняя порядок и edits старых IDs, и обновляет
+  inspection-owned metadata/duration известных items. Reconcile применяется
+  атомарно: ошибка layout/trim не публикует частичный state, а фактическое
+  изменение timeline очищает stale `current_plan`/`jobs` прежней revision.
+- DATE-001/v2 предпочитает explicit camera/QuickTime wall-clock tags общему
+  FFprobe-normalized UTC `creation_time`; raw value, offset и conflict остаются
+  доступны без timezone conversion.
+- Acceptance gate: `12 passed`; focused subsystem gate:
+  `126 passed, 7 skipped`; полный локальный gate:
+  `350 passed, 12 skipped`.
+
 ## GUI export после смены date/time format — 2026-09-13
 
 - Выбор timeline item больше не создаёт persistent `ProjectState` только ради
   вычисления доступности editor actions; state сохраняется после реальной edit
   mutation.
 - Для media с неизвестной длительностью смена date/time format больше не
-  оставляет GUI в невалидном editing snapshot: повторный analysis доходит до
-  automatic representative preview и снова включает export после success.
+  оставляет GUI в невалидном editing snapshot. Текущий контракт выше дополнительно
+  убрал повторный analysis и representative-preview gate для такого изменения.
 - Focused GUI/editing gate: `48 passed, 1 skipped`; полный локальный gate:
   `341 passed, 12 skipped`.
 
@@ -61,8 +86,8 @@
   `329 passed, 12 skipped`. Offscreen render подтвердил светлую поверхность и
   отсутствие clipping у четырёх карточек на размере 1060×860.
 - Исправлен post-analysis lifecycle: после thumbnails Chronicle автоматически
-  строит актуальный representative preview и включает «Экспортировать» при
-  успехе; ошибка preview по-прежнему блокирует export и допускает ручной retry.
+  строит representative preview; ошибка preview видима и допускает ручной retry,
+  но не блокирует export уже проанализированных неизменных sources.
 
 ## Unified light GUI surface — 2026-09-13
 
@@ -79,7 +104,8 @@
   в отдельной вкладке «План хронологии».
 - Selected accepted clips перемещаются «Выше»/«Ниже» через существующий
   immutable EDIT-001 layout. Selection сохраняется после move, source не
-  изменяется, preview/export становятся stale.
+  изменяется; по текущему контракту preview становится stale, а export остаётся
+  доступным.
 - Move/group/ungroup/trim/preset/project-save actions disabled, когда текущий
   plan/selection/boundary не допускает meaningful transition.
 - Focused navigation/editing gate: `53 passed, 1 skipped`; полный локальный

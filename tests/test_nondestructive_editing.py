@@ -12,12 +12,15 @@ from pathlib import Path
 import pytest
 import video_chronicle.repository as repository_module
 
-from video_chronicle.application import apply_project_state
+from video_chronicle.application import apply_project_state, reconcile_project_sources
 from video_chronicle.cache import build_clip_identity, cache_key
 from video_chronicle.domain import ExportMode, ExportPlan, ExportRequest, MediaItem, SourceFingerprint
 from video_chronicle.overlay import OverlayConfig, resolve_overlay_font
 from video_chronicle.pipeline import make_video_filter, normalize_item, render_overlay_preview, source_duration_us
 from video_chronicle.project import (
+    ExportJob,
+    ExportPlanSnapshot,
+    JobState,
     PHOTO_DURATION_US,
     ProjectState,
     RenderPreset,
@@ -324,7 +327,149 @@ def test_real_ffmpeg_trim_duration_within_one_target_frame_and_source_immutable(
     assert (source.read_bytes(), source.stat().st_mtime_ns) == before
 
 
-def test_gui_editor_mutation_invalidates_preview_and_export(qapp, tmp_path: Path) -> None:
+def test_delta_analysis_appends_new_source_without_losing_existing_layout(
+    tmp_path: Path,
+) -> None:
+    state = _state(tmp_path)
+    assert state.layout is not None
+    moved = state.move_items((state.timeline.item_ids[0],), None)
+    existing_order = tuple(entry.item_id for entry in moved.layout.entries)
+    new_source = (tmp_path / "input" / "new.mp4").resolve()
+    new_item = MediaItem(
+        new_source,
+        datetime(2024, 1, 3),
+        False,
+        True,
+        "metadata:creation_time",
+        source_duration_us=1_000_000,
+    )
+    analyzed = ExportPlan(
+        _request(tmp_path),
+        tuple(
+            MediaItem(
+                item.source_path,
+                item.taken_at,
+                item.media_kind == "photo",
+                False,
+                item.date_source,
+                source_duration_us=item.source_duration_us,
+            )
+            for item in moved.timeline.items
+        )
+        + (new_item,),
+    )
+
+    reconciled = reconcile_project_sources(moved, analyzed)
+
+    assert tuple(entry.item_id for entry in reconciled.layout.entries[:-1]) == existing_order
+    assert reconciled.layout.entries[-1].item_id == stable_item_id(new_source)
+    assert reconciled.revision == moved.revision + 1
+
+
+def test_delta_analysis_rebinds_known_timeline_metadata_and_duration(
+    tmp_path: Path,
+) -> None:
+    state = _state(tmp_path)
+    original = state.timeline.items[0]
+    inspected = MediaItem(
+        original.source_path,
+        datetime(2025, 6, 7, 8, 9, 10),
+        False,
+        True,
+        "metadata:com.apple.quicktime.creationdate",
+        source_duration_us=7_000_000,
+    )
+
+    reconciled = reconcile_project_sources(
+        state, ExportPlan(_request(tmp_path), (inspected,))
+    )
+    rebound = next(
+        item
+        for item in reconciled.timeline.items
+        if item.stable_id == original.stable_id
+    )
+
+    assert rebound.taken_at == datetime(2025, 6, 7, 8, 9, 10)
+    assert rebound.date_source == "metadata:com.apple.quicktime.creationdate"
+    assert rebound.media_kind == "video"
+    assert rebound.source_duration_us == 7_000_000
+    assert reconciled.layout == state.layout
+    assert reconciled.revision == state.revision + 1
+
+
+def test_delta_reconcile_atomically_clears_stale_plan_and_jobs_and_round_trips(
+    tmp_path: Path,
+) -> None:
+    state = _state(tmp_path)
+    first_id = state.timeline.item_ids[0]
+    state = state.set_trim(first_id, TrimRange(1_000_000, 3_000_000))
+    snapshot = ExportPlanSnapshot.create(
+        state.timeline,
+        _request(tmp_path).output,
+        crf=20,
+        preset="fast",
+        overwrite=False,
+    )
+    succeeded = ExportJob("job-before-delta", snapshot.plan_id).transition(
+        JobState.RUNNING, snapshot
+    ).transition(
+        JobState.SUCCEEDED,
+        snapshot,
+        final_output=snapshot.output_path,
+    )
+    state = replace(state, current_plan=snapshot, jobs=(succeeded,))
+    assert state.layout is not None
+    old_entries = state.layout.entries
+
+    changed_items = []
+    for item in state.timeline.items:
+        taken_at = datetime(2025, 1, 1) if item.stable_id == first_id else item.taken_at
+        duration = 7_000_000 if item.stable_id == first_id else item.source_duration_us
+        changed_items.append(
+            MediaItem(
+                item.source_path,
+                taken_at,
+                item.media_kind == "photo",
+                False,
+                "metadata:com.apple.quicktime.creationdate"
+                if item.stable_id == first_id
+                else item.date_source,
+                source_duration_us=duration,
+            )
+        )
+    added_path = (tmp_path / "added.mp4").absolute()
+    added_path.write_bytes(b"added")
+    changed_items.append(
+        MediaItem(
+            added_path,
+            datetime(2024, 1, 4),
+            False,
+            True,
+            "filename",
+            source_duration_us=1_000_000,
+        )
+    )
+
+    reconciled = reconcile_project_sources(
+        state, ExportPlan(_request(tmp_path), tuple(changed_items))
+    )
+
+    assert reconciled.current_plan is None
+    assert reconciled.jobs == ()
+    assert reconciled.layout is not None
+    assert reconciled.layout.entries[:-1] == old_entries
+    assert reconciled.layout.entries[0].trim == TrimRange(1_000_000, 3_000_000)
+    assert reconciled.layout.entries[-1].item_id == stable_item_id(added_path)
+    rebound = next(item for item in reconciled.timeline.items if item.stable_id == first_id)
+    assert rebound.taken_at == datetime(2025, 1, 1)
+    assert rebound.source_duration_us == 7_000_000
+
+    repository = JsonProjectRepository(tmp_path / "delta-projects")
+    saved = repository.save(reconciled, expected_revision=0)
+    assert repository.get(saved.project_id) == saved
+
+
+def test_gui_editor_mutation_invalidates_preview_but_keeps_export(qapp, tmp_path: Path) -> None:
     state = _state(tmp_path)
     items = tuple(MediaItem(item.source_path, item.taken_at, item.media_kind == "photo", False, item.date_source, source_duration_us=item.source_duration_us) for item in state.timeline.items)
     plan = ExportPlan(_request(tmp_path), items)
@@ -343,7 +488,7 @@ def test_gui_editor_mutation_invalidates_preview_and_export(qapp, tmp_path: Path
     assert window._project_state is not None
     assert window._plan is not None and window._plan.plan_id is not None
     assert window._visual_preview_current is False
-    assert window.run_button.isEnabled() is False
+    assert window.run_button.isEnabled() is True
     assert "изменён" in window.preview_state_label.text().casefold()
     window.close()
 

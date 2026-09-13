@@ -150,6 +150,199 @@ def test_plan_and_execution_use_injected_workspace_and_process_ports(
     ]
 
 
+def test_reanalysis_inspects_only_new_or_changed_sources(tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    from video_chronicle.application import plan_export, reconfigure_analyzed_plan
+    from video_chronicle.domain import ExportRequest, MediaItem
+    from video_chronicle.overlay import OverlayConfig
+    from video_chronicle.ports import PipelinePorts
+
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    first = input_dir / "20240101_010101.mp4"
+    changed = input_dir / "20240102_020202.mp4"
+    first.write_bytes(b"first")
+    changed.write_bytes(b"before")
+    request = ExportRequest(
+        input_dir=input_dir,
+        output=tmp_path / "result.mp4",
+        error_log=tmp_path / "errors.log",
+        ffmpeg="ffmpeg",
+        ffprobe="ffprobe",
+        crf=20,
+        preset="medium",
+        overwrite=False,
+        keep_work=False,
+        overlay=OverlayConfig(enabled=False),
+    )
+    inspected: list[Path] = []
+
+    def inspect(path, ffprobe, probe, command_runner):
+        inspected.append(path)
+        stamp = datetime.strptime(path.stem, "%Y%m%d_%H%M%S")
+        return MediaItem(path, stamp, False, True, "filename")
+
+    ports = PipelinePorts(
+        command_runner=lambda *args, **kwargs: None,
+        probe_media=lambda *args, **kwargs: {},
+        inspect_item=inspect,
+        normalize_item=lambda *args, **kwargs: None,
+        concatenate=lambda *args, **kwargs: None,
+        publish_output=lambda *args, **kwargs: None,
+        collect_source_paths=lambda directory, *args: sorted(directory.glob("*.mp4")),
+        create_workspace=lambda parent: parent,
+        cleanup_workspace=lambda path: None,
+        validate_source=lambda input_dir, source: None,
+    )
+
+    original = plan_export(request, ports)
+    unchanged_item = original.items[0]
+    inspected.clear()
+    changed.write_bytes(b"changed-content")
+    added = input_dir / "20240103_030303.mp4"
+    added.write_bytes(b"added")
+
+    updated = plan_export(
+        replace(request, crf=18),
+        ports,
+        previous_plan=original,
+    )
+
+    assert inspected == [changed, added]
+    assert updated.request.crf == 18
+    assert updated.items[0] is unchanged_item
+    assert tuple(item.path for item in updated.items) == (first, changed, added)
+
+    late = input_dir / "20240105_050505.mp4"
+    late.write_bytes(b"late")
+    assert reconfigure_analyzed_plan(request, updated, ports) is None
+    late.unlink()
+
+    other_dir = tmp_path / "other"
+    other_dir.mkdir()
+    other = other_dir / "20240104_040404.mp4"
+    other.write_bytes(b"other")
+    inspected.clear()
+    moved_request = replace(request, input_dir=other_dir)
+    moved = plan_export(moved_request, ports, previous_plan=updated)
+
+    assert inspected == [other]
+    assert tuple(item.path for item in moved.items) == (other,)
+
+
+def test_failed_source_fingerprint_is_checked_and_changed_failure_is_retried(
+    tmp_path: Path,
+) -> None:
+    from video_chronicle.application import plan_export, reconfigure_analyzed_plan
+    from video_chronicle.domain import ExportRequest, MediaItem
+    from video_chronicle.overlay import OverlayConfig
+    from video_chronicle.ports import PipelinePorts
+
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    accepted = input_dir / "20240101_010101.mp4"
+    failed = input_dir / "20240102_020202.mp4"
+    accepted.write_bytes(b"accepted")
+    failed.write_bytes(b"bad")
+    request = ExportRequest(
+        input_dir,
+        tmp_path / "result.mp4",
+        tmp_path / "errors.log",
+        "ffmpeg",
+        "ffprobe",
+        20,
+        "medium",
+        False,
+        False,
+        OverlayConfig(enabled=False),
+    )
+    inspected: list[Path] = []
+
+    def inspect(path, ffprobe, probe, command_runner):
+        inspected.append(path)
+        if path.read_bytes() == b"bad":
+            raise RuntimeError("bad media")
+        return MediaItem(
+            path,
+            datetime.strptime(path.stem, "%Y%m%d_%H%M%S"),
+            False,
+            True,
+            "filename",
+        )
+
+    ports = PipelinePorts(
+        command_runner=lambda *args, **kwargs: None,
+        probe_media=lambda *args, **kwargs: {},
+        inspect_item=inspect,
+        normalize_item=lambda *args, **kwargs: None,
+        concatenate=lambda *args, **kwargs: None,
+        publish_output=lambda *args, **kwargs: None,
+        collect_source_paths=lambda directory, *args: sorted(directory.glob("*.mp4")),
+        create_workspace=lambda parent: parent,
+        cleanup_workspace=lambda path: None,
+        validate_source=lambda input_dir, source: None,
+    )
+
+    original = plan_export(request, ports)
+    assert inspected == [accepted, failed]
+    assert original.inspection_failures == ((failed, "bad media"),)
+    assert original.inspection_failure_fingerprints[0][0] == failed
+    assert reconfigure_analyzed_plan(request, original, ports) is not None
+
+    failed.write_bytes(b"now-good")
+    assert reconfigure_analyzed_plan(request, original, ports) is None
+    inspected.clear()
+    updated = plan_export(request, ports, previous_plan=original)
+
+    assert inspected == [failed]
+    assert updated.items[0] is original.items[0]
+    assert tuple(item.path for item in updated.items) == (accepted, failed)
+    assert updated.inspection_failures == ()
+
+
+def test_fingerprintless_plan_is_never_considered_fresh(tmp_path: Path) -> None:
+    from video_chronicle.application import reconfigure_analyzed_plan
+    from video_chronicle.domain import ExportPlan, ExportRequest, MediaItem
+    from video_chronicle.overlay import OverlayConfig
+    from video_chronicle.ports import PipelinePorts
+
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    source = input_dir / "20240101_010101.mp4"
+    source.write_bytes(b"source")
+    request = ExportRequest(
+        input_dir,
+        tmp_path / "result.mp4",
+        tmp_path / "errors.log",
+        "ffmpeg",
+        "ffprobe",
+        20,
+        "medium",
+        False,
+        False,
+        OverlayConfig(enabled=False),
+    )
+    plan = ExportPlan(
+        request,
+        (MediaItem(source, datetime(2024, 1, 1), False, True, "filename"),),
+    )
+    ports = PipelinePorts(
+        command_runner=lambda *args, **kwargs: None,
+        probe_media=lambda *args, **kwargs: {},
+        inspect_item=lambda *args, **kwargs: None,
+        normalize_item=lambda *args, **kwargs: None,
+        concatenate=lambda *args, **kwargs: None,
+        publish_output=lambda *args, **kwargs: None,
+        collect_source_paths=lambda *args: [source],
+        create_workspace=lambda parent: parent,
+        cleanup_workspace=lambda path: None,
+        validate_source=lambda *args: None,
+    )
+
+    assert reconfigure_analyzed_plan(request, plan, ports) is None
+
+
 def test_error_log_cannot_alias_output_or_source(tmp_path: Path) -> None:
     from video_chronicle import pipeline
 

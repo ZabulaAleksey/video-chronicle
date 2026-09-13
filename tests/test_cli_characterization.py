@@ -172,7 +172,7 @@ def test_datetime_from_filename_characterizes_patterns(
         assert result == (expected, "filename")
 
 
-def test_metadata_priority_follows_date_tags_not_probe_order() -> None:
+def test_recorded_wall_clock_tags_precede_generic_creation_time() -> None:
     probe = {
         "format": {
             "tags": {
@@ -189,8 +189,8 @@ def test_metadata_priority_follows_date_tags_not_probe_order() -> None:
     }
 
     assert join_media.datetime_from_metadata(probe) == (
-        datetime(2025, 6, 7, 8, 9, 10),
-        "metadata:creation_time",
+        datetime(2024, 5, 6, 7, 8, 9),
+        "metadata:create_date",
     )
 
 

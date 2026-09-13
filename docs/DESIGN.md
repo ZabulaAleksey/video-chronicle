@@ -54,11 +54,20 @@ services и сохраняется прямой CLI-интерфейс.
 - tab/scroll/content/log surfaces явно окрашены в белый и не наследуют тёмный
   platform background; normal/disabled buttons используют прозрачную рамку,
   отличную от card boundary, а keyboard focus получает бирюзовую рамку;
-- изменение input/output/mode/encoding инвалидирует план, а overlay-only
-  изменение сохраняет analysis и инвалидирует только representative preview;
-  повторный успешный анализ или обновление preview снова разрешает экспорт;
-- переключение mode инвалидирует plan, но не меняет сохранённый пользовательский
-  checkbox Chronicle overlay; в Join overlay controls недоступны;
+- изменение output/tools/mode/encoding/overlay и timeline edits сохраняет
+  analysis и доступность export при неизменных источниках; overlay/timeline
+  изменение инвалидирует только независимый representative preview;
+- новая папка либо добавленный/удалённый/изменённый source блокирует export до
+  delta-analysis; watcher обновляет состояние, а export boundary повторно
+  проверяет accepted/skipped source set и fingerprints; отсутствие fingerprint
+  считается stale;
+- form signals выполняют только лёгкий settings rebind и обновление summary/
+  status, сохраняя существующие timeline widgets; filesystem scan запускается
+  только debounced watcher callback и непосредственно перед export. Эти две
+  safety-проверки выполняют bounded O(N) stat validation по source set;
+- переключение mode пересобирает plan без FFprobe и не меняет сохранённый
+  пользовательский checkbox Chronicle overlay; в Join overlay controls
+  недоступны;
 - существующий файл требует модального подтверждения непосредственно перед
   экспортом;
 - элементы настройки блокируются на время процесса;

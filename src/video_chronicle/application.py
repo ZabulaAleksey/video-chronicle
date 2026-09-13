@@ -13,6 +13,9 @@ from .project import (
     EditingClipSnapshot,
     EditingExportSnapshot,
     ProjectState,
+    Timeline,
+    TimelineLayout,
+    TimelineLayoutEntry,
     TimelineItem,
 )
 from .execution import (
@@ -57,6 +60,7 @@ def plan_export(
     *,
     progress: Callable[[ProgressEvent], None] | None = None,
     cancellation: OperationCancellation | None = None,
+    previous_plan: ExportPlan | None = None,
 ) -> ExportPlan:
     """Inspect sources into an immutable accepted timeline before encoding."""
 
@@ -70,6 +74,7 @@ def plan_export(
             logger,
             progress=progress,
             cancellation=cancellation,
+            previous_plan=previous_plan,
         )
         if cancellation is not None and not cancellation.complete():
             cancellation.checkpoint()
@@ -83,6 +88,7 @@ def _plan_export_impl(
     *,
     progress: Callable[[ProgressEvent], None] | None,
     cancellation: OperationCancellation | None,
+    previous_plan: ExportPlan | None,
 ) -> ExportPlan:
 
     adapters = ports or default_ports()
@@ -105,35 +111,63 @@ def _plan_export_impl(
         )
     items: list[MediaItem] = []
     failures: list[tuple[Path, str]] = []
+    failure_fingerprints: list[tuple[Path, SourceFingerprint]] = []
+    reusable = _reusable_items(request, previous_plan)
+    reusable_failures = _reusable_failures(request, previous_plan)
+    reused_count = 0
     for index, path in enumerate(source_paths, start=1):
         if cancellation is not None:
             cancellation.checkpoint()
         outcome = "completed"
+        fingerprint_before: SourceFingerprint | None = None
         try:
             adapters.validate_source(request.input_dir, path)
-            fingerprint_before = SourceFingerprint.capture(path)
-            inspected = adapters.inspect_item(
+            cached = reusable.get(path.absolute())
+            cached_failure = reusable_failures.get(path.absolute())
+            if cached is not None and source_matches_fingerprint(
+                path, cached.source_fingerprint
+            ):
+                items.append(cached)
+                reused_count += 1
+            elif cached_failure is not None and source_matches_fingerprint(
+                path, cached_failure[1]
+            ):
+                failures.append((path, cached_failure[0]))
+                failure_fingerprints.append((path, cached_failure[1]))
+                outcome = "skipped"
+                reused_count += 1
+            else:
+                fingerprint_before = SourceFingerprint.capture(path)
+                inspected = adapters.inspect_item(
                     path,
                     request.ffprobe,
                     adapters.probe_media,
                     adapters.command_runner,
                 )
-            fingerprint_after = SourceFingerprint.capture(path)
-            if fingerprint_after != fingerprint_before:
-                raise SourceChangedError(
-                    f"source identity changed during inspection: {path}"
+                fingerprint_after = SourceFingerprint.capture(path)
+                if fingerprint_after != fingerprint_before:
+                    raise SourceChangedError(
+                        f"source identity changed during inspection: {path}"
+                    )
+                items.append(
+                    replace(
+                        inspected,
+                        source_fingerprint=fingerprint_after,
+                    )
                 )
-            items.append(
-                replace(
-                    inspected,
-                    source_fingerprint=fingerprint_after,
-                )
-            )
         except (ExportCancelled, ProcessSafetyError):
             raise
         except Exception as exc:
             outcome = "skipped"
             failures.append((path, str(exc)))
+            if fingerprint_before is not None:
+                try:
+                    fingerprint_after = SourceFingerprint.capture(path)
+                except OSError:
+                    pass
+                else:
+                    if fingerprint_after == fingerprint_before:
+                        failure_fingerprints.append((path, fingerprint_after))
             if logger is not None:
                 logger.warning("SKIPPED during inspection | %s | %s", path, exc)
         if progress is not None:
@@ -157,6 +191,10 @@ def _plan_export_impl(
             f"none of the {len(source_paths)} files could be inspected"
         )
     if logger is not None:
+        if reused_count:
+            logger.info(
+                "Reused inspection for %d unchanged source files.", reused_count
+            )
         logger.info(
             "Ready: %d files, from %s to %s.",
             len(items),
@@ -167,7 +205,115 @@ def _plan_export_impl(
         request=request,
         items=tuple(items),
         inspection_failures=tuple(failures),
+        inspection_failure_fingerprints=tuple(failure_fingerprints),
     )
+
+
+def _reusable_items(
+    request: ExportRequest, previous_plan: ExportPlan | None
+) -> dict[Path, MediaItem]:
+    if previous_plan is None or previous_plan.request.input_dir != request.input_dir:
+        return {}
+    return {item.path.absolute(): item for item in previous_plan.items}
+
+
+def _reusable_failures(
+    request: ExportRequest, previous_plan: ExportPlan | None
+) -> dict[Path, tuple[str, SourceFingerprint]]:
+    if previous_plan is None or previous_plan.request.input_dir != request.input_dir:
+        return {}
+    reasons = {path.absolute(): reason for path, reason in previous_plan.inspection_failures}
+    return {
+        path.absolute(): (reasons[path.absolute()], fingerprint)
+        for path, fingerprint in previous_plan.inspection_failure_fingerprints
+        if path.absolute() in reasons
+    }
+
+
+def source_matches_fingerprint(
+    path: Path, fingerprint: SourceFingerprint | None
+) -> bool:
+    """Check the cheap filesystem identity used to select delta inspection.
+
+    Full content verification remains mandatory at every FFmpeg/FFprobe boundary;
+    this stat-only check merely avoids re-running FFprobe for unchanged sources.
+    """
+
+    if fingerprint is None:
+        return False
+    try:
+        current = path.stat()
+    except OSError:
+        return False
+    return (
+        current.st_dev,
+        current.st_ino,
+        current.st_size,
+        current.st_mtime_ns,
+        current.st_ctime_ns,
+    ) == (
+        fingerprint.device,
+        fingerprint.inode,
+        fingerprint.size,
+        fingerprint.mtime_ns,
+        fingerprint.ctime_ns,
+    )
+
+
+def reconfigure_analyzed_plan(
+    request: ExportRequest,
+    analyzed_plan: ExportPlan,
+    ports: PipelinePorts | None = None,
+) -> ExportPlan | None:
+    """Rebind source-independent settings when the analyzed source set is fresh."""
+
+    if request.input_dir != analyzed_plan.request.input_dir:
+        return None
+    adapters = ports or default_ports()
+    collector = getattr(adapters, "collect_source_paths", None)
+    validator = getattr(adapters, "validate_source", None)
+    if not callable(collector) or any(
+        item.source_fingerprint is None for item in analyzed_plan.items
+    ):
+        return None
+    try:
+        current_paths = tuple(
+            collector(request.input_dir, request.output, request.error_log)
+        )
+    except OSError:
+        return None
+    analyzed_paths = tuple(item.path for item in analyzed_plan.items) + tuple(
+        path for path, _reason in analyzed_plan.inspection_failures
+    )
+    if set(current_paths) != set(analyzed_paths):
+        return None
+    for item in analyzed_plan.items:
+        try:
+            if callable(validator):
+                validator(request.input_dir, item.path)
+        except Exception:
+            return None
+        if not source_matches_fingerprint(item.path, item.source_fingerprint):
+            return None
+    failed_fingerprints = {
+        path.absolute(): fingerprint
+        for path, fingerprint in analyzed_plan.inspection_failure_fingerprints
+    }
+    for path, _reason in analyzed_plan.inspection_failures:
+        fingerprint = failed_fingerprints.get(path.absolute())
+        if fingerprint is None or not source_matches_fingerprint(path, fingerprint):
+            return None
+    return replace(analyzed_plan, request=request, project_snapshot=None)
+
+
+def rebind_analyzed_plan(
+    request: ExportRequest, analyzed_plan: ExportPlan
+) -> ExportPlan | None:
+    """Purely replace settings without scanning or inspecting source files."""
+
+    if request.input_dir != analyzed_plan.request.input_dir:
+        return None
+    return replace(analyzed_plan, request=request, project_snapshot=None)
 
 
 def execute_export(
@@ -263,6 +409,46 @@ def apply_project_state(analyzed_plan: ExportPlan, project_state: ProjectState) 
         overwrite=request.overwrite,
     )
     return ExportPlan(request, tuple(effective), tuple(failures), snapshot)
+
+
+def reconcile_project_sources(
+    project_state: ProjectState, analyzed_plan: ExportPlan
+) -> ProjectState:
+    """Add delta-analysis discoveries without disturbing existing edit order."""
+
+    if project_state.layout is None:
+        raise ValueError("project layout is missing")
+    known_ids = set(project_state.timeline.item_ids)
+    inspected_items = tuple(
+        TimelineItem.from_media_item(item) for item in analyzed_plan.items
+    )
+    inspected_by_id = {item.stable_id: item for item in inspected_items}
+    new_items = tuple(
+        item for item in inspected_items if item.stable_id not in known_ids
+    )
+    rebound_items = tuple(
+        inspected_by_id.get(item.stable_id, item)
+        for item in project_state.timeline.items
+    )
+    timeline = Timeline.build(rebound_items + new_items)
+    if timeline == project_state.timeline:
+        return project_state
+    new_ids = tuple(
+        item.stable_id for item in timeline.items if item.stable_id not in known_ids
+    )
+    layout = TimelineLayout(
+        project_state.layout.entries
+        + tuple(TimelineLayoutEntry(item_id) for item_id in new_ids),
+        project_state.layout.groups,
+    )
+    return replace(
+        project_state,
+        timeline=timeline,
+        layout=layout,
+        revision=project_state.revision + 1,
+        current_plan=None,
+        jobs=(),
+    )
 
 
 def execute_plan(

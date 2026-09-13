@@ -10,10 +10,9 @@ from typing import Any, Iterable, Iterator
 from .domain import DateCandidate, DateDecision
 
 
-POLICY_VERSION = "DATE-001/v1"
+POLICY_VERSION = "DATE-001/v2"
 
 DATE_TAGS = (
-    "creation_time",
     "com.apple.quicktime.creationdate",
     "date_time_original",
     "datetimeoriginal",
@@ -21,6 +20,7 @@ DATE_TAGS = (
     "create_date",
     "encoded_date",
     "date",
+    "creation_time",
 )
 
 FILENAME_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (

@@ -324,3 +324,17 @@
   качество либо ускорение на конкретной машине.
 - **Последствие:** отсутствие реального benchmark безопасно сохраняет текущий
   byte-compatible software/cache path.
+
+## 2026-09-14 — Source analysis отделён от preview и настроек export
+
+- **Решение:** валидные source-independent settings и timeline edits
+  пересобирают immutable plan без FFprobe и не блокируют export; source watcher
+  и строгая проверка перед export инвалидируют plan при изменении accepted или
+  skipped source, а повторный analysis инспектирует только дельту.
+- **Причина:** пользовательские настройки не меняют результаты inspection, а
+  representative preview не должен быть обязательным gate для уже проверенных
+  источников.
+- **Последствие:** план хранит fingerprints accepted/skipped paths и fail closed
+  при их отсутствии; stat identity выбирает кандидатов для reuse, полный
+  SHA-256 остаётся обязательной защитой на FFmpeg boundary. DATE-001/v2
+  предпочитает explicit camera/QuickTime wall-clock общему UTC `creation_time`.

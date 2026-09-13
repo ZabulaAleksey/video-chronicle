@@ -88,28 +88,42 @@
    temporary PNG для accepted items через тот же trusted FFmpeg preview port;
    GUI синхронно копирует их в `QPixmap`, после чего adapter удаляет PNG.
    В Chronicle успешный batch запускает автоматический representative preview;
-   только его успех включает export. Join не требует этого шага.
+   preview не является export gate после успешного source analysis. Join не
+   требует representative preview.
    Presentation layer вычисляет доступность move actions через provisional
    EDIT-001 state без сохранения project snapshot от одного выбора item;
-   постоянный state появляется только после edit mutation. Изменение формы
-   инвалидирует plan, а overwrite подтверждается непосредственно перед запуском.
-4. Изменение только `OverlayConfig` сохраняет уже проанализированные items, но
-   инвалидирует визуальный preview. Первый принятый item рендерится через тот же
-   filter adapter в 640×360 PNG до разблокировки экспорта.
+   постоянный state появляется только после edit mutation. Валидные изменения
+   output/tools/mode/encoding/overlay пересобирают request без FFprobe и
+   сохраняют export доступным, пока watcher и проверка непосредственно перед
+   export подтверждают прежний source set/fingerprints. Изменение source set
+   блокирует export; следующий `plan_export(previous_plan=...)` инспектирует
+   только новые/изменённые файлы той же папки. Accepted и skipped sources имеют
+   отдельные fingerprints; missing fingerprint инвалидирует план. Delta reuse
+   использует быстрый stat identity (`device/inode/size/mtime/ctime`), а полный
+   SHA-256 остаётся fail-closed проверкой непосредственно на FFmpeg boundary.
+4. Изменение `OverlayConfig` сохраняет уже проанализированные items и
+   инвалидирует только визуальный preview. Первый принятый item можно повторно
+   отрендерить через тот же filter adapter в 640×360 PNG независимо от export.
 5. При открытом/созданном project GUI связывает текущий analysis с immutable
    layout: применяет reorder, resolved trim/groups и active preset, создавая
    `plan-v2`. Кнопки «Выше»/«Ниже» и internal card drop вызывают только
    `ProjectState.move_items`; второй mutable order в widgets отсутствует.
-   Невалидный partial-group drop восстанавливает canonical order. Любой edit
-   инвалидирует representative preview и export.
+   Невалидный partial-group drop восстанавливает canonical order. Edit
+   инвалидирует representative preview, но не export; delta-analysis добавляет
+   новые sources как full-source entries, не меняя старые edits, и обновляет
+   inspection-owned metadata/duration известных items. Reconcile и применение
+   layout публикуются в GUI атомарно только после успеха обоих шагов; изменённый
+   durable timeline получает новую revision и очищает относящиеся к прежней
+   revision `current_plan`/`jobs`.
 6. GUI передаёт тот же plan в `execute_plan` через отдельный worker; execution
    context транслирует typed progress и принимает остановку export только до
    publication commit. CLI создаёт тот же `ExportRequest` и вызывает тот же
    application path.
 7. Source adapter находит поддерживаемые медиафайлы во входном каталоге.
 8. FFprobe adapter возвращает метаданные, kind и effective duration `0:v:0`.
-9. DATE-001 engine собирает кандидатов, выбирает дату из метаданных или имени
-   файла и сохраняет provenance/conflicts без timezone conversion.
+9. DATE-001 engine собирает кандидатов, предпочитает explicit camera/QuickTime
+   wall-clock tags общему FFprobe-normalized `creation_time`, затем filename,
+   и сохраняет provenance/conflicts без timezone conversion.
 10. Семантический `OverlayConfig` форматирует wall-clock значение в одном
    Qt/FFmpeg-independent formatter. Preview и export получают готовый текст и
    typography в одном `drawtext` adapter. System font family разрешается в

@@ -210,7 +210,35 @@ class ApplicationServiceAdapter(QObject):
             and _declares_keyword(self._plan_service, "cancellation")
         )
 
-    def start_analysis(self, request: GuiRunRequest) -> None:
+    def reconfigure_plan(
+        self, request: GuiRunRequest, analyzed_plan: ExportPlan
+    ) -> ExportPlan | None:
+        """Apply settings without source inspection when cached sources are fresh."""
+
+        from .application import reconfigure_analyzed_plan
+
+        canonical = self._request_factory(request)
+        return reconfigure_analyzed_plan(
+            canonical, analyzed_plan, self._ports_factory()
+        )
+
+    def rebind_plan(
+        self, request: GuiRunRequest, analyzed_plan: ExportPlan
+    ) -> ExportPlan | None:
+        """Pure settings rebind; source freshness is checked separately."""
+
+        from .application import rebind_analyzed_plan
+
+        return rebind_analyzed_plan(
+            self._request_factory(request), analyzed_plan
+        )
+
+    def start_analysis(
+        self,
+        request: GuiRunRequest,
+        *,
+        previous_plan: ExportPlan | None = None,
+    ) -> None:
         """Resolve tools and create an immutable export plan off the UI thread."""
 
         if self.is_running:
@@ -229,6 +257,11 @@ class ApplicationServiceAdapter(QObject):
                     kwargs["progress"] = self.progress_received.emit
                 if cancellation is not None:
                     kwargs["cancellation"] = cancellation
+                if (
+                    previous_plan is not None
+                    and _accepts_keyword(self._plan_service, "previous_plan")
+                ):
+                    kwargs["previous_plan"] = previous_plan
                 return self._plan_service(canonical, ports, logger, **kwargs)
             finally:
                 self._close_logger(logger)

@@ -178,6 +178,9 @@ class ExportPlan:
     items: tuple[MediaItem, ...]
     inspection_failures: tuple[tuple[Path, str], ...] = ()
     project_snapshot: object | None = None
+    inspection_failure_fingerprints: tuple[
+        tuple[Path, SourceFingerprint], ...
+    ] = ()
 
     @property
     def plan_id(self) -> str | None:
