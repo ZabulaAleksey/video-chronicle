@@ -79,17 +79,21 @@
    Chronicle разрешает OVERLAY-001 on/off; Join канонически отключает overlay.
 3. Immutable `ExportPlan` возвращается в GUI: accepted/skipped элементы,
    date provenance и порядок показываются до экспорта во вкладке «План
-   хронологии». Presentation layer включает move actions только для допустимого
-   EDIT-001 перехода; изменение формы инвалидирует plan, а overwrite
-   подтверждается непосредственно перед запуском.
+   хронологии». Следующая worker-операция последовательно создаёт overlay-free
+   temporary PNG для accepted items через тот же trusted FFmpeg preview port;
+   GUI синхронно копирует их в `QPixmap`, после чего adapter удаляет PNG.
+   Presentation layer включает move actions только для допустимого EDIT-001
+   перехода; изменение формы инвалидирует plan, а overwrite подтверждается
+   непосредственно перед запуском.
 4. Изменение только `OverlayConfig` сохраняет уже проанализированные items, но
    инвалидирует визуальный preview. Первый принятый item рендерится через тот же
    filter adapter в 640×360 PNG до разблокировки экспорта.
 5. При открытом/созданном project GUI связывает текущий analysis с immutable
    layout: применяет reorder, resolved trim/groups и active preset, создавая
-   `plan-v2`. Кнопки «Выше»/«Ниже» вызывают только `ProjectState.move_items`;
-   второй mutable order в widgets отсутствует. Любой edit инвалидирует
-   representative preview и export.
+   `plan-v2`. Кнопки «Выше»/«Ниже» и internal card drop вызывают только
+   `ProjectState.move_items`; второй mutable order в widgets отсутствует.
+   Невалидный partial-group drop восстанавливает canonical order. Любой edit
+   инвалидирует representative preview и export.
 6. GUI передаёт тот же plan в `execute_plan` через отдельный worker; execution
    context транслирует typed progress и принимает остановку export только до
    publication commit. CLI создаёт тот же `ExportRequest` и вызывает тот же

@@ -1,5 +1,20 @@
 # Состояние проекта для AI
 
+## Main integration и thumbnail branch — 2026-09-13
+
+- `feature/configurable-datetime-overlay` слита локально в `main` merge-коммитом
+  `7af7f3e`; push не выполнялся.
+- В `feature/timeline-thumbnail-dnd` accepted media показываются 16:9
+  карточками: overlay-free PNG создаются последовательно в worker через managed
+  FFmpeg port, загружаются в `QPixmap` и удаляются; item failure сохраняет
+  placeholder и tooltip.
+- Internal drag одной или нескольких карточек направляется только через
+  `ProjectState.move_items`; grid/table selection и order синхронизированы,
+  partial-group move откатывает projection к canonical order.
+- Focused gate: `47 passed, 1 skipped`; полный локальный gate:
+  `329 passed, 12 skipped`. Offscreen render подтвердил светлую поверхность и
+  отсутствие clipping у четырёх карточек на размере 1060×860.
+
 ## Unified light GUI surface — 2026-09-13
 
 - Timeline tab/viewport/content и журнал получили явные светлые surfaces,

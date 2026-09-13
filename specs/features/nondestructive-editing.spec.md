@@ -1,7 +1,7 @@
 # EDIT-001 — Неразрушающее редактирование timeline
 
 - Статус: утверждённый feature contract этапа 11
-- Версия: 1.0
+- Версия: 1.1
 - Родительская SPEC: `timeline-builder.spec.md`
 - Зависимости: MODEL-001, GUI-APP-001, OVERLAY-001, MODE-001, EXEC-001, CACHE-001
 
@@ -171,6 +171,35 @@ files запрещены. `InMemoryProjectRepository` остаётся reference
 - Legacy GUI/CLI без открытого проекта используют прежний date-sorted план и
   legacy settings; новые project/edit CLI flags в этом этапе не вводятся.
 
+### EDIT-008 — Карточки с миниатюрами
+
+После analysis каждый accepted item представлен в icon-grid карточкой со
+stable `item_id`, именем файла, позицией и PNG-кадром 16:9. До готовности кадра
+показывается явный placeholder. Skipped items остаются только в диагностической
+таблице и не становятся draggable cards.
+
+### EDIT-009 — Асинхронная генерация
+
+Миниатюры создаются вне UI thread через существующий trusted FFmpeg preview
+adapter без shell. Для видео/фото используется effective кадр на `trim_in_us`
+без date/time overlay. Ошибка одного item оставляет его placeholder и понятный
+tooltip, не удаляя остальные карточки. Все временные PNG удаляются после
+синхронной загрузки `QPixmap` либо при failure.
+
+### EDIT-010 — Drag-and-drop reorder
+
+Внутренний drag-and-drop одной карточки или selected block вычисляет
+`move_items(item_ids, before_item_id)` и не хранит второй widget-local порядок.
+Невалидный partial-group move отклоняется, после чего grid восстанавливает
+канонический effective order. Успешный drop увеличивает project revision ровно
+на один и делает representative preview/export stale.
+
+### EDIT-011 — Grid/table parity
+
+Grid и диагностическая таблица используют одинаковые stable IDs, effective
+order и selection. Button move и drag-and-drop дают один доменный результат;
+повторная отрисовка не меняет исходные bytes и сохраняет выбранные карточки.
+
 ## 7. Безопасность и ошибки
 
 - Все пользовательские edits валидируются до FFmpeg.
@@ -206,6 +235,12 @@ files запрещены. `InMemoryProjectRepository` остаётся reference
 - **EDIT-AC-007 (SYS-NFR-001, SYS-COMP-001).** Legacy CLI/MVP characterization
   зелёная; source SHA-256/size/mtime неизменны после edit/save/preview/export,
   failure и cancel.
+- **EDIT-AC-008 (EDIT-008/009).** Component test получает thumbnail batch вне
+  UI thread, загружает PNG в cards, изолирует item failure и подтверждает
+  удаление всех temporary files после signal delivery.
+- **EDIT-AC-009 (EDIT-010/011).** Component drag одной и нескольких cards
+  создаёт точный EDIT-001 order в grid/table/project snapshot; invalid group
+  drop восстанавливает прежний order, а source bytes остаются неизменны.
 
 ## 9. Rollback
 
@@ -214,3 +249,9 @@ files запрещены. `InMemoryProjectRepository` остаётся reference
 - Schema v1 всегда читается; v2 migration не публикуется без backup.
 - В случае regression GUI может скрыть editing controls, сохранив v2 payload и
   не меняя legacy export. Cache v2 entries можно игнорировать/очистить независимо.
+
+## 10. Non-goals расширения 1.1
+
+- hover/autoplay, audio playback, scrubbing и полноценный video player;
+- persistent thumbnail cache, параллельные FFmpeg thumbnails и network assets;
+- drag внешних файлов в проект или изменение baseline `Timeline.items`.

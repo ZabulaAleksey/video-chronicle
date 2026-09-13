@@ -41,7 +41,19 @@
   пользователя в заблуждение.
 - Последствие: прежнее решение о default-вкладке «Дата и время» заменено новым
   прямым запросом пользователя; editor actions capability/selection-gated,
-  widget-local mutable order и drag-and-drop не добавляются.
+  widget-local mutable order не добавляется.
+
+## 2026-09-13 — Thumbnail grid является projection доменного layout
+
+- Решение: показывать accepted items в icon-grid и направлять internal
+  drag-and-drop через `ProjectState.move_items`; таблица остаётся detailed и
+  diagnostic projection того же stable-ID order.
+- Причина: визуальный выбор и прямое перетаскивание удобнее строк таблицы, но
+  Qt widget не должен становиться вторым источником порядка или обходить
+  group constraints.
+- Последствие: overlay-free кадры создаются последовательно вне UI thread через
+  существующий managed FFmpeg preview port, загружаются синхронно и удаляются;
+  persistent thumbnail cache, playback и внешний file drop не вводятся.
 
 ## 2026-08-11 — переносимые пользовательские пути
 

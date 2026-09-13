@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from PySide6.QtCore import QProcess, QTimer
+from PySide6.QtCore import QProcess, QTimer, Qt
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QLabel, QMessageBox
 from PySide6.QtWidgets import QScrollArea
@@ -29,7 +29,7 @@ from video_chronicle.gui_services import ApplicationServiceAdapter
 from video_chronicle.execution import ProgressEvent
 from video_chronicle.overlay import OverlayConfig
 from video_chronicle.ports import PipelinePorts
-from video_chronicle.project import RenderSettings
+from video_chronicle.project import RenderSettings, TimelineItem
 import video_chronicle_gui as gui_module
 from video_chronicle_gui import ChronicleWindow, CliProcessAdapter, STYLE_SHEET
 
@@ -115,6 +115,20 @@ def _preview_plan(request: ExportRequest) -> ExportPlan:
     )
 
 
+def _multi_item_plan(request: ExportRequest, count: int = 3) -> ExportPlan:
+    base = _preview_plan(request).items[0]
+    items = tuple(
+        replace(
+            base,
+            path=request.input_dir / f"clip-{index}.mp4",
+            taken_at=base.taken_at.replace(minute=index),
+            source_duration_us=1_000_000,
+        )
+        for index in range(1, count + 1)
+    )
+    return ExportPlan(request=request, items=items)
+
+
 def _gui_request(input_dir: Path, output: Path) -> GuiRunRequest:
     return GuiRunRequest(
         input_dir=input_dir,
@@ -164,6 +178,141 @@ def test_application_adapter_is_async_repeatable_and_cleans_worker(
     adapter.start_analysis(_gui_request(input_dir, output))
     _wait_until(qapp, lambda: len(completed) == 2)
     assert adapter.is_running is False
+
+
+def test_thumbnail_batch_is_async_isolates_failure_and_cleans_temp_pngs(
+    qapp, tmp_path: Path
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    plan = _multi_item_plan(_canonical_request(input_dir, tmp_path / "output.mp4"))
+    worker_threads: list[int] = []
+    paths_seen_during_signal: list[Path] = []
+    batches: list[object] = []
+    completed: list[tuple[str, bool, str]] = []
+
+    def preview_service(item, overlay, ffmpeg, destination, runner):
+        worker_threads.append(threading.get_ident())
+        assert overlay.enabled is False
+        if item.path.name == "clip-2.mp4":
+            raise RuntimeError("synthetic thumbnail failure")
+        destination.write_bytes(_PNG_1X1)
+
+    adapter = ApplicationServiceAdapter(
+        preview_service=preview_service,
+        ports_factory=_preview_ports,  # type: ignore[arg-type]
+    )
+
+    def receive(batch):
+        batches.append(batch)
+        paths_seen_during_signal.extend(path for _item_id, path in batch.images)
+        assert all(path.is_file() for path in paths_seen_during_signal)
+
+    adapter.thumbnails_ready.connect(receive)
+    adapter.completed.connect(lambda *args: completed.append(args))
+    ticks: list[bool] = []
+    adapter.start_thumbnails(plan)
+    QTimer.singleShot(0, lambda: ticks.append(True))
+    qapp.processEvents()
+    assert ticks == [True]
+    _wait_until(qapp, lambda: bool(completed))
+
+    batch = batches[0]
+    assert len(batch.images) == 2
+    assert len(batch.failures) == 1
+    assert "synthetic thumbnail failure" in batch.failures[0][1]
+    assert all(not path.exists() for path in paths_seen_during_signal)
+    assert all(thread_id != threading.get_ident() for thread_id in worker_threads)
+    assert completed[0][0:2] == ("thumbnails", True)
+
+
+def test_thumbnail_grid_reorders_domain_and_table_without_touching_sources(
+    qapp, tmp_path: Path
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    plan = _multi_item_plan(_canonical_request(input_dir, tmp_path / "output.mp4"))
+    for item in plan.items:
+        item.path.write_bytes(item.path.name.encode("utf-8"))
+    original_bytes = {item.path: item.path.read_bytes() for item in plan.items}
+    adapter = ApplicationServiceAdapter(ports_factory=lambda: object())  # type: ignore[arg-type]
+    window = ChronicleWindow(application_adapter=adapter)
+    window._active_request = _gui_request(input_dir, tmp_path / "output.mp4")
+    window._analyzed_plan = plan
+    window._plan = plan
+    window._populate_preview(plan)
+    ids = tuple(TimelineItem.from_media_item(item).stable_id for item in plan.items)
+
+    window._apply_thumbnail_move((ids[0],), None)
+    qapp.processEvents()
+
+    expected = (ids[1], ids[2], ids[0])
+    assert tuple(
+        window.thumbnail_list.item(index).data(Qt.ItemDataRole.UserRole)
+        for index in range(window.thumbnail_list.count())
+    ) == expected
+    assert tuple(
+        window.preview_tree.topLevelItem(index).data(0, Qt.ItemDataRole.UserRole)
+        for index in range(len(plan.items))
+    ) == expected
+    assert tuple(entry.item_id for entry in window._project_state.layout.entries) == expected
+    assert window.run_button.isEnabled() is False
+    assert {path: path.read_bytes() for path in original_bytes} == original_bytes
+
+    window._apply_thumbnail_move(expected[:2], None)
+    expected = (ids[0], ids[1], ids[2])
+    assert tuple(
+        entry.item_id for entry in window._project_state.layout.entries
+    ) == expected
+    assert tuple(
+        window.thumbnail_list.item(index).data(Qt.ItemDataRole.UserRole)
+        for index in range(window.thumbnail_list.count())
+    ) == expected
+
+    window._project_state = window._project_state.create_group(
+        "group-test", "Test", expected[1:]
+    )
+    revision_before_invalid_drop = window._project_state.revision
+    window._apply_thumbnail_move((expected[1],), None)
+    assert tuple(entry.item_id for entry in window._project_state.layout.entries) == expected
+    assert window._project_state.revision == revision_before_invalid_drop
+    assert "Порядок не изменён" in window.status_label.text()
+    window.close()
+
+
+def test_analysis_automatically_loads_thumbnail_cards_and_syncs_selection(
+    qapp, tmp_path: Path
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    canonical = _canonical_request(input_dir, tmp_path / "output.mp4")
+    plan = _multi_item_plan(canonical, count=2)
+    adapter = ApplicationServiceAdapter(
+        plan_service=lambda request, ports, logger: plan,
+        preview_service=_fake_preview,
+        ports_factory=_preview_ports,  # type: ignore[arg-type]
+        request_factory=lambda gui: canonical,
+    )
+    window = ChronicleWindow(application_adapter=adapter)
+    window.input_edit.setText(str(input_dir))
+    window.output_edit.setText(str(canonical.output))
+    window.analyze_button.click()
+    _wait_until(
+        qapp,
+        lambda: not adapter.is_running and len(window._thumbnail_pixmaps) == 2,
+    )
+
+    assert window.thumbnail_list.count() == 2
+    assert all(
+        not window.thumbnail_list.item(index).icon().isNull()
+        for index in range(window.thumbnail_list.count())
+    )
+    first_id = window.thumbnail_list.item(0).data(Qt.ItemDataRole.UserRole)
+    window.thumbnail_list.item(0).setSelected(True)
+    qapp.processEvents()
+    assert window.preview_tree.topLevelItem(0).isSelected() is True
+    assert window._selected_item_ids() == (first_id,)
+    window.close()
 
 
 def test_rejected_second_export_does_not_corrupt_active_completion(

@@ -1,33 +1,30 @@
 # Текущий план для AI
 
-## Срез 2026-09-12–13 — configurable GUI и safe actions
+## Срез 2026-09-13 — thumbnail cards и drag-and-drop
 
-- Статус: **реализован и валидирован локально в feature-ветке**
-- Ветка: `feature/configurable-datetime-overlay`
-- SPEC: `OVERLAY-007–009`, `GUI-TOOLS-001–005`, `EXEC-009–012` и
-  `GUI-NAV-001–005` в
-  `specs/features/timeline-builder.spec.md`
-- Scope: семантические форматы даты/времени, visibility/layout, system font
-  family resolution/fallback, practical typography, project persistence и
-  общий formatter для preview/export, automatic env/PATH discovery и Windows
-  WinGet bootstrap, secondary technical settings tab, объяснимый cache UX и
-  раздельная безопасная остановка анализа/экспорта; default «Основное»,
-  отдельный «План хронологии», reorder и meaningful editor button states.
+- Статус: **реализовано и проверено локально; ожидает пользовательской проверки/merge**
+- Ветка: `feature/timeline-thumbnail-dnd`
+- SPEC: `EDIT-008–011`, `EDIT-AC-008/009` в
+  `specs/features/nondestructive-editing.spec.md`
+- Scope: icon-grid accepted clips, actual local thumbnails через existing
+  managed FFmpeg preview adapter, placeholder/error state, synchronized
+  grid/table selection и drag-and-drop через `ProjectState.move_items`.
 
 ## Acceptance evidence
 
-- focused analysis/export cancellation gate: `53 passed, 1 skipped`;
-- focused navigation/editing gate: `53 passed, 1 skipped`;
-- полный Python gate: `326 passed, 12 skipped`;
-- локальный system font inventory: `284` family / `437` file-backed faces;
-- skips относятся к недоступным FFmpeg/FFprobe и platform privilege tests;
-  новый real FFmpeg multiline/typography test добавлен, но локально не выполнен.
+- PASS: thumbnail worker остаётся async, item failure изолирован, temporary PNG
+  существует при signal delivery и удаляется после синхронной загрузки;
+- PASS: single/multi-card reorder использует `ProjectState.move_items`, grid и
+  table повторяют project order, partial-group move отклоняется без revision;
+- PASS: анализ автоматически заполняет карточки кадрами и синхронизирует
+  stable-ID selection;
+- полный локальный gate: `329 passed, 12 skipped`;
+- baseline перед срезом: `326 passed, 12 skipped`.
 
 ## NEXT
 
-Работа ожидает пользовательской проверки либо явного разрешения merge.
-Этап 13 optional local transcription остаётся приостановленным и не входит в
-этот срез.
+Передать пользователю для визуальной проверки; merge выполнять только после
+явного подтверждения.
 
 ## Сохраняющиеся release blockers
 

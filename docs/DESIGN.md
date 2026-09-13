@@ -22,8 +22,13 @@ services и сохраняется прямой CLI-интерфейс.
   shadow с opacity/offset; отсутствующее сохранённое семейство при рендере
   использует fallback;
 - отдельное действие «Анализировать» строит immutable preview до экспорта;
-- accepted/skipped элементы показаны в детерминированном порядке с выбранной
-  датой, provenance, timezone, конфликтом или причиной пропуска;
+- accepted items показаны 16:9 thumbnail-карточками и в подробной таблице;
+  skipped элементы остаются в таблице с причиной пропуска;
+- карточки поддерживают multi-selection и internal drag-and-drop через тот же
+  immutable `ProjectState.move_items`, что и кнопки «Выше»/«Ниже»; grid и table
+  синхронизируют stable-ID selection и effective order;
+- кадры без overlay создаются через managed FFmpeg adapter вне UI thread;
+  до загрузки или при изолированной ошибке item остаётся явный placeholder;
 - project editor позволяет открыть/сохранить JSON project, перемещать selected
   items кнопками «Выше»/«Ниже», задавать trim в миллисекундах, группировать/разгруппировать
   contiguous items и сохранять/применять versioned render presets;
@@ -70,7 +75,7 @@ services и сохраняется прямой CLI-интерфейс.
   двухколоночную сетку с собственной прокруткой timeline-вкладки;
   default layout 1060×860 показывает navigation и журнал без clipping.
 
-GUI пока не поддерживает воспроизведение timeline, drag-and-drop, undo/redo,
+GUI пока не поддерживает воспроизведение timeline, внешний file drop, undo/redo,
 multi-track, transitions или nested groups. Cache хранит только проверенные
 normalized clips и не является persistence проекта. Stop actions скрыты для
 legacy/injected backend без явной safe capability и через
