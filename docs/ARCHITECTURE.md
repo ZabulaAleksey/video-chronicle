@@ -123,7 +123,9 @@
 8. FFprobe adapter возвращает метаданные, kind и effective duration `0:v:0`.
 9. DATE-001 engine собирает кандидатов, предпочитает explicit camera/QuickTime
    wall-clock tags общему FFprobe-normalized `creation_time`, затем filename,
-   и сохраняет provenance/conflicts без timezone conversion.
+   сохраняет provenance/conflicts и raw timezone. Explicit camera/QuickTime
+   wall clock не пересчитывается; generic `creation_time` с `Z`/`UTC`
+   переводится из UTC instant в системное локальное wall time на дату записи.
 10. Семантический `OverlayConfig` форматирует wall-clock значение в одном
    Qt/FFmpeg-independent formatter. Preview и export получают готовый текст и
    typography в одном `drawtext` adapter. System font family разрешается в

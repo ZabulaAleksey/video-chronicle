@@ -541,9 +541,12 @@ EXEC-001 без ослабления process-tree и publication guarantees.
 - **DATE-004 — Provenance и conflict.** Результат анализа хранит выбранный
   кандидат, все валидные кандидаты, raw value, origin/key/location и отличные
   от выбранного конфликтующие значения. Конфликт не меняет приоритет молча.
-- **DATE-005 — Timezone.** Offset или `Z` сохраняется отдельно от записанных
-  wall-clock полей. В DATE-001 timezone не преобразуется и не участвует в
-  неявном пересчёте overlay; факт offset доступен consumer-ам.
+- **DATE-005 — Timezone.** Для explicit camera/QuickTime tags offset или `Z`
+  сохраняется отдельно, а записанные wall-clock поля используются без
+  преобразования. Общий FFprobe `creation_time` с `Z`/`UTC` трактуется как
+  нормализованный UTC instant и переводится в системную локальную timezone
+  на дату записи; overlay получает локальные naive wall-clock поля. Raw value
+  и исходная timezone сохраняются в provenance без изменений.
 - **DATE-006 — Стабильный порядок.** Сортировка использует выбранные wall-clock
   поля, затем `path.name.casefold()`. Элементы без даты пропускаются до
   сортировки; одинаковые даты разрешаются одинаково на повторных запусках.
@@ -553,9 +556,11 @@ EXEC-001 без ослабления process-tree и publication guarantees.
 - **DATE-AC-001 (DATE-001–DATE-004, FR-002).** Набор с разным регистром ключей,
   невалидным приоритетным значением, конфликтом metadata/filename и Unicode в
   имени дважды даёт одинаковое решение и provenance.
-- **DATE-AC-002 (DATE-005, FR-003).** Значения `Z`, с offset и без timezone
-  сохраняют одинаковые записанные wall-clock поля без неявного conversion, а
-  наличие/отсутствие offset различимо в результате.
+- **DATE-AC-002 (DATE-005, FR-003).** Explicit camera/QuickTime значения `Z`,
+  с offset и без timezone сохраняют записанные wall-clock поля, а общий
+  `creation_time=2026-07-21T06:41:11Z` при локальной timezone `+03:00` даёт
+  overlay wall clock `21.07.2026 09:41:11`; raw UTC value и `Z` остаются
+  различимы в provenance.
 - **DATE-AC-003 (DATE-006, FR-004, NFR-001).** Равные даты сортируются по
   стабильному filename tie-breaker; missing item получает явную ошибку.
 - **DATE-AC-004 (DATE-001/005, FR-002/003).** Если source одновременно содержит
@@ -566,7 +571,7 @@ EXEC-001 без ослабления process-tree и publication guarantees.
 ### Не входит в срез
 
 - ExifTool/EXIF dependency и licensing decision;
-- пользовательское исправление даты или timezone conversion;
+- пользовательское исправление даты или произвольный выбор timezone;
 - включение missing item в export plan с искусственной датой.
 
 ## Утверждённый срез MODEL-001 — project/queue contracts

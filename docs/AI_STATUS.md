@@ -1,5 +1,18 @@
 # Состояние проекта для AI
 
+## Local wall time для generic FFprobe creation_time — 2026-09-14
+
+- DATE-001/v3 переводит общий `creation_time` с `Z`/`UTC` из UTC instant в
+  системное локальное wall time на дату записи; именно оно используется в
+  timeline и overlay.
+- Explicit camera/QuickTime tags сохраняют записанные wall-clock поля без
+  conversion. Metadata остаётся приоритетной, filename — диагностическим
+  fallback; raw value и исходный timezone marker сохраняются в provenance.
+- Детерминированный regression фиксирует `06:41:11Z` → `09:41:11` при
+  injected `+03:00`; focused gate: `112 passed, 6 skipped`, полный локальный
+  gate: `333 passed, 31 skipped`; independent review не обнаружил
+  функциональных дефектов.
+
 ## Export reuse, delta-analysis и metadata wall time — 2026-09-14
 
 - Валидные изменения output/tools/CRF/preset/mode/overlay и timeline edits
@@ -18,9 +31,9 @@
   inspection-owned metadata/duration известных items. Reconcile применяется
   атомарно: ошибка layout/trim не публикует частичный state, а фактическое
   изменение timeline очищает stale `current_plan`/`jobs` прежней revision.
-- DATE-001/v2 предпочитает explicit camera/QuickTime wall-clock tags общему
-  FFprobe-normalized UTC `creation_time`; raw value, offset и conflict остаются
-  доступны без timezone conversion.
+- DATE-001/v3 предпочитает explicit camera/QuickTime wall-clock tags общему
+  FFprobe-normalized UTC `creation_time`; generic `Z`/`UTC` переводится в
+  системное локальное wall time, raw value, offset и conflict сохраняются.
 - Acceptance gate: `12 passed`; focused subsystem gate:
   `126 passed, 7 skipped`; полный локальный gate:
   `350 passed, 12 skipped`.

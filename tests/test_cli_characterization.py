@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -220,7 +220,9 @@ def test_metadata_date_has_priority_over_filename_date(tmp_path: Path) -> None:
     original_probe_media = join_media.probe_media
     join_media.probe_media = lambda _path, _ffprobe, _runner=None: probe
     try:
-        item = join_media.inspect_item(path, "ffprobe")
+        item = join_media.inspect_item(
+            path, "ffprobe", local_timezone=timezone.utc
+        )
     finally:
         join_media.probe_media = original_probe_media
 

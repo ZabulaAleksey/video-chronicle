@@ -338,3 +338,19 @@
   при их отсутствии; stat identity выбирает кандидатов для reuse, полный
   SHA-256 остаётся обязательной защитой на FFmpeg boundary. DATE-001/v2
   предпочитает explicit camera/QuickTime wall-clock общему UTC `creation_time`.
+
+## 2026-09-14 — Generic FFprobe UTC creation time отображается локально
+
+- **Решение:** DATE-001/v3 сохраняет wall-clock поля explicit camera/QuickTime
+  tags без пересчёта, но общий FFprobe `creation_time` с `Z`/`UTC` трактует как
+  UTC instant и переводит в системную локальную timezone на дату записи. Raw
+  value и исходный timezone marker остаются в provenance.
+- **Причина:** FFprobe нормализует общий MP4 `creation_time` в UTC, тогда как
+  проводник и имя файла показывают локальное время съёмки; прямое отбрасывание
+  `tzinfo` давало сдвинутый overlay (`06:41` вместо `09:41` при `+03:00`).
+- **Альтернативы:** всегда использовать UTC wall clock; предпочитать filename
+  metadata; пересчитывать также explicit camera offsets; дать пользователю
+  ручной timezone selector.
+- **Последствие:** решение отменяет только timezone-часть решения DATE-001/v2
+  от 2026-09-14. Приоритет metadata сохраняется, filename остаётся fallback и
+  provenance; результат зависит от корректной системной timezone.

@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone as datetime_timezone, tzinfo
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 from .domain import DateCandidate, DateDecision
 
 
-POLICY_VERSION = "DATE-001/v2"
+POLICY_VERSION = "DATE-001/v3"
 
 DATE_TAGS = (
     "com.apple.quicktime.creationdate",
@@ -137,7 +137,21 @@ def parse_datetime_text(value: Any) -> datetime | None:
     return parsed[0] if parsed is not None else None
 
 
-def metadata_candidates(probe: dict[str, Any]) -> tuple[DateCandidate, ...]:
+def _utc_wall_time_in_local_timezone(
+    wall_time: datetime, local_timezone: tzinfo | None
+) -> datetime:
+    instant = wall_time.replace(tzinfo=datetime_timezone.utc)
+    localized = (
+        instant.astimezone(local_timezone)
+        if local_timezone is not None
+        else instant.astimezone()
+    )
+    return localized.replace(tzinfo=None)
+
+
+def metadata_candidates(
+    probe: dict[str, Any], *, local_timezone: tzinfo | None = None
+) -> tuple[DateCandidate, ...]:
     """Collect valid candidates by tag priority and source occurrence."""
 
     located = tuple(_iter_located_tag_pairs(probe))
@@ -150,6 +164,10 @@ def metadata_candidates(probe: dict[str, Any]) -> tuple[DateCandidate, ...]:
             if parsed is None:
                 continue
             wall_time, raw_value, timezone = parsed
+            if wanted_key == "creation_time" and timezone in {"UTC", "Z"}:
+                wall_time = _utc_wall_time_in_local_timezone(
+                    wall_time, local_timezone
+                )
             candidates.append(
                 DateCandidate(
                     wall_time=wall_time,
@@ -200,10 +218,15 @@ def filename_candidate(path: Path) -> DateCandidate | None:
     return None
 
 
-def decide_date(probe: dict[str, Any], path: Path) -> DateDecision | None:
+def decide_date(
+    probe: dict[str, Any],
+    path: Path,
+    *,
+    local_timezone: tzinfo | None = None,
+) -> DateDecision | None:
     """Resolve a date and retain every valid candidate for diagnostics."""
 
-    candidates = list(metadata_candidates(probe))
+    candidates = list(metadata_candidates(probe, local_timezone=local_timezone))
     from_filename = filename_candidate(path)
     if from_filename is not None:
         candidates.append(from_filename)
@@ -224,10 +247,12 @@ def decide_date(probe: dict[str, Any], path: Path) -> DateDecision | None:
     )
 
 
-def datetime_from_metadata(probe: dict[str, Any]) -> tuple[datetime, str] | None:
+def datetime_from_metadata(
+    probe: dict[str, Any], *, local_timezone: tzinfo | None = None
+) -> tuple[datetime, str] | None:
     """Legacy adapter for callers that only need the selected metadata date."""
 
-    candidates = metadata_candidates(probe)
+    candidates = metadata_candidates(probe, local_timezone=local_timezone)
     if not candidates:
         return None
     selected = candidates[0]

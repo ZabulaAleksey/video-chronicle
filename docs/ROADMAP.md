@@ -50,7 +50,9 @@ groups, console/GUI entry points и временные compatibility modules б�
 Самостоятельный prompt: [`04-metadata-date-engine.md`](../prompts/stages/04-metadata-date-engine.md).
 
 Этап завершён: DATE-001 engine детерминированно выбирает metadata/filename date,
-сохраняет raw provenance, timezone и conflicts и не меняет legacy overlay.
+сохраняет raw provenance, timezone и conflicts; generic UTC `creation_time`
+отображается как системное локальное wall time, explicit camera tags не
+пересчитываются.
 
 ## Выполненный этап — 05. Project/queue model
 

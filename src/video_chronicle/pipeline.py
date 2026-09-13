@@ -9,7 +9,7 @@ import shutil
 import stat
 import subprocess
 import tempfile
-from datetime import datetime
+from datetime import datetime, tzinfo
 from decimal import Decimal, InvalidOperation, ROUND_FLOOR
 from pathlib import Path
 from typing import Any
@@ -241,6 +241,8 @@ def inspect_item(
     ffprobe: str,
     probe_adapter: ProbeMedia | None = None,
     runner: CommandRunner | None = None,
+    *,
+    local_timezone: tzinfo | None = None,
 ) -> MediaItem:
     probe_adapter = probe_adapter or probe_media
     runner = runner or run_command
@@ -250,7 +252,9 @@ def inspect_item(
     if not has_video:
         raise MediaError(f"no video/image stream found in {path}")
 
-    date_decision = decide_date(probe, path)
+    date_decision = decide_date(
+        probe, path, local_timezone=local_timezone
+    )
     if date_decision is None:
         raise MediaError(
             f"no supported creation date in metadata or filename: {path.name}"

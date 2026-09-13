@@ -42,7 +42,7 @@ preview/normalize, включая multiline typography при доступном
 | Ранняя и поздняя коллизии, no-replace и разрешённый overwrite | characterization | `test_existing_output_*`, `test_publish_output_*` | `SYS-AC-003`, `AC-008` |
 | Неизменность valid/corrupt/skipped источников | characterization + integration | `test_corrupt_input_*`, `test_partial_encoding_success_*`, synthetic smoke | `SYS-AC-005` |
 | Реальный mixed photo/video экспорт и проверка A/V streams | integration smoke | `test_synthetic_photo_video_cli_smoke_preserves_sources` | `SYS-AC-001`, `SYS-AC-005`, `AC-008`, `AC-010` |
-| DATE-001 priority, raw provenance, timezone и conflicts | unit/table | `tests/test_metadata_date_engine.py` | `DATE-AC-001–003`, `AC-002` |
+| DATE-001 priority, raw provenance, timezone, generic UTC→local wall time и conflicts | unit/table | `tests/test_metadata_date_engine.py` | `DATE-AC-001–003`, `AC-002` |
 | MODEL-001 IDs/order, job transitions, schema v1 и repository | unit/table | `tests/test_project_queue_model.py` | `MODEL-AC-001–003` |
 | GUI application preview, async lifecycle, Unicode, stale plan и overwrite | GUI/contract | `tests/test_gui_application.py` | `GUI-APP-AC-001–003`, `AC-001/002/010` |
 | Absolute FFmpeg discovery, pinned WinGet argv, default tab и cache explanation | unit/GUI/contract | `tests/test_tooling.py`, `tests/test_gui_application.py` | `GUI-TOOLS-AC-001–004` |
