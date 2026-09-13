@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 import time
 import base64
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -451,26 +452,37 @@ def test_minimum_window_keeps_full_form_accessible_via_scroll(qapp) -> None:
     assert scroll.horizontalScrollBar().maximum() == 0
     settings_tabs = window.findChild(QTabWidget, "settingsTabs")
     assert settings_tabs is not None
-    assert settings_tabs.currentWidget() is window.overlay_group
-    assert settings_tabs.tabText(0) == "Дата и время"
-    assert settings_tabs.tabText(1) == "Дополнительно"
+    assert settings_tabs.currentWidget() is window.main_tab
+    assert [settings_tabs.tabText(index) for index in range(settings_tabs.count())] == [
+        "Основное",
+        "План хронологии",
+        "Дата и время",
+        "Дополнительно",
+    ]
+    assert window.main_tab.isAncestorOf(window.input_edit)
+    assert window.main_tab.isAncestorOf(window.output_edit)
+    assert window.main_tab.isAncestorOf(window.mode_combo)
     assert window.crf_spin.isVisible() is False
     assert window.preset_combo.isVisible() is False
     viewport_width = scroll.viewport().width()
     for button in (
         window.input_button,
         window.output_button,
-        window.project_save_button,
-        window.preset_apply_button,
-        window.trim_apply_button,
     ):
         button_right = button.mapTo(scroll.viewport(), button.rect().bottomRight()).x()
         assert 0 <= button_right < viewport_width
+    settings_tabs.setCurrentIndex(1)
+    qapp.processEvents()
+    assert window.timeline_tab.isAncestorOf(window.preview_tree)
+    assert window.move_up_button.isEnabled() is False
+    assert window.move_down_button.isEnabled() is False
+    settings_tabs.setCurrentIndex(2)
+    qapp.processEvents()
     font_button_right = window.overlay_font_button.mapTo(
         scroll.viewport(), window.overlay_font_button.rect().bottomRight()
     ).x()
     assert 0 <= font_button_right < viewport_width
-    settings_tabs.setCurrentIndex(1)
+    settings_tabs.setCurrentIndex(3)
     qapp.processEvents()
     assert window.crf_spin.isVisible() is True
     assert window.preset_combo.isVisible() is True
@@ -557,6 +569,97 @@ def test_application_export_progress_cancel_is_responsive_and_terminal(
     assert window.status_label.text() == "Экспорт отменён"
     assert output.exists() is False
     assert workspace.exists() is False
+    window.close()
+
+
+def test_timeline_reorder_buttons_follow_selection_and_boundaries(
+    qapp, tmp_path: Path
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    output = tmp_path / "output.mp4"
+    canonical = _canonical_request(input_dir, output)
+    base = _preview_plan(canonical)
+    items = tuple(
+        replace(
+            base.items[0],
+            path=input_dir / f"clip-{index}.mp4",
+            taken_at=datetime(2024, 5, 6, 7, 8, 9 + index),
+            source_duration_us=5_000_000,
+        )
+        for index in range(1, 4)
+    )
+    for index, item in enumerate(items, start=1):
+        item.path.write_bytes(f"source-{index}".encode())
+    original_sources = {item.path: item.path.read_bytes() for item in items}
+    plan = replace(base, items=items)
+    adapter = ApplicationServiceAdapter(
+        plan_service=lambda request, ports, logger: plan,
+        ports_factory=lambda: object(),  # type: ignore[arg-type]
+        request_factory=lambda gui: canonical,
+    )
+    window = ChronicleWindow(application_adapter=adapter)
+    window.input_edit.setText(str(input_dir))
+    window.output_edit.setText(str(output))
+
+    assert window.project_save_button.isEnabled() is False
+    assert window.move_up_button.isEnabled() is False
+    assert window.move_down_button.isEnabled() is False
+    assert window.group_button.isEnabled() is False
+    assert window.trim_apply_button.isEnabled() is False
+
+    window.analyze_button.click()
+    _wait_until(qapp, lambda: not adapter.is_running)
+    window.settings_tabs.setCurrentWidget(window.timeline_tab)
+    skipped = window.preview_tree.topLevelItem(3)
+    skipped.setSelected(True)
+    qapp.processEvents()
+    assert window.move_up_button.isEnabled() is False
+    assert window.move_down_button.isEnabled() is False
+    assert window.trim_apply_button.isEnabled() is False
+    skipped.setSelected(False)
+    first = window.preview_tree.topLevelItem(0)
+    first.setSelected(True)
+    qapp.processEvents()
+
+    assert window.move_up_button.isEnabled() is False
+    assert window.move_down_button.isEnabled() is True
+    assert window.group_button.isEnabled() is False
+    assert window.trim_apply_button.isEnabled() is True
+
+    window.move_down_button.click()
+    qapp.processEvents()
+
+    assert window.preview_tree.topLevelItem(0).text(2).endswith("clip-2.mp4")
+    assert window.preview_tree.topLevelItem(1).text(2).endswith("clip-1.mp4")
+    assert window.preview_tree.topLevelItem(1).isSelected() is True
+    assert window.move_up_button.isEnabled() is True
+    assert window.move_down_button.isEnabled() is True
+
+    window.move_down_button.click()
+    qapp.processEvents()
+
+    assert window.preview_tree.topLevelItem(2).text(2).endswith("clip-1.mp4")
+    assert window.move_up_button.isEnabled() is True
+    assert window.move_down_button.isEnabled() is False
+    assert window.run_button.isEnabled() is False
+    assert window.preview_state_label.text() == "План изменён; обновите preview"
+
+    window.preview_tree.clearSelection()
+    window.preview_tree.topLevelItem(0).setSelected(True)
+    window.preview_tree.topLevelItem(1).setSelected(True)
+    qapp.processEvents()
+    assert window.group_button.isEnabled() is True
+    window.group_button.click()
+    qapp.processEvents()
+
+    window.preview_tree.clearSelection()
+    window.preview_tree.topLevelItem(0).setSelected(True)
+    qapp.processEvents()
+    assert window.move_up_button.isEnabled() is False
+    assert window.move_down_button.isEnabled() is False
+    assert window.ungroup_button.isEnabled() is True
+    assert {path: path.read_bytes() for path in original_sources} == original_sources
     window.close()
 
 

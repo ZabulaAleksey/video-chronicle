@@ -33,7 +33,6 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QSpinBox,
-    QSplitter,
     QTabWidget,
     QTreeWidget,
     QTreeWidgetItem,
@@ -285,6 +284,7 @@ class ChronicleWindow(QMainWindow):
                 widget.hide()
         else:
             self.run_button.setEnabled(False)
+        self._update_action_states()
 
     def _build_ui(self, default_input: Path) -> None:
         central = QWidget(self)
@@ -313,6 +313,12 @@ class ChronicleWindow(QMainWindow):
         card_layout.setContentsMargins(20, 20, 20, 20)
         card_layout.setSpacing(14)
 
+        self.main_tab = QWidget()
+        self.main_tab.setObjectName("mainSettingsTab")
+        main_layout = QVBoxLayout(self.main_tab)
+        main_layout.setContentsMargins(14, 14, 14, 14)
+        main_layout.setSpacing(14)
+
         mode_row = QHBoxLayout()
         mode_row.addWidget(QLabel("Режим"))
         self.mode_combo = QComboBox()
@@ -326,7 +332,7 @@ class ChronicleWindow(QMainWindow):
         self.mode_description_label.setObjectName("hint")
         self.mode_description_label.setWordWrap(True)
         mode_row.addWidget(self.mode_description_label, 1)
-        card_layout.addLayout(mode_row)
+        main_layout.addLayout(mode_row)
 
         paths = QFormLayout()
         paths.setHorizontalSpacing(18)
@@ -346,11 +352,21 @@ class ChronicleWindow(QMainWindow):
         self.output_button = QPushButton("Выбрать…")
         self.output_button.clicked.connect(self._browse_output)
         paths.addRow("Результат", self._path_row(self.output_edit, self.output_button))
-        card_layout.addLayout(paths)
+        main_layout.addLayout(paths)
+        main_layout.addStretch(1)
+
+        self.timeline_tab = QWidget()
+        self.timeline_tab.setObjectName("timelineTab")
+        timeline_tab_layout = QVBoxLayout(self.timeline_tab)
+        timeline_tab_layout.setContentsMargins(0, 0, 0, 0)
+        self.timeline_scroll = QScrollArea()
+        self.timeline_scroll.setObjectName("timelineScroll")
+        self.timeline_scroll.setWidgetResizable(True)
+        self.timeline_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        timeline_tab_layout.addWidget(self.timeline_scroll)
 
         advanced = QGroupBox("Параметры кодирования")
-        # The preview and log panes both request vertical stretch.  Preserve the
-        # form's minimum layout height so those panes cannot collapse its rows.
+        # Preserve the technical form's row height inside the shared tab frame.
         advanced.setMinimumHeight(245)
         advanced_layout = QGridLayout(advanced)
         advanced_layout.setHorizontalSpacing(12)
@@ -592,8 +608,11 @@ class ChronicleWindow(QMainWindow):
         self._allow_widget_to_shrink_horizontally(self.settings_tabs)
         advanced.setTitle("")
         self.overlay_group.setTitle("")
+        self.settings_tabs.addTab(self.main_tab, "Основное")
+        self.settings_tabs.addTab(self.timeline_tab, "План хронологии")
         self.settings_tabs.addTab(self.overlay_group, "Дата и время")
         self.settings_tabs.addTab(advanced, "Дополнительно")
+        self.settings_tabs.setCurrentIndex(0)
         card_layout.addWidget(self.settings_tabs)
         root.addWidget(settings_card)
 
@@ -630,9 +649,6 @@ class ChronicleWindow(QMainWindow):
         self.progress.setTextVisible(False)
         root.addWidget(self.progress)
 
-        workspace = QSplitter(Qt.Orientation.Horizontal)
-        workspace.setChildrenCollapsible(False)
-
         preview_panel = QFrame()
         preview_layout = QVBoxLayout(preview_panel)
         preview_layout.setContentsMargins(0, 0, 8, 0)
@@ -664,8 +680,10 @@ class ChronicleWindow(QMainWindow):
         editor_actions.setVerticalSpacing(8)
         self.project_open_button = QPushButton("Открыть проект…")
         self.project_save_button = QPushButton("Сохранить проект…")
-        self.move_up_button = QPushButton("↑")
-        self.move_down_button = QPushButton("↓")
+        self.move_up_button = QPushButton("↑ Выше")
+        self.move_up_button.setAccessibleName("Переместить выбранные фрагменты выше")
+        self.move_down_button = QPushButton("↓ Ниже")
+        self.move_down_button.setAccessibleName("Переместить выбранные фрагменты ниже")
         self.group_button = QPushButton("Группа")
         self.ungroup_button = QPushButton("Разгруппировать")
         self.preset_save_version_button = QPushButton("Сохранить preset version")
@@ -713,6 +731,7 @@ class ChronicleWindow(QMainWindow):
         )
         self.preview_tree.setUniformRowHeights(True)
         self.preview_tree.setMinimumHeight(165)
+        self.preview_tree.itemSelectionChanged.connect(self._update_action_states)
         preview_layout.addWidget(self.preview_tree, 1)
 
         visual_header = QGridLayout()
@@ -762,12 +781,9 @@ class ChronicleWindow(QMainWindow):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
         log_layout.addWidget(self.log_view, 1)
-        workspace.addWidget(preview_panel)
-        workspace.addWidget(log_panel)
-        workspace.setStretchFactor(0, 3)
-        workspace.setStretchFactor(1, 2)
-        workspace.setSizes([620, 400])
-        root.addWidget(workspace, 1)
+        self.timeline_scroll.setWidget(preview_panel)
+        log_panel.setMinimumHeight(160)
+        root.addWidget(log_panel)
 
         scroll = QScrollArea(self)
         scroll.setObjectName("mainScroll")
@@ -1346,16 +1362,25 @@ class ChronicleWindow(QMainWindow):
     def _refresh_edited_plan(self) -> None:
         if self._analyzed_plan is None or self._project_state is None:
             return
+        selected_ids = set(self._selected_item_ids())
         self._plan = apply_project_state(self._analyzed_plan, self._project_state)
-        self._populate_preview(self._plan)
+        signals_were_blocked = self.preview_tree.blockSignals(True)
+        try:
+            self._populate_preview(self._plan)
+            for index in range(self.preview_tree.topLevelItemCount()):
+                item = self.preview_tree.topLevelItem(index)
+                if item.data(0, Qt.ItemDataRole.UserRole) in selected_ids:
+                    item.setSelected(True)
+        finally:
+            self.preview_tree.blockSignals(signals_were_blocked)
         self._visual_preview_current = False
         self.visual_preview_state_label.setText("Предпросмотр устарел")
         self.preview_button.setEnabled(True)
         self.preview_state_label.setText("План изменён; обновите preview")
         self.run_button.setEnabled(False)
+        self._update_action_states()
 
     def _selected_item_ids(self) -> tuple[str, ...]:
-        self._ensure_project_state()
         return tuple(
             item_id
             for item in self.preview_tree.selectedItems()
@@ -1364,17 +1389,93 @@ class ChronicleWindow(QMainWindow):
             )
         )
 
+    def _move_candidate(self, direction: int) -> ProjectState | None:
+        ids = self._selected_item_ids()
+        if not ids or self._plan is None:
+            return None
+        try:
+            state = self._ensure_project_state()
+        except RuntimeError:
+            return None
+        assert state.layout is not None
+        selected = set(ids)
+        positions = [
+            index
+            for index, entry in enumerate(state.layout.entries)
+            if entry.item_id in selected
+        ]
+        if not positions:
+            return None
+        target = min(positions) - 1 if direction < 0 else max(positions) + 2
+        if target < 0 or target > len(state.layout.entries):
+            return None
+        before = (
+            state.layout.entries[target].item_id
+            if target < len(state.layout.entries)
+            else None
+        )
+        try:
+            candidate = state.move_items(ids, before)
+        except ValueError:
+            return None
+        return candidate if candidate.layout != state.layout else None
+
+    @Slot()
+    def _update_action_states(self) -> None:
+        running = self._adapter.is_running
+        editable = not self._legacy_mode and not running and self._plan is not None
+        ids = self._selected_item_ids() if editable else ()
+        state = self._project_state
+        if editable and ids and state is None:
+            try:
+                state = self._ensure_project_state()
+            except RuntimeError:
+                state = None
+
+        self.project_save_button.setEnabled(
+            not self._legacy_mode and not running and self._plan is not None
+        )
+        self.move_up_button.setEnabled(editable and self._move_candidate(-1) is not None)
+        self.move_down_button.setEnabled(editable and self._move_candidate(1) is not None)
+
+        can_group = False
+        if editable and state is not None and len(ids) >= 2:
+            try:
+                state.create_group(
+                    f"group-{state.revision + 1}",
+                    f"Группа {state.revision + 1}",
+                    ids,
+                )
+            except ValueError:
+                pass
+            else:
+                can_group = True
+        self.group_button.setEnabled(can_group)
+
+        groups: set[str] = set()
+        if editable and state is not None and state.layout is not None:
+            selected = set(ids)
+            groups = {
+                entry.group_id
+                for entry in state.layout.entries
+                if entry.item_id in selected and entry.group_id is not None
+            }
+        self.ungroup_button.setEnabled(len(groups) == 1)
+        single_item = editable and len(ids) == 1
+        self.trim_in_spin.setEnabled(single_item)
+        self.trim_out_spin.setEnabled(single_item)
+        self.trim_apply_button.setEnabled(single_item)
+        self.preset_save_version_button.setEnabled(editable)
+        self.preset_apply_button.setEnabled(
+            editable and state is not None and state.active_preset is not None
+        )
+
     @Slot()
     def _move_selected(self, direction: int) -> None:
-        ids = self._selected_item_ids()
-        if not ids: return
-        state = self._ensure_project_state(); assert state.layout is not None
-        positions = [i for i, entry in enumerate(state.layout.entries) if entry.item_id in set(ids)]
-        target = min(positions) - 1 if direction < 0 else max(positions) + 2
-        if target < 0 or target > len(state.layout.entries): return
-        before = state.layout.entries[target].item_id if target < len(state.layout.entries) else None
-        try: self._project_state = state.move_items(ids, before)
-        except ValueError as exc: QMessageBox.warning(self, "Редактирование", str(exc)); return
+        candidate = self._move_candidate(direction)
+        if candidate is None:
+            return
+        self._project_state = candidate
         self._refresh_edited_plan()
 
     @Slot()
@@ -1572,6 +1673,7 @@ class ChronicleWindow(QMainWindow):
             f"CRF {request.crf}, preset {request.preset} | "
             "overwrite: только после отдельного подтверждения"
         )
+        self._update_action_states()
 
     @Slot(str, bool, str)
     def _on_application_completed(
@@ -1867,6 +1969,7 @@ class ChronicleWindow(QMainWindow):
             self.analysis_cancel_button.setVisible(False)
             self.cancel_button.setEnabled(False)
             self.cancel_button.setVisible(False)
+        self._update_action_states()
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt API
         if (

@@ -8,8 +8,10 @@ services и сохраняется прямой CLI-интерфейс.
 - одно окно с выбором входной папки и итогового MP4;
 - selector режима до input-полей: Chronicle по умолчанию разрешает подпись
   даты, Join явно создаёт хронологический MP4 без неё;
-- вкладка «Дата и время» открывается первой; пути FFmpeg/FFprobe, CRF, preset и
-  cache убраны во вторичную вкладку «Дополнительно»;
+- вкладка «Основное» открывается первой и содержит mode, input и output;
+  «План хронологии» содержит effective order/editor/representative preview,
+  подпись настраивается в «Дата и время», а пути FFmpeg/FFprobe, CRF, preset и
+  cache находятся в «Дополнительно»;
 - доступные FFmpeg/FFprobe автоматически показываются абсолютными путями; при
   отсутствии на Windows GUI асинхронно запускает закреплённую WinGet-установку,
   а при ошибке оставляет понятный manual fallback;
@@ -23,13 +25,16 @@ services и сохраняется прямой CLI-интерфейс.
 - accepted/skipped элементы показаны в детерминированном порядке с выбранной
   датой, provenance, timezone, конфликтом или причиной пропуска;
 - project editor позволяет открыть/сохранить JSON project, перемещать selected
-  items вверх/вниз, задавать trim в миллисекундах, группировать/разгруппировать
+  items кнопками «Выше»/«Ниже», задавать trim в миллисекундах, группировать/разгруппировать
   contiguous items и сохранять/применять versioned render presets;
+- editor actions disabled без подходящего selection, на границе списка и при
+  нарушении group constraints; disabled action не маскирует no-op;
 - сохранённый `item_id`, а не номер строки, связывает edits с source; partial
   success не переназначает edit соседнему элементу;
 - preview summary показывает input/output, количество элементов, CRF, preset и
   явную overwrite policy;
-- preview и read-only журнал находятся в изменяемой горизонтальной splitter-паре;
+- preview находится во внутренней прокрутке вкладки «План хронологии», а
+  read-only журнал остаётся отдельной областью под основными actions;
 - loading, empty, error, stale и populated состояния имеют явный текст;
 - representative-frame preview имеет отдельные stale/loading/ready/disabled/
   error состояния; Chronicle экспорт доступен только для актуального preview,
@@ -59,8 +64,8 @@ services и сохраняется прямой CLI-интерфейс.
 - при размере 820×660 используется только вертикальная центральная прокрутка:
   path/tool/overlay fields сжимаются внутри доступной ширины, browse/action
   buttons справа остаются видимыми, а editor actions складываются в компактную
-  двухколоночную сетку;
-  default layout 1060×860 показывает параметры и две рабочие панели без clipping.
+  двухколоночную сетку с собственной прокруткой timeline-вкладки;
+  default layout 1060×860 показывает navigation и журнал без clipping.
 
 GUI пока не поддерживает воспроизведение timeline, drag-and-drop, undo/redo,
 multi-track, transitions или nested groups. Cache хранит только проверенные

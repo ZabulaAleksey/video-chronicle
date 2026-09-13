@@ -46,6 +46,7 @@ preview/normalize, включая multiline typography при доступном
 | MODEL-001 IDs/order, job transitions, schema v1 и repository | unit/table | `tests/test_project_queue_model.py` | `MODEL-AC-001–003` |
 | GUI application preview, async lifecycle, Unicode, stale plan и overwrite | GUI/contract | `tests/test_gui_application.py` | `GUI-APP-AC-001–003`, `AC-001/002/010` |
 | Absolute FFmpeg discovery, pinned WinGet argv, default tab и cache explanation | unit/GUI/contract | `tests/test_tooling.py`, `tests/test_gui_application.py` | `GUI-TOOLS-AC-001–004` |
+| Main/timeline/date/advanced navigation, reorder и meaningful button states | GUI/component | `tests/test_gui_application.py` | `GUI-NAV-AC-001–003`, `EDIT-AC-001/004` |
 | Единый date/time formatter, typography, font fallback, preview и multi-item export | unit/GUI/integration | `tests/test_overlay.py`, `tests/test_gui_application.py`, `tests/test_nondestructive_editing.py` | `OVERLAY-AC-001–003`, `OVERLAY-007–009`, `AC-004/010` |
 | Join/Chronicle invariant, CLI parity, GUI round-trip и оба real exports | matrix/GUI/integration | `tests/test_modes.py`, `tests/test_gui_application.py`, `tests/test_ffmpeg_smoke.py` | `MODE-AC-001–003`, `AC-003/004/008` |
 | Structured progress, analysis/export stop, cancellation races и cleanup | unit/integration/GUI | `tests/test_execution.py`, `tests/test_gui_application.py` | `EXEC-AC-001/003–007`, `AC-003/005/009/010` |
