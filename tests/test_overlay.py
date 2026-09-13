@@ -15,10 +15,14 @@ from video_chronicle import overlay as overlay_module
 from video_chronicle.application import execute_plan
 from video_chronicle.domain import ExportPlan, ExportRequest, MediaItem
 from video_chronicle.overlay import (
+    DATE_FORMATS,
     DEFAULT_OVERLAY_CONFIG,
     OVERLAY_FORMATS,
     OVERLAY_POSITIONS,
+    TIME_FORMATS,
+    FontFace,
     OverlayConfig,
+    format_overlay_text,
     require_resolved_overlay_font,
     resolve_overlay_font,
 )
@@ -71,6 +75,87 @@ def test_overlay_rejects_values_outside_approved_presets(kwargs) -> None:
         OverlayConfig(**kwargs)
 
 
+@pytest.mark.parametrize(
+    ("date_format", "expected"),
+    [
+        ("DD.MM.YYYY", "12.09.2026"),
+        ("DD/MM/YYYY", "12/09/2026"),
+        ("YYYY-MM-DD", "2026-09-12"),
+        ("MM/DD/YYYY", "09/12/2026"),
+        ("DD MMM YYYY", "12 Sep 2026"),
+        ("DD MMMM YYYY", "12 September 2026"),
+    ],
+)
+def test_canonical_date_formats(date_format: str, expected: str) -> None:
+    value = datetime(2026, 9, 12, 23, 48, 17)
+    config = OverlayConfig(format=None, date_format=date_format)  # type: ignore[arg-type]
+    assert format_overlay_text(value, config) == expected
+
+
+@pytest.mark.parametrize(
+    ("time_format", "expected"),
+    [
+        ("HH:mm", "23:48"),
+        ("HH:mm:ss", "23:48:17"),
+        ("hh:mm A", "11:48 PM"),
+        ("hh:mm:ss A", "11:48:17 PM"),
+    ],
+)
+def test_canonical_time_formats(time_format: str, expected: str) -> None:
+    value = datetime(2026, 9, 12, 23, 48, 17)
+    config = OverlayConfig(
+        format=None,
+        show_date=False,
+        show_time=True,
+        time_format=time_format,  # type: ignore[arg-type]
+    )
+    assert format_overlay_text(value, config) == expected
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "expected"),
+    [
+        ({"show_date": True, "show_time": False}, "12.09.2026"),
+        ({"show_date": False, "show_time": True}, "23:48:17"),
+        ({"show_date": True, "show_time": True}, "12.09.2026 23:48:17"),
+        ({"show_date": True, "show_time": True, "layout": "separator", "separator": " • "}, "12.09.2026 • 23:48:17"),
+        ({"show_date": True, "show_time": True, "layout": "multiline"}, "12.09.2026\n23:48:17"),
+    ],
+)
+def test_visibility_and_layout(kwargs: dict[str, object], expected: str) -> None:
+    config = OverlayConfig(
+        format=None,
+        date_format="DD.MM.YYYY",
+        time_format="HH:mm:ss",
+        **kwargs,
+    )
+    assert format_overlay_text(datetime(2026, 9, 12, 23, 48, 17), config) == expected
+
+
+def test_custom_date_format_is_bounded_and_safe() -> None:
+    config = OverlayConfig(
+        format=None,
+        date_format="CUSTOM",
+        custom_date_format="YYYY/MM/DD",
+    )
+    assert format_overlay_text(datetime(2026, 9, 12), config) == "2026/09/12"
+    for invalid in (None, "", "%Y-%m-%d", "YYYY{MM}", "x" * 65):
+        with pytest.raises(ValueError, match="custom date format"):
+            OverlayConfig(
+                format=None,
+                date_format="CUSTOM",
+                custom_date_format=invalid,
+            )
+
+
+def test_enabled_overlay_requires_at_least_one_visible_value() -> None:
+    with pytest.raises(ValueError, match="show date, time, or both"):
+        OverlayConfig(format=None, show_date=False, show_time=False)
+    assert OverlayConfig(
+        enabled=False, format=None, show_date=False, show_time=False
+    ).enabled is False
+
+
 def test_font_policy_rejects_missing_or_unsupported_and_requires_fallback(
     tmp_path: Path,
 ) -> None:
@@ -83,6 +168,13 @@ def test_font_policy_rejects_missing_or_unsupported_and_requires_fallback(
     with pytest.raises(RuntimeError, match="No supported overlay font"):
         resolve_overlay_font(OverlayConfig(), None)
     assert resolve_overlay_font(OverlayConfig(enabled=False), None).font_file is None
+
+
+def test_font_family_and_explicit_file_are_mutually_exclusive(tmp_path: Path) -> None:
+    font = tmp_path / "exact.ttf"
+    font.write_bytes(b"font")
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        OverlayConfig(format=None, font_family="Example Sans", font_file=font)
 
 
 def test_font_identity_is_rechecked_and_size_is_bounded(
@@ -100,6 +192,37 @@ def test_font_identity_is_rechecked_and_size_is_bounded(
     monkeypatch.setattr(overlay_module, "MAX_FONT_BYTES", 1)
     with pytest.raises(ValueError, match="MiB limit"):
         OverlayConfig(font_file=oversized)
+
+
+def test_font_family_resolves_style_and_unknown_family_uses_fallback(
+    tmp_path: Path,
+) -> None:
+    regular = tmp_path / "family-regular.ttf"
+    bold_italic = tmp_path / "family-bold-italic.ttf"
+    fallback = tmp_path / "fallback.ttf"
+    for path in (regular, bold_italic, fallback):
+        path.write_bytes(path.name.encode("ascii"))
+    fonts = (
+        FontFace("Example Sans", regular),
+        FontFace("Example Sans", bold_italic, bold=True, italic=True),
+    )
+    resolved = resolve_overlay_font(
+        OverlayConfig(format=None, font_family="Example Sans", bold=True, italic=True),
+        fallback,
+        fonts=fonts,
+    )
+    assert resolved.font_family == "Example Sans"
+    assert resolved.font_file is None
+    assert resolved.effective_font_file == bold_italic.resolve()
+    require_resolved_overlay_font(resolved)
+
+    degraded = resolve_overlay_font(
+        OverlayConfig(format=None, font_family="Missing Family"),
+        fallback,
+        fonts=fonts,
+    )
+    assert degraded.font_family == "Missing Family"
+    assert degraded.effective_font_file == fallback.resolve()
 
 
 def test_font_policy_rejects_symlink_or_reparse_point(tmp_path: Path) -> None:
@@ -169,6 +292,32 @@ def test_disabled_overlay_removes_drawtext_without_changing_base_pipeline(
     assert "drawtext" not in result
     assert "scale=1600:900" in result
     assert "fps=60" in result
+
+
+def test_filter_applies_opacity_outline_and_shadow_settings(tmp_path: Path) -> None:
+    font = tmp_path / "styled.ttf"
+    font.write_bytes(b"font")
+    config = OverlayConfig(
+        format=None,
+        show_date=True,
+        show_time=True,
+        date_format="DD.MM.YYYY",
+        time_format="HH:mm:ss",
+        layout="multiline",
+        opacity=0.65,
+        outline_enabled=False,
+        outline_width=8,
+        shadow_enabled=True,
+        shadow_opacity=0.4,
+        shadow_offset_x=-3,
+        shadow_offset_y=5,
+        font_file=font,
+    )
+    result = pipeline.make_video_filter(_item(tmp_path), config)
+    assert r"text='29.02.2024\n23\:59\:00'" in result
+    assert "fontcolor=#000000@0.650" in result
+    assert "borderw=0" in result
+    assert "shadowcolor=#000000@0.400:shadowx=-3:shadowy=5" in result
 
 
 def test_preview_adapter_uses_list_argv_and_the_same_config(
@@ -378,6 +527,57 @@ def test_real_ffmpeg_preview_accepts_apostrophe_in_font_path(tmp_path: Path) -> 
         item, OverlayConfig(font_file=font), ffmpeg, destination
     )
 
+    assert destination.stat().st_size > 0
+
+
+def test_real_ffmpeg_preview_accepts_multiline_and_typography(tmp_path: Path) -> None:
+    ffmpeg = _resolve_smoke_tool("VIDEO_CHRONICLE_FFMPEG", "ffmpeg")
+    font = pipeline.find_default_font()
+    if ffmpeg is None or font is None:
+        pytest.skip("FFmpeg or verified system font is unavailable")
+    source = tmp_path / "IMG_20260912_234817.bmp"
+    subprocess.run(
+        [
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=blue:s=320x180",
+            "-frames:v",
+            "1",
+            "-y",
+            str(source),
+        ],
+        check=True,
+        timeout=60,
+    )
+    destination = tmp_path / "styled-multiline.png"
+    config = OverlayConfig(
+        format=None,
+        show_date=True,
+        show_time=True,
+        date_format="DD MMMM YYYY",
+        time_format="hh:mm:ss A",
+        layout="multiline",
+        font_size=24,
+        opacity=0.8,
+        outline_enabled=True,
+        outline_width=2,
+        shadow_enabled=True,
+        shadow_opacity=0.4,
+        shadow_offset_x=2,
+        shadow_offset_y=3,
+        font_file=font,
+    )
+    pipeline.render_overlay_preview(
+        MediaItem(source, datetime(2026, 9, 12, 23, 48, 17), True, False, "fixture"),
+        config,
+        ffmpeg,
+        destination,
+    )
     assert destination.stat().st_size > 0
 
 

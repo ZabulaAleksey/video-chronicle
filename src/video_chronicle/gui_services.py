@@ -21,7 +21,7 @@ from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot
 from gui_contract import GuiRunRequest
 
 from .domain import ExportPlan, ExportRequest
-from .execution import ExecutionContext, ProgressEvent
+from .execution import ExecutionContext, ExportCancelled, OperationCancellation, ProgressEvent
 from .ports import PipelinePorts
 from .overlay import OverlayConfig, require_resolved_overlay_font, resolve_overlay_font
 from .project import ProjectState
@@ -145,6 +145,11 @@ class ApplicationServiceAdapter(QObject):
             if cancel_capable is None
             else cancel_capable
         )
+        self._analysis_cancel_capable = (
+            plan_service is None and ports_factory is None
+            if cancel_capable is None
+            else cancel_capable
+        )
         self._request_factory = request_factory
         if preview_service is None:
             from . import pipeline
@@ -159,6 +164,7 @@ class ApplicationServiceAdapter(QObject):
         self._output_before: tuple[int, int, int, int] | None = None
         self._preview_path: Path | None = None
         self._execution_context: ExecutionContext | None = None
+        self._analysis_cancellation: OperationCancellation | None = None
         self._last_terminal_state: str | None = None
 
     @property
@@ -183,22 +189,36 @@ class ApplicationServiceAdapter(QObject):
             self._execute_service, "execution"
         )
 
+    @property
+    def supports_analysis_cancel(self) -> bool:
+        from .process_control import safe_cancel_supported
+
+        return (
+            self._analysis_cancel_capable
+            and safe_cancel_supported()
+            and _declares_keyword(self._plan_service, "cancellation")
+        )
+
     def start_analysis(self, request: GuiRunRequest) -> None:
         """Resolve tools and create an immutable export plan off the UI thread."""
+
+        if self.is_running:
+            raise RuntimeError("Другая операция уже выполняется.")
+        cancellation = OperationCancellation() if self.supports_analysis_cancel else None
+        self._analysis_cancellation = cancellation
+        self._last_terminal_state = None
 
         def task() -> ExportPlan:
             canonical = self._request_factory(request)
             ports = self._ports_factory()
             logger = self._memory_logger("analysis")
             try:
+                kwargs: dict[str, object] = {}
                 if _accepts_keyword(self._plan_service, "progress"):
-                    return self._plan_service(
-                        canonical,
-                        ports,
-                        logger,
-                        progress=self.progress_received.emit,
-                    )
-                return self._plan_service(canonical, ports, logger)
+                    kwargs["progress"] = self.progress_received.emit
+                if cancellation is not None:
+                    kwargs["cancellation"] = cancellation
+                return self._plan_service(canonical, ports, logger, **kwargs)
             finally:
                 self._close_logger(logger)
 
@@ -322,6 +342,17 @@ class ApplicationServiceAdapter(QObject):
             self.execution_state_changed.emit(context.state.value)
         return accepted
 
+    def cancel_analysis(self) -> bool:
+        """Request cooperative cancellation of the active analysis."""
+
+        context = self._analysis_cancellation
+        if self._operation != "analysis" or context is None:
+            return False
+        accepted = context.request_cancel()
+        if accepted:
+            self.execution_state_changed.emit("cancel-requested")
+        return accepted
+
     def start_preview(self, plan: ExportPlan) -> None:
         """Render a representative 640x360 PNG for the first accepted item."""
 
@@ -408,15 +439,28 @@ class ApplicationServiceAdapter(QObject):
         operation = self._operation or "operation"
         result, error = self._outcome
         execution = self._execution_context if operation == "export" else None
+        analysis = self._analysis_cancellation if operation == "analysis" else None
         if execution is not None:
             self._last_terminal_state = execution.state.value
             self.execution_state_changed.emit(execution.state.value)
+        elif analysis is not None:
+            if isinstance(error, ExportCancelled) and analysis.cancel_requested:
+                self._last_terminal_state = "cancelled"
+            elif error is not None:
+                self._last_terminal_state = "failed"
+            else:
+                self._last_terminal_state = "succeeded"
+            self.execution_state_changed.emit(self._last_terminal_state)
         self._thread = None
         self._worker = None
         self._operation = None
         self._execution_context = None
+        self._analysis_cancellation = None
 
         if error is not None:
+            if operation == "analysis" and self._last_terminal_state == "cancelled":
+                self.completed.emit(operation, False, "Анализ остановлен; план не создан.")
+                return
             if operation == "export" and self._last_terminal_state == "cancelled":
                 self.completed.emit(
                     operation, False, "Экспорт отменён; итоговый файл не опубликован."

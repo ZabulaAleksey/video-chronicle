@@ -17,6 +17,7 @@ from typing import Any
 from .domain import MediaError, MediaItem
 from .overlay import (
     OverlayConfig,
+    format_overlay_text as format_datetime_overlay_text,
     require_resolved_overlay_font,
     resolve_overlay_font,
 )
@@ -311,6 +312,9 @@ def source_duration_us(probe: dict[str, Any], *, is_photo: bool = False) -> int 
 def ffmpeg_filter_escape(value: str) -> str:
     return (
         value.replace("\\", "/")
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .replace("\n", r"\n")
         .replace(":", r"\:")
         .replace("'", r"\'")
         .replace("[", r"\[")
@@ -369,18 +373,9 @@ def find_default_font() -> Path | None:
 
 
 def format_overlay_text(item: MediaItem, config: OverlayConfig) -> str:
-    """Format the selected wall-clock date using an approved preset."""
+    """Compatibility adapter to the canonical Qt/FFmpeg-independent formatter."""
 
-    if config.format == "dd.MM.yy ddd":
-        return (
-            f"{item.taken_at.strftime('%d.%m.%y')} "
-            f"{russian_weekday_abbrev(item.taken_at)}"
-        )
-    if config.format == "dd.MM.yyyy":
-        return item.taken_at.strftime("%d.%m.%Y")
-    if config.format == "dd.MM.yyyy HH:mm":
-        return item.taken_at.strftime("%d.%m.%Y %H:%M")
-    raise ValueError(f"unsupported overlay format: {config.format}")
+    return format_datetime_overlay_text(item.taken_at, config)
 
 
 def _overlay_coordinates(config: OverlayConfig) -> tuple[str, str]:
@@ -430,20 +425,35 @@ def make_video_filter(
 
     timestamp = ffmpeg_filter_escape(format_overlay_text(item, overlay))
     x, y = _overlay_coordinates(overlay)
+    border_width = overlay.outline_width if overlay.outline_enabled else 0
+    font_color = (
+        overlay.text_color
+        if overlay.opacity == 1
+        else f"{overlay.text_color}@{overlay.opacity:.3f}"
+    )
     drawtext_options = [
         f"text='{timestamp}'",
-        f"fontcolor={overlay.text_color}",
+        f"fontcolor={font_color}",
         f"bordercolor={overlay.outline_color}",
-        f"borderw={overlay.outline_width}",
+        f"borderw={border_width}",
         f"fontsize={overlay.font_size}",
         "box=0",
         f"x={x}",
         f"y={y}",
     ]
-    if overlay.font_file is not None:
+    if overlay.shadow_enabled:
+        drawtext_options.extend(
+            [
+                f"shadowcolor=#000000@{overlay.shadow_opacity:.3f}",
+                f"shadowx={overlay.shadow_offset_x}",
+                f"shadowy={overlay.shadow_offset_y}",
+            ]
+        )
+    font = overlay.effective_font_file
+    if font is not None:
         drawtext_options.insert(
             0,
-            f"fontfile={ffmpeg_fontfile_escape(str(overlay.font_file.resolve()))}",
+            f"fontfile={ffmpeg_fontfile_escape(str(font.resolve()))}",
         )
     filters.append("drawtext=" + ":".join(drawtext_options))
     return ",".join(filters)

@@ -3,16 +3,18 @@ from __future__ import annotations
 import threading
 import time
 import base64
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QProcess, QTimer
 from PySide6.QtGui import QCloseEvent
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QLabel, QMessageBox
 from PySide6.QtWidgets import QScrollArea
+from PySide6.QtWidgets import QTabWidget
 
 from gui_contract import GuiRunRequest, build_cli_arguments
 from video_chronicle.domain import (
@@ -27,7 +29,9 @@ from video_chronicle.gui_services import ApplicationServiceAdapter
 from video_chronicle.execution import ProgressEvent
 from video_chronicle.overlay import OverlayConfig
 from video_chronicle.ports import PipelinePorts
-from video_chronicle_gui import ChronicleWindow, CliProcessAdapter
+from video_chronicle.project import RenderSettings
+import video_chronicle_gui as gui_module
+from video_chronicle_gui import ChronicleWindow, CliProcessAdapter, STYLE_SHEET
 
 
 _PNG_1X1 = base64.b64decode(
@@ -445,8 +449,57 @@ def test_minimum_window_keeps_full_form_accessible_via_scroll(qapp) -> None:
     scroll = window.findChild(QScrollArea, "mainScroll")
     assert scroll is not None
     assert scroll.verticalScrollBar().maximum() > 0
+    assert scroll.horizontalScrollBar().maximum() == 0
+    settings_tabs = window.findChild(QTabWidget, "settingsTabs")
+    assert settings_tabs is not None
+    assert settings_tabs.currentWidget() is window.main_tab
+    assert [settings_tabs.tabText(index) for index in range(settings_tabs.count())] == [
+        "Основное",
+        "План хронологии",
+        "Дата и время",
+        "Дополнительно",
+    ]
+    assert window.main_tab.isAncestorOf(window.input_edit)
+    assert window.main_tab.isAncestorOf(window.output_edit)
+    assert window.main_tab.isAncestorOf(window.mode_combo)
+    assert window.crf_spin.isVisible() is False
+    assert window.preset_combo.isVisible() is False
+    viewport_width = scroll.viewport().width()
+    for button in (
+        window.input_button,
+        window.output_button,
+    ):
+        button_right = button.mapTo(scroll.viewport(), button.rect().bottomRight()).x()
+        assert 0 <= button_right < viewport_width
+    settings_tabs.setCurrentIndex(1)
+    qapp.processEvents()
+    assert window.timeline_tab.isAncestorOf(window.preview_tree)
+    assert window.move_up_button.isEnabled() is False
+    assert window.move_down_button.isEnabled() is False
+    settings_tabs.setCurrentIndex(2)
+    qapp.processEvents()
+    font_button_right = window.overlay_font_button.mapTo(
+        scroll.viewport(), window.overlay_font_button.rect().bottomRight()
+    ).x()
+    assert 0 <= font_button_right < viewport_width
+    settings_tabs.setCurrentIndex(3)
+    qapp.processEvents()
     assert window.crf_spin.isVisible() is True
     assert window.preset_combo.isVisible() is True
+    for button in (
+        window.ffmpeg_button,
+        window.ffprobe_button,
+        window.cache_dir_button,
+    ):
+        button_right = button.mapTo(scroll.viewport(), button.rect().bottomRight()).x()
+        assert 0 <= button_right < viewport_width
+    cache_hint = next(
+        label
+        for label in window.findChildren(QLabel)
+        if label.text().startswith("Кэш ускоряет повторный экспорт")
+    )
+    assert "не изменяет исходники" in cache_hint.text()
+    assert "итоговый MP4" in cache_hint.text()
     scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
     qapp.processEvents()
     assert scroll.verticalScrollBar().value() > 0
@@ -505,8 +558,10 @@ def test_application_export_progress_cancel_is_responsive_and_terminal(
     assert ticks == [True]
     assert window.cancel_button.isHidden() is False
     assert window.cancel_button.isEnabled() is True
+    assert window.cancel_button.text() == "Остановить экспорт"
+    assert window.analysis_cancel_button.isHidden() is True
     window.cancel_button.click()
-    assert window.status_label.text() == "Отмена экспорта…"
+    assert window.status_label.text() == "Остановка экспорта…"
     release.set()
     _wait_until(qapp, lambda: not adapter.is_running)
 
@@ -517,12 +572,179 @@ def test_application_export_progress_cancel_is_responsive_and_terminal(
     window.close()
 
 
+def test_timeline_surface_and_buttons_do_not_inherit_dark_container_style(qapp) -> None:
+    previous_style_sheet = qapp.styleSheet()
+    window = None
+    try:
+        qapp.setStyleSheet(STYLE_SHEET)
+        window = ChronicleWindow()
+        window.settings_tabs.setCurrentWidget(window.timeline_tab)
+        window.show()
+        qapp.processEvents()
+
+        viewport_image = window.timeline_scroll.viewport().grab().toImage()
+        content_image = window.timeline_scroll.widget().grab().toImage()
+        assert viewport_image.pixelColor(5, 5).name() == "#ffffff"
+        assert content_image.pixelColor(5, 5).name() == "#ffffff"
+        assert "QPushButton {" in STYLE_SHEET
+        assert "border: 1px solid transparent;" in STYLE_SHEET
+        assert "QPushButton:focus" in STYLE_SHEET
+        assert "QPushButton:disabled" in STYLE_SHEET
+        assert "border-color: transparent;" in STYLE_SHEET
+    finally:
+        if window is not None:
+            window.close()
+        qapp.setStyleSheet(previous_style_sheet)
+
+
+def test_timeline_reorder_buttons_follow_selection_and_boundaries(
+    qapp, tmp_path: Path
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    output = tmp_path / "output.mp4"
+    canonical = _canonical_request(input_dir, output)
+    base = _preview_plan(canonical)
+    items = tuple(
+        replace(
+            base.items[0],
+            path=input_dir / f"clip-{index}.mp4",
+            taken_at=datetime(2024, 5, 6, 7, 8, 9 + index),
+            source_duration_us=5_000_000,
+        )
+        for index in range(1, 4)
+    )
+    for index, item in enumerate(items, start=1):
+        item.path.write_bytes(f"source-{index}".encode())
+    original_sources = {item.path: item.path.read_bytes() for item in items}
+    plan = replace(base, items=items)
+    adapter = ApplicationServiceAdapter(
+        plan_service=lambda request, ports, logger: plan,
+        ports_factory=lambda: object(),  # type: ignore[arg-type]
+        request_factory=lambda gui: canonical,
+    )
+    window = ChronicleWindow(application_adapter=adapter)
+    window.input_edit.setText(str(input_dir))
+    window.output_edit.setText(str(output))
+
+    assert window.project_save_button.isEnabled() is False
+    assert window.move_up_button.isEnabled() is False
+    assert window.move_down_button.isEnabled() is False
+    assert window.group_button.isEnabled() is False
+    assert window.trim_apply_button.isEnabled() is False
+
+    window.analyze_button.click()
+    _wait_until(qapp, lambda: not adapter.is_running)
+    window.settings_tabs.setCurrentWidget(window.timeline_tab)
+    skipped = window.preview_tree.topLevelItem(3)
+    skipped.setSelected(True)
+    qapp.processEvents()
+    assert window.move_up_button.isEnabled() is False
+    assert window.move_down_button.isEnabled() is False
+    assert window.trim_apply_button.isEnabled() is False
+    skipped.setSelected(False)
+    first = window.preview_tree.topLevelItem(0)
+    first.setSelected(True)
+    qapp.processEvents()
+
+    assert window.move_up_button.isEnabled() is False
+    assert window.move_down_button.isEnabled() is True
+    assert window.group_button.isEnabled() is False
+    assert window.trim_apply_button.isEnabled() is True
+
+    window.move_down_button.click()
+    qapp.processEvents()
+
+    assert window.preview_tree.topLevelItem(0).text(2).endswith("clip-2.mp4")
+    assert window.preview_tree.topLevelItem(1).text(2).endswith("clip-1.mp4")
+    assert window.preview_tree.topLevelItem(1).isSelected() is True
+    assert window.move_up_button.isEnabled() is True
+    assert window.move_down_button.isEnabled() is True
+
+    window.move_down_button.click()
+    qapp.processEvents()
+
+    assert window.preview_tree.topLevelItem(2).text(2).endswith("clip-1.mp4")
+    assert window.move_up_button.isEnabled() is True
+    assert window.move_down_button.isEnabled() is False
+    assert window.run_button.isEnabled() is False
+    assert window.preview_state_label.text() == "План изменён; обновите preview"
+
+    window.preview_tree.clearSelection()
+    window.preview_tree.topLevelItem(0).setSelected(True)
+    window.preview_tree.topLevelItem(1).setSelected(True)
+    qapp.processEvents()
+    assert window.group_button.isEnabled() is True
+    window.group_button.click()
+    qapp.processEvents()
+
+    window.preview_tree.clearSelection()
+    window.preview_tree.topLevelItem(0).setSelected(True)
+    qapp.processEvents()
+    assert window.move_up_button.isEnabled() is False
+    assert window.move_down_button.isEnabled() is False
+    assert window.ungroup_button.isEnabled() is True
+    assert {path: path.read_bytes() for path in original_sources} == original_sources
+    window.close()
+
+
+def test_application_analysis_can_be_stopped_without_publishing_partial_plan(
+    qapp, tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.delenv("VIDEO_CHRONICLE_CANCEL_UI", raising=False)
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    output = tmp_path / "output.mp4"
+    canonical = _canonical_request(input_dir, output)
+    entered = threading.Event()
+
+    def plan_service(request, ports, logger, *, cancellation, progress=None):
+        entered.set()
+        while not cancellation.cancel_requested:
+            time.sleep(0.005)
+        cancellation.checkpoint()
+
+    adapter = ApplicationServiceAdapter(
+        plan_service=plan_service,
+        ports_factory=lambda: object(),  # type: ignore[arg-type]
+        request_factory=lambda gui: canonical,
+        cancel_capable=True,
+    )
+    window = ChronicleWindow(application_adapter=adapter)
+    window.input_edit.setText(str(input_dir))
+    window.output_edit.setText(str(output))
+
+    window.analyze_button.click()
+    _wait_until(qapp, entered.is_set)
+
+    assert window.analysis_cancel_button.isHidden() is False
+    assert window.analysis_cancel_button.isEnabled() is True
+    assert window.analysis_cancel_button.text() == "Остановить анализ"
+    assert window.cancel_button.isHidden() is True
+    ticks: list[bool] = []
+    QTimer.singleShot(0, lambda: ticks.append(True))
+    qapp.processEvents()
+    assert ticks == [True]
+
+    window.analysis_cancel_button.click()
+    assert window.status_label.text() == "Остановка анализа…"
+    _wait_until(qapp, lambda: not adapter.is_running)
+
+    assert adapter.last_terminal_state == "cancelled"
+    assert window._plan is None
+    assert window.preview_state_label.text() == "Анализ остановлен"
+    assert window.status_label.text() == "Анализ остановлен"
+    assert window.analysis_cancel_button.isHidden() is True
+    window.close()
+
+
 def test_cancel_ui_flag_and_legacy_execute_fallback_hide_button(
     qapp, monkeypatch
 ) -> None:
     monkeypatch.setenv("VIDEO_CHRONICLE_CANCEL_UI", "0")
     flagged = ChronicleWindow(application_adapter=ApplicationServiceAdapter())
     assert flagged.cancel_button.isHidden() is True
+    assert flagged.analysis_cancel_button.isHidden() is True
     flagged.close()
 
     monkeypatch.delenv("VIDEO_CHRONICLE_CANCEL_UI", raising=False)
@@ -532,6 +754,7 @@ def test_cancel_ui_flag_and_legacy_execute_fallback_hide_button(
         )
     )
     assert fallback.cancel_button.isHidden() is True
+    assert fallback.analysis_cancel_button.isHidden() is True
     fallback.close()
 
     injected_backend = ChronicleWindow(
@@ -540,6 +763,7 @@ def test_cancel_ui_flag_and_legacy_execute_fallback_hide_button(
         )
     )
     assert injected_backend.cancel_button.isHidden() is True
+    assert injected_backend.analysis_cancel_button.isHidden() is True
     assert (
         isinstance(injected_backend._adapter, ApplicationServiceAdapter)
         and injected_backend._adapter.supports_cancel is False
@@ -563,7 +787,7 @@ def test_overlay_only_change_keeps_plan_and_preview_temp_is_cleaned(
         return _preview_plan(request)
 
     def preview_service(item, overlay, ffmpeg, destination, runner):
-        assert overlay.enabled is False
+        assert overlay.enabled is True
         preview_configs.append(overlay)
         preview_paths.append(destination)
         destination.write_bytes(_PNG_1X1)
@@ -581,7 +805,19 @@ def test_overlay_only_change_keeps_plan_and_preview_temp_is_cleaned(
     _wait_until(qapp, lambda: not adapter.is_running)
     original_items = window._plan.items
 
-    window.overlay_enabled.setChecked(False)
+    window.overlay_show_time.setChecked(True)
+    window.overlay_format_combo.setCurrentIndex(
+        window.overlay_format_combo.findData("YYYY-MM-DD")
+    )
+    window.overlay_time_format_combo.setCurrentIndex(
+        window.overlay_time_format_combo.findData("hh:mm:ss A")
+    )
+    window.overlay_layout_combo.setCurrentIndex(
+        window.overlay_layout_combo.findData("multiline")
+    )
+    window.overlay_font_size.setValue(32)
+    window.overlay_outline_enabled.setChecked(False)
+    window.overlay_shadow_enabled.setChecked(True)
     qapp.processEvents()
     assert analysis_calls == [True]
     assert window._plan.items is original_items
@@ -592,10 +828,16 @@ def test_overlay_only_change_keeps_plan_and_preview_temp_is_cleaned(
     _wait_until(qapp, lambda: not adapter.is_running)
     assert preview_paths and all(not path.exists() for path in preview_paths)
     assert window._plan.request.overlay is not canonical.overlay
-    assert window._plan.request.overlay.enabled is False
+    assert window._plan.request.overlay.show_time is True
+    assert window._plan.request.overlay.date_format == "YYYY-MM-DD"
+    assert window._plan.request.overlay.time_format == "hh:mm:ss A"
+    assert window._plan.request.overlay.layout == "multiline"
+    assert window._plan.request.overlay.font_size == 32
+    assert window._plan.request.overlay.outline_enabled is False
+    assert window._plan.request.overlay.shadow_enabled is True
     assert preview_configs == [window._plan.request.overlay]
     assert preview_configs[0] is window._plan.request.overlay
-    assert window.visual_preview_state_label.text() == "Подпись выключена"
+    assert window.visual_preview_state_label.text() == "Готов"
     assert window.run_button.isEnabled() is True
     window.close()
 
@@ -703,4 +945,122 @@ def test_legacy_mode_round_trip_preserves_chronicle_default_and_cli_parity(
     assert request.overlay.enabled is True
     assert window.mode_combo.currentText() == "Chronicle"
     assert "--mode" not in arguments
+    window.close()
+
+
+def test_gui_resolves_existing_encoding_tools_without_installer(
+    qapp, tmp_path: Path, monkeypatch
+) -> None:
+    ffmpeg = tmp_path / "ffmpeg.exe"
+    ffprobe = tmp_path / "ffprobe.exe"
+    ffmpeg.write_bytes(b"tool")
+    ffprobe.write_bytes(b"tool")
+    monkeypatch.setattr(
+        gui_module,
+        "resolve_encoding_tools",
+        lambda: (str(ffmpeg.resolve()), str(ffprobe.resolve())),
+    )
+    window = ChronicleWindow()
+
+    window.ensure_encoding_tools()
+
+    assert window.ffmpeg_edit.text() == str(ffmpeg.resolve())
+    assert window.ffprobe_edit.text() == str(ffprobe.resolve())
+    assert window._tool_setup_process is None
+    assert "найдены автоматически" in window.status_label.text()
+    window.close()
+
+
+def test_gui_starts_pinned_winget_install_and_applies_paths(
+    qapp, tmp_path: Path, monkeypatch
+) -> None:
+    ffmpeg = tmp_path / "ffmpeg.exe"
+    ffprobe = tmp_path / "ffprobe.exe"
+    ffmpeg.write_bytes(b"tool")
+    ffprobe.write_bytes(b"tool")
+    resolutions = iter(
+        [(None, None), (str(ffmpeg.resolve()), str(ffprobe.resolve()))]
+    )
+    monkeypatch.setattr(gui_module, "resolve_encoding_tools", lambda: next(resolutions))
+    monkeypatch.setattr(gui_module, "resolve_winget", lambda: "C:/Windows/winget.exe")
+    monkeypatch.setattr(gui_module.sys, "platform", "win32")
+    refreshed: list[bool] = []
+    monkeypatch.setattr(
+        gui_module, "refresh_windows_process_path", lambda: refreshed.append(True)
+    )
+    starts: list[bool] = []
+    monkeypatch.setattr(QProcess, "start", lambda self: starts.append(True))
+    window = ChronicleWindow()
+
+    window.ensure_encoding_tools()
+
+    process = window._tool_setup_process
+    assert process is not None
+    assert process.program() == "C:/Windows/winget.exe"
+    assert process.arguments() == gui_module.winget_ffmpeg_install_arguments()
+    assert starts == [True]
+    assert window.analyze_button.isEnabled() is False
+
+    window._on_encoding_tool_setup_finished(0, QProcess.ExitStatus.NormalExit)
+
+    assert refreshed == [True]
+    assert window.ffmpeg_edit.text() == str(ffmpeg.resolve())
+    assert window.ffprobe_edit.text() == str(ffprobe.resolve())
+    assert window.analyze_button.isEnabled() is True
+    assert "установлен и готов" in window.status_label.text()
+    window.close()
+
+
+def test_gui_winget_failure_restores_manual_fallback(
+    qapp, monkeypatch
+) -> None:
+    monkeypatch.setattr(gui_module, "resolve_encoding_tools", lambda: (None, None))
+    monkeypatch.setattr(gui_module, "resolve_winget", lambda: "C:/Windows/winget.exe")
+    monkeypatch.setattr(gui_module.sys, "platform", "win32")
+    monkeypatch.setattr(QProcess, "start", lambda self: None)
+    window = ChronicleWindow()
+
+    window.ensure_encoding_tools()
+    window._on_encoding_tool_setup_finished(37, QProcess.ExitStatus.NormalExit)
+
+    assert window.analyze_button.isEnabled() is True
+    assert window.ffmpeg_edit.text() == "ffmpeg"
+    assert window.ffprobe_edit.text() == "ffprobe"
+    assert "кодом 37" in window.status_label.text()
+    assert "Дополнительно" in window.status_label.text()
+    window.close()
+
+
+def test_loaded_overlay_settings_populate_every_gui_control(qapp) -> None:
+    window = ChronicleWindow(application_adapter=ApplicationServiceAdapter())
+    overlay = OverlayConfig(
+        format=None,
+        show_date=True,
+        show_time=True,
+        date_format="DD MMMM YYYY",
+        time_format="hh:mm:ss A",
+        layout="separator",
+        separator=" | ",
+        position="top-right",
+        horizontal_margin=11,
+        vertical_margin=13,
+        font_family="Unavailable Saved Family",
+        font_size=32,
+        bold=True,
+        italic=True,
+        text_color="#123456",
+        opacity=0.72,
+        outline_enabled=False,
+        outline_color="#ABCDEF",
+        outline_width=6,
+        shadow_enabled=True,
+        shadow_opacity=0.38,
+        shadow_offset_x=-4,
+        shadow_offset_y=7,
+    )
+    window._apply_render_settings_to_form(
+        RenderSettings(ExportMode.CHRONICLE, overlay, 24, "slow")
+    )
+    assert window._form_overlay_config(resolve_fallback=False) == overlay
+    assert "fallback" in window.overlay_font_combo.currentText()
     window.close()

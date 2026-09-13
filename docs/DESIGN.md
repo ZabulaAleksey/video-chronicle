@@ -8,22 +8,33 @@ services и сохраняется прямой CLI-интерфейс.
 - одно окно с выбором входной папки и итогового MP4;
 - selector режима до input-полей: Chronicle по умолчанию разрешает подпись
   даты, Join явно создаёт хронологический MP4 без неё;
-- отдельная группа параметров FFmpeg, FFprobe, CRF и preset;
-- вкладки «Кодирование» и «Подпись даты» сохраняют компактность формы;
-- подпись даты имеет явный переключатель, три утверждённых format preset,
-  четыре угловых position, margins, font size, text/outline colors, outline
-  width и выбор локального `.ttf`/`.otf`;
+- вкладка «Основное» открывается первой и содержит mode, input и output;
+  «План хронологии» содержит effective order/editor/representative preview,
+  подпись настраивается в «Дата и время», а пути FFmpeg/FFprobe, CRF, preset и
+  cache находятся в «Дополнительно»;
+- доступные FFmpeg/FFprobe автоматически показываются абсолютными путями; при
+  отсутствии на Windows GUI асинхронно запускает закреплённую WinGet-установку,
+  а при ошибке оставляет понятный manual fallback;
+- overlay имеет независимые переключатели даты/времени, понятные примеры date
+  и 12/24-hour time formats, inline/custom-separator/multiline layout;
+- typography содержит список file-backed системных семейств, optional exact
+  `.ttf`/`.otf` override, size, bold/italic, text color/opacity, outline и
+  shadow с opacity/offset; отсутствующее сохранённое семейство при рендере
+  использует fallback;
 - отдельное действие «Анализировать» строит immutable preview до экспорта;
 - accepted/skipped элементы показаны в детерминированном порядке с выбранной
   датой, provenance, timezone, конфликтом или причиной пропуска;
 - project editor позволяет открыть/сохранить JSON project, перемещать selected
-  items вверх/вниз, задавать trim в миллисекундах, группировать/разгруппировать
+  items кнопками «Выше»/«Ниже», задавать trim в миллисекундах, группировать/разгруппировать
   contiguous items и сохранять/применять versioned render presets;
+- editor actions disabled без подходящего selection, на границе списка и при
+  нарушении group constraints; disabled action не маскирует no-op;
 - сохранённый `item_id`, а не номер строки, связывает edits с source; partial
   success не переназначает edit соседнему элементу;
 - preview summary показывает input/output, количество элементов, CRF, preset и
   явную overwrite policy;
-- preview и read-only журнал находятся в изменяемой горизонтальной splitter-паре;
+- preview находится во внутренней прокрутке вкладки «План хронологии», а
+  read-only журнал остаётся отдельной областью под основными actions;
 - loading, empty, error, stale и populated состояния имеют явный текст;
 - representative-frame preview имеет отдельные stale/loading/ready/disabled/
   error состояния; Chronicle экспорт доступен только для актуального preview,
@@ -33,6 +44,9 @@ services и сохраняется прямой CLI-интерфейс.
   показывается, failure/cancel не переводятся искусственно в 100%;
 - светлая нейтральная поверхность с бирюзовым акцентом, явными focus-состояниями
   и foreground-цветами, не зависящими от светлой или тёмной системной палитры;
+- tab/scroll/content/log surfaces явно окрашены в белый и не наследуют тёмный
+  platform background; normal/disabled buttons используют прозрачную рамку,
+  отличную от card boundary, а keyboard focus получает бирюзовую рамку;
 - любое изменение формы инвалидирует план, а экспорт остаётся недоступен до
   повторного успешного анализа;
 - переключение mode инвалидирует plan, но не меняет сохранённый пользовательский
@@ -40,21 +54,29 @@ services и сохраняется прямой CLI-интерфейс.
 - существующий файл требует модального подтверждения непосредственно перед
   экспортом;
 - элементы настройки блокируются на время процесса;
-- cache выключен по умолчанию; пользователь может включить reuse, выбрать
-  приватную локальную папку, увидеть `hit`/`miss` в progress и отдельно
-  подтвердить асинхронную очистку только в idle-состоянии;
-- default application backend показывает «Отменить экспорт» только во время
-  export; после запроса различаются `cancel-requested`, `cancelled`, `failed` и
-  `succeeded`; закрытие окна блокируется до terminal state.
-- при размере 820×660 всё содержимое доступно через центральную прокрутку;
-  default layout 1060×860 показывает параметры и две рабочие панели без clipping.
+- cache выключен по умолчанию; видимое пояснение определяет его как локальное
+  хранение проверенных normalized clips для ускорения повторного экспорта, а не
+  как хранилище исходников, project state или итогового MP4; пользователь может
+  включить reuse, выбрать приватную папку, увидеть `hit`/`miss` в progress и
+  отдельно подтвердить асинхронную очистку только в idle-состоянии;
+- default application backend показывает раздельные «Остановить анализ» и
+  «Остановить экспорт» только во время соответствующей cancellable operation;
+  после запроса различаются `cancel-requested`, `cancelled`, `failed` и
+  `succeeded`, partial analysis plan не отображается, а закрытие окна
+  блокируется до terminal state.
+- при размере 820×660 используется только вертикальная центральная прокрутка:
+  path/tool/overlay fields сжимаются внутри доступной ширины, browse/action
+  buttons справа остаются видимыми, а editor actions складываются в компактную
+  двухколоночную сетку с собственной прокруткой timeline-вкладки;
+  default layout 1060×860 показывает navigation и журнал без clipping.
 
 GUI пока не поддерживает воспроизведение timeline, drag-and-drop, undo/redo,
 multi-track, transitions или nested groups. Cache хранит только проверенные
-normalized clips и не является persistence проекта. Cancel скрыт для
+normalized clips и не является persistence проекта. Stop actions скрыты для
 legacy/injected backend без явной safe capability и через
-`VIDEO_CHRONICLE_CANCEL_UI=0`. Overlay ограничен
-утверждёнными presets: arbitrary FFmpeg expressions и keyframes отсутствуют.
+`VIDEO_CHRONICLE_CANCEL_UI=0`. Overlay ограничен утверждёнными token formats;
+custom date не принимает `strftime`/FFmpeg expressions, animation и keyframes
+отсутствуют.
 
 ## CLI
 

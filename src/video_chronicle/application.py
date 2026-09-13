@@ -18,6 +18,7 @@ from .project import (
 from .execution import (
     ExecutionContext,
     ExportCancelled,
+    OperationCancellation,
     ProgressEvent,
     bind_execution_context,
 )
@@ -55,8 +56,34 @@ def plan_export(
     logger: logging.Logger | None = None,
     *,
     progress: Callable[[ProgressEvent], None] | None = None,
+    cancellation: OperationCancellation | None = None,
 ) -> ExportPlan:
     """Inspect sources into an immutable accepted timeline before encoding."""
+
+    binding = bind_execution_context(cancellation) if cancellation else nullcontext()
+    with binding:
+        if cancellation is not None:
+            cancellation.checkpoint()
+        result = _plan_export_impl(
+            request,
+            ports,
+            logger,
+            progress=progress,
+            cancellation=cancellation,
+        )
+        if cancellation is not None and not cancellation.complete():
+            cancellation.checkpoint()
+        return result
+
+
+def _plan_export_impl(
+    request: ExportRequest,
+    ports: PipelinePorts | None,
+    logger: logging.Logger | None,
+    *,
+    progress: Callable[[ProgressEvent], None] | None,
+    cancellation: OperationCancellation | None,
+) -> ExportPlan:
 
     adapters = ports or default_ports()
     source_paths = tuple(
@@ -64,6 +91,8 @@ def plan_export(
             request.input_dir, request.output, request.error_log
         )
     )
+    if cancellation is not None:
+        cancellation.checkpoint()
     if not source_paths:
         raise RuntimeError(
             f"no supported videos or photos found in {request.input_dir}"
@@ -77,6 +106,8 @@ def plan_export(
     items: list[MediaItem] = []
     failures: list[tuple[Path, str]] = []
     for index, path in enumerate(source_paths, start=1):
+        if cancellation is not None:
+            cancellation.checkpoint()
         outcome = "completed"
         try:
             adapters.validate_source(request.input_dir, path)
@@ -98,6 +129,8 @@ def plan_export(
                     source_fingerprint=fingerprint_after,
                 )
             )
+        except (ExportCancelled, ProcessSafetyError):
+            raise
         except Exception as exc:
             outcome = "skipped"
             failures.append((path, str(exc)))
@@ -116,6 +149,8 @@ def plan_export(
                     outcome=outcome,
                 )
             )
+        if cancellation is not None:
+            cancellation.checkpoint()
     items.sort(key=lambda item: (item.taken_at, item.path.name.casefold()))
     if not items:
         raise RuntimeError(
@@ -205,6 +240,11 @@ def apply_project_state(analyzed_plan: ExportPlan, project_state: ProjectState) 
         raise ValueError("project contains no currently usable media")
     preset = project_state.resolve_active_preset()
     settings = preset.settings
+    if settings.overlay == analyzed_plan.request.overlay:
+        # Family resolution is runtime-only and deliberately omitted from the
+        # portable project preset. Reuse the semantically identical resolved
+        # config produced by the current analysis request.
+        settings = replace(settings, overlay=analyzed_plan.request.overlay)
     request = replace(
         analyzed_plan.request,
         mode=settings.mode,

@@ -573,10 +573,11 @@ def build_clip_identity(
         raise ValueError("source fingerprint changed before cache reuse")
     overlay = request.overlay
     font: dict[str, Any] | None = None
-    if overlay.font_file is not None:
-        font_hash, font_stat = _sha256_stable(overlay.font_file)
+    effective_font = overlay.effective_font_file
+    if effective_font is not None:
+        font_hash, font_stat = _sha256_stable(effective_font)
         font = {
-            "path_sha256": _path_hash(overlay.font_file),
+            "path_sha256": _path_hash(effective_font),
             "sha256": font_hash,
             "size": font_stat.st_size,
             "mtime_ns": font_stat.st_mtime_ns,
@@ -621,7 +622,29 @@ def build_clip_identity(
         "mode": request.mode.value,
         "overlay": {
             "enabled": overlay.enabled,
-            "format": overlay.format,
+            **(
+                {"format": overlay.format}
+                if overlay.format is not None
+                else {
+                    "version": 2,
+                    "show_date": overlay.show_date,
+                    "show_time": overlay.show_time,
+                    "date_format": overlay.date_format,
+                    "custom_date_format": overlay.custom_date_format,
+                    "time_format": overlay.time_format,
+                    "layout": overlay.layout,
+                    "separator": overlay.separator,
+                    "font_family": overlay.font_family,
+                    "bold": overlay.bold,
+                    "italic": overlay.italic,
+                    "opacity": overlay.opacity,
+                    "outline_enabled": overlay.outline_enabled,
+                    "shadow_enabled": overlay.shadow_enabled,
+                    "shadow_opacity": overlay.shadow_opacity,
+                    "shadow_offset_x": overlay.shadow_offset_x,
+                    "shadow_offset_y": overlay.shadow_offset_y,
+                }
+            ),
             "position": overlay.position,
             "horizontal_margin": overlay.horizontal_margin,
             "vertical_margin": overlay.vertical_margin,

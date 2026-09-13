@@ -29,13 +29,23 @@ release gate для будущего пакетирования, но ещё н�
   legacy fallback запускает `sys.executable` и `join_media.py` через list-argv
   `QProcess`. Пути не склеиваются в shell-команду. Overwrite разрешается только
   после отдельного подтверждения и повторной проверки коллизии.
+- Analysis и export используют отдельные cooperative cancellation contexts.
+  Analysis проверяет token на item boundaries и передаёт его managed FFprobe;
+  принятая остановка не публикует partial plan. `cancelled` показывается только
+  после подтверждённого reap process tree и завершения worker; unconfirmed
+  termination остаётся failure.
 - Без `--overwrite` итог публикуется атомарным no-replace rename на Windows
   (включая FAT/exFAT) или create-if-absent hard link на POSIX; файл,
   появившийся во время рендера, сохраняется и приводит к отказу. С
   подтверждённым разрешением используется `os.replace`.
-- Выбранные FFmpeg/FFprobe являются исполняемым доверенным кодом. GUI не
-  подхватывает автоматически локальные бинарники вне PATH и предупреждает
-  пользователя выбирать только доверенные сборки.
+- Выбранные FFmpeg/FFprobe являются исполняемым доверенным кодом. GUI сначала
+  разрешает только явные project environment paths и команды из `PATH` в
+  абсолютные regular-file пути. При отсутствии на Windows он запускает WinGet
+  отдельным argv без shell для точного user-scope пакета `Gyan.FFmpeg` версии
+  9.0.1, принимает package/source agreements в рамках явно утверждённого
+  automatic-bootstrap UX и не сканирует произвольные локальные каталоги.
+  Ошибка bootstrap отображается и оставляет ручной выбор вместо запуска
+  неизвестного executable.
 - Объём отображаемого журнала ограничен; сохраняется диагностически полезный
   хвост вместо неограниченного роста памяти.
 - Путь error log валидируется до открытия: он не может совпадать с output или
@@ -50,6 +60,11 @@ release gate для будущего пакетирования, но ещё н�
   UNC и symlink/reparse отвергаются, а identity повторно проверяется перед
   preview и каждым FFmpeg normalize. Экранирование `fontfile` выполняется в
   pipeline adapter на двух уровнях FFmpeg parser, без shell.
+- Список системных шрифтов строится только из file-backed Windows registry или
+  стандартных platform font directories. Сохранённое family name не становится
+  путём: resolver выбирает проверенный face, а неизвестное семейство деградирует
+  к тому же bounded fallback. Custom date format ограничен 64 символами,
+  разрешёнными tokens и безопасными literal separators до FFmpeg boundary.
 - Каждый tool process запускается в принадлежащем операции дереве: unnamed
   Windows Job Object с `KILL_ON_JOB_CLOSE` и проверкой `ActiveProcesses == 0`
   либо новая POSIX session/process group. Cancel сначала отправляет FFmpeg `q`,

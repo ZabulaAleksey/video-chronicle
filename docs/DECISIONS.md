@@ -19,6 +19,30 @@
 - Альтернатива: Git LFS или включение исходников в основной репозиторий.
 - Последствие: после обычного клонирования FFmpeg требуется установить или восстановить отдельно.
 
+## 2026-09-13 — GUI автоматически подготавливает FFmpeg на Windows
+
+- Решение: при старте разрешать project environment/PATH в абсолютные пути, а
+  при отсутствии FFmpeg или FFprobe асинхронно запускать WinGet для точного
+  user-scope пакета `Gyan.FFmpeg==9.0.1`; существующие инструменты не обновлять.
+- Причина: базовый пользовательский сценарий не должен требовать поиска
+  каталога установки и ручного заполнения технических полей при каждом запуске.
+- Ограничение: bootstrap выполняется только на Windows с доступным WinGet, не
+  сканирует произвольные каталоги и при failure оставляет manual fallback.
+- Последствие: «Дата и время» становится default-вкладкой, а пути/кодек/cache
+  перемещаются во вторичную вкладку «Дополнительно».
+
+## 2026-09-13 — Основная навигация и один владелец порядка
+
+- Решение: сделать «Основное» первой вкладкой, вынести effective timeline и
+  editor во вкладку «План хронологии», а reorder направлять только через
+  immutable `ProjectState.move_items`.
+- Причина: input/output/mode нужны до анализа, а порядок имеет смысл только
+  после построения plan. Кнопка без допустимого state transition вводит
+  пользователя в заблуждение.
+- Последствие: прежнее решение о default-вкладке «Дата и время» заменено новым
+  прямым запросом пользователя; editor actions capability/selection-gated,
+  widget-local mutable order и drag-and-drop не добавляются.
+
 ## 2026-08-11 — переносимые пользовательские пути
 
 - Решение: использовать `~` и `Path.home()` вместо путей конкретного диска и пользователя.
@@ -175,6 +199,22 @@
   overlay-only change сохраняет inspection plan, но требует нового visual
   preview. Video playback, keyframes и arbitrary expressions остаются вне scope.
 
+## 2026-09-12 — semantic date/time formatter и portable font family
+
+- Решение: расширить существующий `OverlayConfig`, сохранив legacy `format` как
+  compatibility input; новые presets хранят независимые date/time/layout/style
+  поля во вложенной overlay schema v2. Форматирование принадлежит Qt-free
+  `overlay.py`, а FFmpeg adapter получает готовый текст и typography.
+- Причина: preview, export, cache identity и project persistence должны
+  интерпретировать одну модель; готовая timestamp string не является setting.
+- Font resolution: сохраняется family name либо explicit local file. Family
+  выбирает file-backed face с нужным bold/italic и runtime-only identity;
+  неизвестное family использует проверенный legacy fallback. Exact file остаётся
+  exact-face override и сам задаёт style.
+- Последствия: внешний project schema v2 читает оба exact nested shapes;
+  legacy overlay сохраняет прежний plan digest, новый overlay имеет собственную
+  `version: 2`. Custom date tokens bounded и не открывают FFmpeg expressions.
+
 ## 2026-08-14 — Join и Chronicle как policy одного плана
 
 - Решение: хранить `ExportMode` в immutable `ExportRequest`; Join использует
@@ -200,6 +240,10 @@
 - Последствия: cancel принимается только до atomic publication commit; grace
   2 секунды и force/reap budget 3 секунды; source identity и workspace cleanup
   подтверждаются; unsafe/legacy backend не показывает кнопку отмены.
+- Расширение 2026-09-13: analysis использует отдельный non-publishing
+  `OperationCancellation`, но связывает его с тем же managed-process context.
+  Completion/cancel race решается одним lock; частичный plan отбрасывается, а
+  GUI показывает раздельные stop actions только для активной операции.
 
 ## 2026-08-14 — CACHE-001: opt-in cache нормализованных клипов
 

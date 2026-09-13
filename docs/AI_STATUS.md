@@ -1,5 +1,66 @@
 # Состояние проекта для AI
 
+## Unified light GUI surface — 2026-09-13
+
+- Timeline tab/viewport/content и журнал получили явные светлые surfaces,
+  поэтому Windows dark palette больше не создаёт чёрный фон между controls.
+- Normal/disabled buttons используют transparent border и визуально отделены
+  от внешнего card boundary; keyboard focus сохраняет бирюзовую рамку.
+- Render regression и полный локальный gate: `326 passed, 12 skipped`.
+
+## Main/timeline navigation и reorder — 2026-09-13
+
+- В `feature/configurable-datetime-overlay` первой открывается вкладка
+  «Основное» с input/output/mode; plan/editor/representative preview находятся
+  в отдельной вкладке «План хронологии».
+- Selected accepted clips перемещаются «Выше»/«Ниже» через существующий
+  immutable EDIT-001 layout. Selection сохраняется после move, source не
+  изменяется, preview/export становятся stale.
+- Move/group/ungroup/trim/preset/project-save actions disabled, когда текущий
+  plan/selection/boundary не допускает meaningful transition.
+- Focused navigation/editing gate: `53 passed, 1 skipped`; полный локальный
+  gate с последующим visual fix: `326 passed, 12 skipped`.
+
+## Analysis/export stop actions — 2026-09-13
+
+- В `feature/configurable-datetime-overlay` GUI показывает раздельные кнопки
+  «Остановить анализ» и «Остановить экспорт» только для активной cancellable
+  операции; неподдерживаемые и legacy adapters их не рекламируют.
+- Analysis использует cooperative token на границах items и managed FFprobe;
+  после принятой остановки частичный plan не публикуется.
+- Export сохраняет прежние process-tree, cleanup и atomic publication
+  guarantees; terminal `cancelled` появляется только после завершения worker.
+- Focused cancellation gate: `53 passed, 1 skipped`; полный локальный gate после
+  `uv sync --locked --extra dev --extra otio`: `324 passed, 12 skipped`.
+
+## Automatic encoding tools и GUI focus — 2026-09-13
+
+- В `feature/configurable-datetime-overlay` GUI по умолчанию открывает
+  «Основное», а технические параметры остаются во вкладке «Дополнительно».
+- Существующие FFmpeg/FFprobe разрешаются в абсолютные env/PATH-пути; при
+  отсутствии на Windows неблокирующий `QProcess` запускает pinned user-scope
+  `Gyan.FFmpeg==9.0.1` через WinGet без shell и заполняет оба поля после success.
+- Failure сохраняет ручной fallback; существующие инструменты не обновляются.
+- UI и README поясняют, что opt-in cache повторно использует только проверенные
+  normalized clips и не хранит исходники, project state или итоговый MP4.
+- Focused GUI/tooling gate: `23 passed`; полный локальный gate с последующим
+  последующими GUI-срезами: `326 passed, 12 skipped`. WinGet metadata подтверждает
+  доступность `Gyan.FFmpeg 9.0.1`;
+  live system installation тестами намеренно не выполнялась.
+
+## Configurable date/time overlay — 2026-09-12
+
+- В `feature/configurable-datetime-overlay` существующий OVERLAY-001 расширен
+  semantic date/time/layout и practical typography без второго renderer path.
+- `overlay.py` владеет единым formatter, custom token validation и file-backed
+  system font resolution; неизвестное family использует проверенный fallback.
+- Project schema v2 читает legacy exact overlay shape и новый nested overlay
+  `version: 2`; family сохраняется переносимо, resolved path остаётся runtime-only.
+- Representative preview и export используют один immutable config и один
+  FFmpeg filter adapter; overlay-only edit по-прежнему требует обновить preview.
+- Полный локальный gate: `313 passed, 12 skipped`; skips включают недоступный
+  FFmpeg/FFprobe runtime, поэтому real multiline typography остаётся `NOT VERIFIED`.
+
 ## Governance migration — 2026-08-24
 
 - 17 stage-файлов объединены в `prompts/STAGES.md`, старые workspace paths обновлены; overlay — PASS.
@@ -34,8 +95,9 @@ project schema v2 и opt-in normalized-clip cache являются разным�
   `domain → ports → application → pipeline adapters`;
 - `src/video_chronicle/metadata.py` реализует утверждённую DATE-001 policy и
   отдаёт typed provenance/conflict/timezone result;
-- `src/video_chronicle/overlay.py` реализует immutable OVERLAY-001 config,
-  font identity policy и approved formats/positions/ranges;
+- `src/video_chronicle/overlay.py` реализует immutable OVERLAY-001/002 config,
+  canonical date/time formatter, font inventory/identity/fallback и approved
+  formats/layout/positions/typography ranges;
 - `ExportMode` входит в immutable request/plan: Join требует disabled overlay,
   Chronicle сохраняет configurable OVERLAY-001;
 - `src/video_chronicle/project.py`, `repository.py` и `serialization.py`
@@ -96,7 +158,8 @@ project schema v2 и opt-in normalized-clip cache являются разным�
   переключении и показывает mode в plan summary;
 - CLI без `--mode` эквивалентен legacy Chronicle; новый `--mode join` проходит
   тот же mixed photo/video production path без `drawtext`;
-- GUI показывает determinate progress и безопасно отменяет default export;
+- GUI показывает determinate progress и раздельно останавливает default
+  analysis/export; partial plan и partial export не публикуются;
   cancel/timeout/output-limit завершают всё дерево процессов в bounded time;
 - cancellation/publication race, strict private-workspace cleanup и terminal
   states `succeeded/failed/cancelled` имеют явный Qt-free контракт;
@@ -121,9 +184,9 @@ project schema v2 и opt-in normalized-clip cache являются разным�
   возвращает proposal, неизвестные/неоднозначные local refs не auto-bind;
 - synthetic scene benchmark на FFmpeg 9.0.1 дал P/R/F1 `1.0/1.0/1.0`,
   `0` FP/min, p95 `0 µs`, deterministic `3/3` и wall/media `0.080509`;
-- 298 тестов проходят, включая interchange/parser/security/scene benchmark;
-  два
-  Windows symlink/reparse теста пропущены из-за WinError 1314.
+- 326 тестов проходят, включая configurable overlay, navigation/reorder, stop actions,
+  interchange/parser/security/scene benchmark; 12 platform/runtime checks
+  пропущены в текущем worktree, включая недоступные FFmpeg/FFprobe.
 
 ## Локальные зависимости
 

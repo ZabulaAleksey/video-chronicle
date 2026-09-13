@@ -10,7 +10,7 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, Qt, Signal, Slot
+from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QCloseEvent, QPixmap, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
@@ -33,7 +33,6 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QSpinBox,
-    QSplitter,
     QTabWidget,
     QTreeWidget,
     QTreeWidgetItem,
@@ -62,10 +61,20 @@ from video_chronicle.project import (
     TrimRange,
 )
 from video_chronicle.repository import JsonProjectRepository
+from video_chronicle.tooling import (
+    FFMPEG_WINGET_VERSION,
+    refresh_windows_process_path,
+    resolve_encoding_tool,
+    resolve_encoding_tools,
+    resolve_winget,
+    winget_ffmpeg_install_arguments,
+)
 from video_chronicle.overlay import (
-    OVERLAY_FORMATS,
+    DATE_FORMATS,
     OVERLAY_POSITIONS,
+    TIME_FORMATS,
     OverlayConfig,
+    available_overlay_font_families,
     resolve_overlay_font,
 )
 
@@ -76,9 +85,9 @@ MAX_LOG_CHARACTERS = 500_000
 
 
 def default_tool_value(tool_name: str) -> str:
-    """Use the platform PATH until the user explicitly selects another tool."""
+    """Show an absolute tool path when the configured executable is available."""
 
-    return tool_name
+    return resolve_encoding_tool(tool_name) or tool_name
 
 
 def file_identity(path: Path) -> tuple[int, int, int, int] | None:
@@ -230,11 +239,19 @@ class ChronicleWindow(QMainWindow):
         self._project_repository: JsonProjectRepository | None = None
         self._persisted_project_revision = 0
         self._visual_preview_current = False
+        self._tool_setup_process: QProcess | None = None
+        self._tool_setup_started = False
         self._cancel_ui_enabled = (
             not self._legacy_mode
             and os.environ.get("VIDEO_CHRONICLE_CANCEL_UI", "1") != "0"
             and isinstance(self._adapter, ApplicationServiceAdapter)
             and self._adapter.supports_cancel
+        )
+        self._analysis_cancel_ui_enabled = (
+            not self._legacy_mode
+            and os.environ.get("VIDEO_CHRONICLE_CANCEL_UI", "1") != "0"
+            and isinstance(self._adapter, ApplicationServiceAdapter)
+            and self._adapter.supports_analysis_cancel
         )
         self._building_ui = True
 
@@ -267,6 +284,7 @@ class ChronicleWindow(QMainWindow):
                 widget.hide()
         else:
             self.run_button.setEnabled(False)
+        self._update_action_states()
 
     def _build_ui(self, default_input: Path) -> None:
         central = QWidget(self)
@@ -295,6 +313,12 @@ class ChronicleWindow(QMainWindow):
         card_layout.setContentsMargins(20, 20, 20, 20)
         card_layout.setSpacing(14)
 
+        self.main_tab = QWidget()
+        self.main_tab.setObjectName("mainSettingsTab")
+        main_layout = QVBoxLayout(self.main_tab)
+        main_layout.setContentsMargins(14, 14, 14, 14)
+        main_layout.setSpacing(14)
+
         mode_row = QHBoxLayout()
         mode_row.addWidget(QLabel("Режим"))
         self.mode_combo = QComboBox()
@@ -308,7 +332,7 @@ class ChronicleWindow(QMainWindow):
         self.mode_description_label.setObjectName("hint")
         self.mode_description_label.setWordWrap(True)
         mode_row.addWidget(self.mode_description_label, 1)
-        card_layout.addLayout(mode_row)
+        main_layout.addLayout(mode_row)
 
         paths = QFormLayout()
         paths.setHorizontalSpacing(18)
@@ -316,27 +340,41 @@ class ChronicleWindow(QMainWindow):
         paths.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
 
         self.input_edit = QLineEdit(str(default_input))
+        self._allow_widget_to_shrink_horizontally(self.input_edit)
         self.input_edit.setAccessibleName("Папка с исходными медиафайлами")
         self.input_button = QPushButton("Выбрать…")
         self.input_button.clicked.connect(self._browse_input)
         paths.addRow("Исходники", self._path_row(self.input_edit, self.input_button))
 
         self.output_edit = QLineEdit(str(self._suggested_output))
+        self._allow_widget_to_shrink_horizontally(self.output_edit)
         self.output_edit.setAccessibleName("Путь итогового MP4-файла")
         self.output_button = QPushButton("Выбрать…")
         self.output_button.clicked.connect(self._browse_output)
         paths.addRow("Результат", self._path_row(self.output_edit, self.output_button))
-        card_layout.addLayout(paths)
+        main_layout.addLayout(paths)
+        main_layout.addStretch(1)
+
+        self.timeline_tab = QWidget()
+        self.timeline_tab.setObjectName("timelineTab")
+        timeline_tab_layout = QVBoxLayout(self.timeline_tab)
+        timeline_tab_layout.setContentsMargins(0, 0, 0, 0)
+        self.timeline_scroll = QScrollArea()
+        self.timeline_scroll.setObjectName("timelineScroll")
+        self.timeline_scroll.viewport().setObjectName("timelineViewport")
+        self.timeline_scroll.setWidgetResizable(True)
+        self.timeline_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        timeline_tab_layout.addWidget(self.timeline_scroll)
 
         advanced = QGroupBox("Параметры кодирования")
-        # The preview and log panes both request vertical stretch.  Preserve the
-        # form's minimum layout height so those panes cannot collapse its rows.
+        # Preserve the technical form's row height inside the shared tab frame.
         advanced.setMinimumHeight(245)
         advanced_layout = QGridLayout(advanced)
         advanced_layout.setHorizontalSpacing(12)
         advanced_layout.setVerticalSpacing(10)
 
         self.ffmpeg_edit = QLineEdit(default_tool_value("ffmpeg"))
+        self._allow_widget_to_shrink_horizontally(self.ffmpeg_edit)
         self.ffmpeg_button = QPushButton("Файл…")
         self.ffmpeg_button.clicked.connect(
             lambda: self._browse_tool(self.ffmpeg_edit, "FFmpeg")
@@ -346,6 +384,7 @@ class ChronicleWindow(QMainWindow):
         advanced_layout.addWidget(self.ffmpeg_button, 0, 2)
 
         self.ffprobe_edit = QLineEdit(default_tool_value("ffprobe"))
+        self._allow_widget_to_shrink_horizontally(self.ffprobe_edit)
         self.ffprobe_button = QPushButton("Файл…")
         self.ffprobe_button.clicked.connect(
             lambda: self._browse_tool(self.ffprobe_edit, "FFprobe")
@@ -386,10 +425,14 @@ class ChronicleWindow(QMainWindow):
         tool_warning.setWordWrap(True)
         advanced_layout.addWidget(tool_warning, 4, 0, 1, 3)
 
-        self.cache_enabled = QCheckBox("Использовать кэш")
+        self.cache_enabled = QCheckBox("Ускорять повторные экспорты (кэш)")
         self.cache_enabled.setChecked(False)
-        self.cache_enabled.setToolTip("Повторно использовать только проверенные нормализованные клипы")
+        self.cache_enabled.setToolTip(
+            "Сохранять проверенные подготовленные клипы и не кодировать их заново, "
+            "если исходник и настройки не изменились"
+        )
         self.cache_dir_edit = QLineEdit("")
+        self._allow_widget_to_shrink_horizontally(self.cache_dir_edit)
         self.cache_dir_edit.setPlaceholderText("Системная папка кэша")
         self.cache_dir_button = QPushButton("Папка…")
         self.cache_dir_button.clicked.connect(self._browse_cache_dir)
@@ -400,25 +443,86 @@ class ChronicleWindow(QMainWindow):
         advanced_layout.addWidget(self.cache_dir_edit, 5, 1)
         advanced_layout.addWidget(self.cache_dir_button, 5, 2)
         advanced_layout.addWidget(self.cache_purge_button, 6, 2)
+        cache_hint = QLabel(
+            "Кэш ускоряет повторный экспорт, сохраняя проверенные подготовленные "
+            "клипы на локальном диске. Он не изменяет исходники и не хранит project "
+            "state или итоговый MP4; при необходимости его можно очистить."
+        )
+        cache_hint.setObjectName("hint")
+        cache_hint.setWordWrap(True)
+        advanced_layout.addWidget(cache_hint, 7, 0, 1, 3)
 
-        self.overlay_group = QGroupBox("Подпись даты")
+        self.overlay_group = QGroupBox("Дата, время и оформление")
         overlay_layout = QGridLayout(self.overlay_group)
         overlay_layout.setHorizontalSpacing(12)
         overlay_layout.setVerticalSpacing(10)
-        self.overlay_enabled = QCheckBox("Показывать дату на кадре")
+        self.overlay_enabled = QCheckBox("Показывать дату/время на кадре")
         self.overlay_enabled.setChecked(True)
-        self.overlay_enabled.setAccessibleName("Включить подпись даты")
-        overlay_layout.addWidget(self.overlay_enabled, 0, 0, 1, 3)
+        self.overlay_enabled.setAccessibleName("Включить подпись даты и времени")
+        self.overlay_show_date = QCheckBox("Дата")
+        self.overlay_show_date.setChecked(True)
+        self.overlay_show_time = QCheckBox("Время")
+        overlay_layout.addWidget(self.overlay_enabled, 0, 0, 1, 2)
+        overlay_layout.addWidget(self.overlay_show_date, 0, 2)
+        overlay_layout.addWidget(self.overlay_show_time, 0, 3)
 
+        date_examples = {
+            "DD.MM.YY ddd": "12.09.26 Сб (legacy)",
+            "DD.MM.YYYY": "12.09.2026",
+            "DD/MM/YYYY": "12/09/2026",
+            "YYYY-MM-DD": "2026-09-12",
+            "MM/DD/YYYY": "09/12/2026",
+            "DD MMM YYYY": "12 Sep 2026",
+            "DD MMMM YYYY": "12 September 2026",
+            "CUSTOM": "Свой формат…",
+        }
         self.overlay_format_combo = QComboBox()
-        self.overlay_format_combo.addItems(list(OVERLAY_FORMATS))
+        for format_id in DATE_FORMATS:
+            self.overlay_format_combo.addItem(date_examples[format_id], format_id)
+        self.overlay_custom_date_format = QLineEdit("")
+        self._allow_widget_to_shrink_horizontally(self.overlay_custom_date_format)
+        self.overlay_custom_date_format.setPlaceholderText("Например: YYYY/MM/DD")
+        self.overlay_custom_date_format.setMaxLength(64)
+        self.overlay_time_format_combo = QComboBox()
+        time_examples = {
+            "HH:mm": "23:48",
+            "HH:mm:ss": "23:48:17",
+            "hh:mm A": "11:48 PM",
+            "hh:mm:ss A": "11:48:17 PM",
+        }
+        for format_id in TIME_FORMATS:
+            self.overlay_time_format_combo.addItem(time_examples[format_id], format_id)
+        self.overlay_layout_combo = QComboBox()
+        for label, layout_id in (
+            ("В одну строку", "inline"),
+            ("Через разделитель", "separator"),
+            ("В две строки", "multiline"),
+        ):
+            self.overlay_layout_combo.addItem(label, layout_id)
+        self.overlay_separator = QLineEdit(" • ")
+        self._allow_widget_to_shrink_horizontally(self.overlay_separator)
+        self.overlay_separator.setMaxLength(8)
         self.overlay_position_combo = QComboBox()
         self.overlay_position_combo.addItems(list(OVERLAY_POSITIONS))
         self.overlay_position_combo.setCurrentText("bottom-left")
-        overlay_layout.addWidget(QLabel("Формат"), 1, 0)
+        for widget in (
+            self.overlay_format_combo,
+            self.overlay_time_format_combo,
+            self.overlay_layout_combo,
+            self.overlay_position_combo,
+        ):
+            self._allow_widget_to_shrink_horizontally(widget)
+        overlay_layout.addWidget(QLabel("Формат даты"), 1, 0)
         overlay_layout.addWidget(self.overlay_format_combo, 1, 1)
-        overlay_layout.addWidget(QLabel("Позиция"), 2, 0)
-        overlay_layout.addWidget(self.overlay_position_combo, 2, 1)
+        overlay_layout.addWidget(self.overlay_custom_date_format, 1, 2, 1, 2)
+        overlay_layout.addWidget(QLabel("Формат времени"), 2, 0)
+        overlay_layout.addWidget(self.overlay_time_format_combo, 2, 1)
+        overlay_layout.addWidget(QLabel("Компоновка"), 2, 2)
+        overlay_layout.addWidget(self.overlay_layout_combo, 2, 3)
+        overlay_layout.addWidget(QLabel("Разделитель"), 3, 0)
+        overlay_layout.addWidget(self.overlay_separator, 3, 1)
+        overlay_layout.addWidget(QLabel("Позиция"), 3, 2)
+        overlay_layout.addWidget(self.overlay_position_combo, 3, 3)
 
         self.overlay_horizontal_margin = QSpinBox()
         self.overlay_horizontal_margin.setRange(0, 300)
@@ -432,46 +536,92 @@ class ChronicleWindow(QMainWindow):
         self.overlay_outline_width = QSpinBox()
         self.overlay_outline_width.setRange(0, 20)
         self.overlay_outline_width.setValue(4)
-        overlay_layout.addWidget(QLabel("Отступ X"), 3, 0)
-        overlay_layout.addWidget(self.overlay_horizontal_margin, 3, 1)
-        overlay_layout.addWidget(QLabel("Отступ Y"), 3, 2)
-        overlay_layout.addWidget(self.overlay_vertical_margin, 3, 3)
-        overlay_layout.addWidget(QLabel("Размер шрифта"), 4, 0)
-        overlay_layout.addWidget(self.overlay_font_size, 4, 1)
-        overlay_layout.addWidget(QLabel("Обводка"), 4, 2)
-        overlay_layout.addWidget(self.overlay_outline_width, 4, 3)
+        overlay_layout.addWidget(QLabel("Отступ X"), 4, 0)
+        overlay_layout.addWidget(self.overlay_horizontal_margin, 4, 1)
+        overlay_layout.addWidget(QLabel("Отступ Y"), 4, 2)
+        overlay_layout.addWidget(self.overlay_vertical_margin, 4, 3)
+
+        self.overlay_font_combo = QComboBox()
+        self.overlay_font_combo.addItem("Автоматически (legacy fallback)", None)
+        for family in available_overlay_font_families():
+            self.overlay_font_combo.addItem(family, family)
+        self._allow_widget_to_shrink_horizontally(self.overlay_font_combo)
+        overlay_layout.addWidget(QLabel("Системный шрифт"), 5, 0)
+        overlay_layout.addWidget(self.overlay_font_combo, 5, 1, 1, 3)
+
+        self.overlay_bold = QCheckBox("Жирный")
+        self.overlay_italic = QCheckBox("Курсив")
+        overlay_layout.addWidget(QLabel("Размер шрифта"), 6, 0)
+        overlay_layout.addWidget(self.overlay_font_size, 6, 1)
+        overlay_layout.addWidget(self.overlay_bold, 6, 2)
+        overlay_layout.addWidget(self.overlay_italic, 6, 3)
 
         self.overlay_text_color = QLineEdit("#000000")
+        self._allow_widget_to_shrink_horizontally(self.overlay_text_color)
         self.overlay_text_color.setMaxLength(7)
+        self.overlay_opacity = QSpinBox()
+        self.overlay_opacity.setRange(0, 100)
+        self.overlay_opacity.setValue(100)
+        self.overlay_opacity.setSuffix(" %")
+        self.overlay_outline_enabled = QCheckBox("Обводка")
+        self.overlay_outline_enabled.setChecked(True)
         self.overlay_outline_color = QLineEdit("#FFFFFF")
+        self._allow_widget_to_shrink_horizontally(self.overlay_outline_color)
         self.overlay_outline_color.setMaxLength(7)
-        overlay_layout.addWidget(QLabel("Цвет текста"), 5, 0)
-        overlay_layout.addWidget(self.overlay_text_color, 5, 1)
-        overlay_layout.addWidget(QLabel("Цвет обводки"), 5, 2)
-        overlay_layout.addWidget(self.overlay_outline_color, 5, 3)
+        overlay_layout.addWidget(QLabel("Цвет текста"), 7, 0)
+        overlay_layout.addWidget(self.overlay_text_color, 7, 1)
+        overlay_layout.addWidget(QLabel("Прозрачность"), 7, 2)
+        overlay_layout.addWidget(self.overlay_opacity, 7, 3)
+        overlay_layout.addWidget(self.overlay_outline_enabled, 8, 0)
+        overlay_layout.addWidget(self.overlay_outline_color, 8, 1)
+        overlay_layout.addWidget(QLabel("Толщина"), 8, 2)
+        overlay_layout.addWidget(self.overlay_outline_width, 8, 3)
+
+        self.overlay_shadow_enabled = QCheckBox("Тень")
+        self.overlay_shadow_opacity = QSpinBox()
+        self.overlay_shadow_opacity.setRange(0, 100)
+        self.overlay_shadow_opacity.setValue(50)
+        self.overlay_shadow_opacity.setSuffix(" %")
+        self.overlay_shadow_x = QSpinBox()
+        self.overlay_shadow_x.setRange(-50, 50)
+        self.overlay_shadow_x.setValue(2)
+        self.overlay_shadow_y = QSpinBox()
+        self.overlay_shadow_y.setRange(-50, 50)
+        self.overlay_shadow_y.setValue(2)
+        overlay_layout.addWidget(self.overlay_shadow_enabled, 9, 0)
+        overlay_layout.addWidget(self.overlay_shadow_opacity, 9, 1)
+        overlay_layout.addWidget(self.overlay_shadow_x, 9, 2)
+        overlay_layout.addWidget(self.overlay_shadow_y, 9, 3)
 
         self.overlay_font_edit = QLineEdit("")
-        self.overlay_font_edit.setPlaceholderText("Системный fallback (.ttf/.otf)")
+        self._allow_widget_to_shrink_horizontally(self.overlay_font_edit)
+        self.overlay_font_edit.setPlaceholderText("Необязательно: точный файл .ttf/.otf")
         self.overlay_font_button = QPushButton("Файл…")
         self.overlay_font_button.clicked.connect(self._browse_overlay_font)
-        overlay_layout.addWidget(QLabel("Шрифт"), 6, 0)
-        overlay_layout.addWidget(self.overlay_font_edit, 6, 1, 1, 2)
-        overlay_layout.addWidget(self.overlay_font_button, 6, 3)
+        overlay_layout.addWidget(QLabel("Файл шрифта"), 10, 0)
+        overlay_layout.addWidget(self.overlay_font_edit, 10, 1, 1, 2)
+        overlay_layout.addWidget(self.overlay_font_button, 10, 3)
         overlay_layout.setColumnStretch(1, 1)
         overlay_layout.setColumnStretch(3, 1)
-        settings_tabs = QTabWidget()
-        settings_tabs.setObjectName("settingsTabs")
-        settings_tabs.setMinimumHeight(310)
+        self.settings_tabs = QTabWidget()
+        self.settings_tabs.setObjectName("settingsTabs")
+        self.settings_tabs.setMinimumHeight(520)
+        self._allow_widget_to_shrink_horizontally(self.settings_tabs)
         advanced.setTitle("")
         self.overlay_group.setTitle("")
-        settings_tabs.addTab(advanced, "Кодирование")
-        settings_tabs.addTab(self.overlay_group, "Подпись даты")
-        card_layout.addWidget(settings_tabs)
+        self.settings_tabs.addTab(self.main_tab, "Основное")
+        self.settings_tabs.addTab(self.timeline_tab, "План хронологии")
+        self.settings_tabs.addTab(self.overlay_group, "Дата и время")
+        self.settings_tabs.addTab(advanced, "Дополнительно")
+        self.settings_tabs.setCurrentIndex(0)
+        card_layout.addWidget(self.settings_tabs)
         root.addWidget(settings_card)
 
         action_row = QHBoxLayout()
         self.status_label = QLabel("Настройте параметры и запустите анализ")
         self.status_label.setObjectName("status")
+        self.status_label.setWordWrap(True)
+        self._allow_widget_to_shrink_horizontally(self.status_label)
         self.analyze_button = QPushButton("Анализировать")
         self.analyze_button.setMinimumHeight(42)
         self.analyze_button.clicked.connect(self._start_analysis)
@@ -479,13 +629,18 @@ class ChronicleWindow(QMainWindow):
         self.run_button.setObjectName("primary")
         self.run_button.setMinimumHeight(42)
         self.run_button.clicked.connect(self._start_export)
-        self.cancel_button = QPushButton("Отменить экспорт")
+        self.analysis_cancel_button = QPushButton("Остановить анализ")
+        self.analysis_cancel_button.setEnabled(False)
+        self.analysis_cancel_button.setVisible(False)
+        self.analysis_cancel_button.clicked.connect(self._cancel_analysis)
+        self.cancel_button = QPushButton("Остановить экспорт")
         self.cancel_button.setEnabled(False)
-        self.cancel_button.setVisible(self._cancel_ui_enabled)
+        self.cancel_button.setVisible(False)
         self.cancel_button.clicked.connect(self._cancel_export)
         action_row.addWidget(self.status_label, 1)
         action_row.addWidget(self.analyze_button)
         action_row.addWidget(self.run_button)
+        action_row.addWidget(self.analysis_cancel_button)
         action_row.addWidget(self.cancel_button)
         root.addLayout(action_row)
 
@@ -495,10 +650,8 @@ class ChronicleWindow(QMainWindow):
         self.progress.setTextVisible(False)
         root.addWidget(self.progress)
 
-        workspace = QSplitter(Qt.Orientation.Horizontal)
-        workspace.setChildrenCollapsible(False)
-
         preview_panel = QFrame()
+        preview_panel.setObjectName("timelineContent")
         preview_layout = QVBoxLayout(preview_panel)
         preview_layout.setContentsMargins(0, 0, 8, 0)
         preview_layout.setSpacing(10)
@@ -508,6 +661,7 @@ class ChronicleWindow(QMainWindow):
         self.preview_state_label = QLabel("План ещё не построен")
         self.preview_state_label.setObjectName("previewState")
         self.preview_state_label.setAccessibleName("Состояние анализа")
+        self.preview_state_label.setWordWrap(True)
         preview_header.addWidget(preview_title)
         preview_header.addStretch(1)
         preview_header.addWidget(self.preview_state_label)
@@ -523,11 +677,15 @@ class ChronicleWindow(QMainWindow):
         )
         preview_layout.addWidget(self.plan_summary_label)
 
-        editor_actions = QHBoxLayout()
+        editor_actions = QGridLayout()
+        editor_actions.setHorizontalSpacing(8)
+        editor_actions.setVerticalSpacing(8)
         self.project_open_button = QPushButton("Открыть проект…")
         self.project_save_button = QPushButton("Сохранить проект…")
-        self.move_up_button = QPushButton("↑")
-        self.move_down_button = QPushButton("↓")
+        self.move_up_button = QPushButton("↑ Выше")
+        self.move_up_button.setAccessibleName("Переместить выбранные фрагменты выше")
+        self.move_down_button = QPushButton("↓ Ниже")
+        self.move_down_button.setAccessibleName("Переместить выбранные фрагменты ниже")
         self.group_button = QPushButton("Группа")
         self.ungroup_button = QPushButton("Разгруппировать")
         self.preset_save_version_button = QPushButton("Сохранить preset version")
@@ -535,8 +693,22 @@ class ChronicleWindow(QMainWindow):
         self.trim_in_spin = QSpinBox(); self.trim_in_spin.setRange(0, 2_147_483_647); self.trim_in_spin.setSuffix(" ms")
         self.trim_out_spin = QSpinBox(); self.trim_out_spin.setRange(0, 2_147_483_647); self.trim_out_spin.setSuffix(" ms")
         self.trim_apply_button = QPushButton("Trim")
-        for widget in (self.project_open_button, self.project_save_button, self.move_up_button, self.move_down_button, self.group_button, self.ungroup_button, self.preset_save_version_button, self.preset_apply_button, self.trim_in_spin, self.trim_out_spin, self.trim_apply_button):
-            editor_actions.addWidget(widget)
+        for widget, row, column, column_span in (
+            (self.project_open_button, 0, 0, 2),
+            (self.project_save_button, 1, 0, 2),
+            (self.move_up_button, 2, 0, 1),
+            (self.move_down_button, 2, 1, 1),
+            (self.group_button, 3, 0, 1),
+            (self.ungroup_button, 3, 1, 1),
+            (self.preset_save_version_button, 4, 0, 2),
+            (self.preset_apply_button, 5, 0, 2),
+            (self.trim_in_spin, 6, 0, 1),
+            (self.trim_out_spin, 6, 1, 1),
+            (self.trim_apply_button, 7, 0, 2),
+        ):
+            editor_actions.addWidget(widget, row, column, 1, column_span)
+        editor_actions.setColumnStretch(0, 1)
+        editor_actions.setColumnStretch(1, 1)
         self.project_open_button.clicked.connect(self._open_project)
         self.project_save_button.clicked.connect(self._save_project)
         self.move_up_button.clicked.connect(lambda: self._move_selected(-1))
@@ -561,9 +733,10 @@ class ChronicleWindow(QMainWindow):
         )
         self.preview_tree.setUniformRowHeights(True)
         self.preview_tree.setMinimumHeight(165)
+        self.preview_tree.itemSelectionChanged.connect(self._update_action_states)
         preview_layout.addWidget(self.preview_tree, 1)
 
-        visual_header = QHBoxLayout()
+        visual_header = QGridLayout()
         visual_title = QLabel("Кадр с подписью")
         visual_title.setObjectName("sectionTitle")
         self.visual_preview_state_label = QLabel("Предпросмотр не построен")
@@ -571,10 +744,10 @@ class ChronicleWindow(QMainWindow):
         self.preview_button = QPushButton("Обновить предпросмотр")
         self.preview_button.setEnabled(False)
         self.preview_button.clicked.connect(self._start_visual_preview)
-        visual_header.addWidget(visual_title)
-        visual_header.addStretch(1)
-        visual_header.addWidget(self.visual_preview_state_label)
-        visual_header.addWidget(self.preview_button)
+        visual_header.addWidget(visual_title, 0, 0)
+        visual_header.addWidget(self.visual_preview_state_label, 1, 0)
+        visual_header.addWidget(self.preview_button, 2, 0)
+        visual_header.setColumnStretch(0, 1)
         preview_layout.addLayout(visual_header)
         self.visual_preview_label = QLabel("640 × 360")
         self.visual_preview_label.setObjectName("visualPreview")
@@ -587,6 +760,7 @@ class ChronicleWindow(QMainWindow):
         preview_layout.addWidget(self.visual_preview_label)
 
         log_panel = QFrame()
+        log_panel.setObjectName("logPanel")
         log_layout = QVBoxLayout(log_panel)
         log_layout.setContentsMargins(8, 0, 0, 0)
         log_layout.setSpacing(10)
@@ -610,15 +784,13 @@ class ChronicleWindow(QMainWindow):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
         log_layout.addWidget(self.log_view, 1)
-        workspace.addWidget(preview_panel)
-        workspace.addWidget(log_panel)
-        workspace.setStretchFactor(0, 3)
-        workspace.setStretchFactor(1, 2)
-        workspace.setSizes([620, 400])
-        root.addWidget(workspace, 1)
+        self.timeline_scroll.setWidget(preview_panel)
+        log_panel.setMinimumHeight(160)
+        root.addWidget(log_panel)
 
         scroll = QScrollArea(self)
         scroll.setObjectName("mainScroll")
+        scroll.viewport().setObjectName("mainViewport")
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setWidget(central)
@@ -666,15 +838,130 @@ class ChronicleWindow(QMainWindow):
         self.preset_combo.currentTextChanged.connect(self._invalidate_plan)
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         self.overlay_enabled.toggled.connect(self._invalidate_overlay)
-        self.overlay_format_combo.currentTextChanged.connect(self._invalidate_overlay)
+        self.overlay_show_date.toggled.connect(self._invalidate_overlay)
+        self.overlay_show_time.toggled.connect(self._invalidate_overlay)
+        self.overlay_format_combo.currentIndexChanged.connect(self._invalidate_overlay)
+        self.overlay_custom_date_format.textChanged.connect(self._invalidate_overlay)
+        self.overlay_time_format_combo.currentIndexChanged.connect(self._invalidate_overlay)
+        self.overlay_layout_combo.currentIndexChanged.connect(self._invalidate_overlay)
+        self.overlay_separator.textChanged.connect(self._invalidate_overlay)
         self.overlay_position_combo.currentTextChanged.connect(self._invalidate_overlay)
         self.overlay_horizontal_margin.valueChanged.connect(self._invalidate_overlay)
         self.overlay_vertical_margin.valueChanged.connect(self._invalidate_overlay)
+        self.overlay_font_combo.currentIndexChanged.connect(self._invalidate_overlay)
         self.overlay_font_size.valueChanged.connect(self._invalidate_overlay)
+        self.overlay_bold.toggled.connect(self._invalidate_overlay)
+        self.overlay_italic.toggled.connect(self._invalidate_overlay)
+        self.overlay_opacity.valueChanged.connect(self._invalidate_overlay)
+        self.overlay_outline_enabled.toggled.connect(self._invalidate_overlay)
         self.overlay_outline_width.valueChanged.connect(self._invalidate_overlay)
         self.overlay_text_color.textChanged.connect(self._invalidate_overlay)
         self.overlay_outline_color.textChanged.connect(self._invalidate_overlay)
+        self.overlay_shadow_enabled.toggled.connect(self._invalidate_overlay)
+        self.overlay_shadow_opacity.valueChanged.connect(self._invalidate_overlay)
+        self.overlay_shadow_x.valueChanged.connect(self._invalidate_overlay)
+        self.overlay_shadow_y.valueChanged.connect(self._invalidate_overlay)
         self.overlay_font_edit.textChanged.connect(self._invalidate_overlay)
+        self._update_overlay_control_state()
+
+    @staticmethod
+    def _allow_widget_to_shrink_horizontally(widget: QWidget) -> None:
+        policy = widget.sizePolicy()
+        policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
+        widget.setSizePolicy(policy)
+        widget.setMinimumWidth(0)
+
+    def ensure_encoding_tools(self) -> None:
+        """Resolve tools or asynchronously install the pinned Windows package."""
+
+        if self._tool_setup_started:
+            return
+        self._tool_setup_started = True
+        ffmpeg, ffprobe = resolve_encoding_tools()
+        if ffmpeg and ffprobe:
+            self._apply_encoding_tool_paths(ffmpeg, ffprobe)
+            self.status_label.setText("FFmpeg и FFprobe найдены автоматически")
+            return
+        if sys.platform != "win32":
+            self.status_label.setText(
+                "FFmpeg/FFprobe не найдены. Установите их через системный package manager "
+                "или укажите пути в разделе «Дополнительно»."
+            )
+            return
+        winget = resolve_winget()
+        if winget is None:
+            self.status_label.setText(
+                "FFmpeg/FFprobe не найдены, а WinGet недоступен. Установите Microsoft "
+                "App Installer или укажите пути в разделе «Дополнительно»."
+            )
+            return
+
+        self.status_label.setText(
+            f"FFmpeg {FFMPEG_WINGET_VERSION} не найден — выполняется автоматическая установка…"
+        )
+        self.analyze_button.setEnabled(False)
+        self.run_button.setEnabled(False)
+        process = QProcess(self)
+        process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        process.setProgram(winget)
+        process.setArguments(winget_ffmpeg_install_arguments())
+        process.errorOccurred.connect(self._on_encoding_tool_setup_error)
+        process.finished.connect(self._on_encoding_tool_setup_finished)
+        self._tool_setup_process = process
+        process.start()
+
+    def _apply_encoding_tool_paths(self, ffmpeg: str, ffprobe: str) -> None:
+        self.ffmpeg_edit.setText(ffmpeg)
+        self.ffprobe_edit.setText(ffprobe)
+
+    def _restore_actions_after_tool_setup(self) -> None:
+        if self._legacy_mode:
+            self.run_button.setEnabled(True)
+        else:
+            self.analyze_button.setEnabled(True)
+
+    def _release_tool_setup_process(self) -> None:
+        process = self._tool_setup_process
+        self._tool_setup_process = None
+        if process is not None:
+            process.deleteLater()
+
+    @Slot(QProcess.ProcessError)
+    def _on_encoding_tool_setup_error(self, error: QProcess.ProcessError) -> None:
+        if error != QProcess.ProcessError.FailedToStart:
+            return
+        self.status_label.setText(
+            "Не удалось запустить WinGet. Укажите FFmpeg/FFprobe в разделе «Дополнительно»."
+        )
+        self._release_tool_setup_process()
+        self._restore_actions_after_tool_setup()
+
+    @Slot(int, QProcess.ExitStatus)
+    def _on_encoding_tool_setup_finished(
+        self, exit_code: int, exit_status: QProcess.ExitStatus
+    ) -> None:
+        self._release_tool_setup_process()
+        if exit_status != QProcess.ExitStatus.NormalExit or exit_code != 0:
+            self.status_label.setText(
+                f"Автоматическая установка FFmpeg завершилась с кодом {exit_code}. "
+                "Укажите пути в разделе «Дополнительно»."
+            )
+            self._restore_actions_after_tool_setup()
+            return
+        refresh_windows_process_path()
+        ffmpeg, ffprobe = resolve_encoding_tools()
+        if not ffmpeg or not ffprobe:
+            self.status_label.setText(
+                "FFmpeg установлен, но новые пути пока не найдены. Перезапустите GUI "
+                "или укажите их в разделе «Дополнительно»."
+            )
+            self._restore_actions_after_tool_setup()
+            return
+        self._apply_encoding_tool_paths(ffmpeg, ffprobe)
+        self.status_label.setText(
+            f"FFmpeg {FFMPEG_WINGET_VERSION} установлен и готов к работе"
+        )
+        self._restore_actions_after_tool_setup()
 
     @staticmethod
     def _path_row(line_edit: QLineEdit, button: QPushButton) -> QWidget:
@@ -722,6 +1009,7 @@ class ChronicleWindow(QMainWindow):
             "Fonts (*.ttf *.otf)",
         )
         if selected:
+            self.overlay_font_combo.setCurrentIndex(0)
             self.overlay_font_edit.setText(selected)
 
     def _browse_tool(self, target: QLineEdit, label: str) -> None:
@@ -796,14 +1084,36 @@ class ChronicleWindow(QMainWindow):
                     self.overlay_enabled.isChecked()
                     and self._selected_mode() is ExportMode.CHRONICLE
                 ),
-                format=self.overlay_format_combo.currentText(),  # type: ignore[arg-type]
+                format=None,
+                show_date=self.overlay_show_date.isChecked(),
+                show_time=self.overlay_show_time.isChecked(),
+                date_format=self.overlay_format_combo.currentData(),
+                custom_date_format=(
+                    self.overlay_custom_date_format.text()
+                    if self.overlay_format_combo.currentData() == "CUSTOM"
+                    else None
+                ),
+                time_format=self.overlay_time_format_combo.currentData(),
+                layout=self.overlay_layout_combo.currentData(),
+                separator=self.overlay_separator.text(),
                 position=self.overlay_position_combo.currentText(),  # type: ignore[arg-type]
                 horizontal_margin=self.overlay_horizontal_margin.value(),
                 vertical_margin=self.overlay_vertical_margin.value(),
+                font_family=(
+                    None if raw_font else self.overlay_font_combo.currentData()
+                ),
                 font_size=self.overlay_font_size.value(),
+                bold=self.overlay_bold.isChecked(),
+                italic=self.overlay_italic.isChecked(),
                 text_color=self.overlay_text_color.text().strip(),
+                opacity=self.overlay_opacity.value() / 100,
+                outline_enabled=self.overlay_outline_enabled.isChecked(),
                 outline_color=self.overlay_outline_color.text().strip(),
                 outline_width=self.overlay_outline_width.value(),
+                shadow_enabled=self.overlay_shadow_enabled.isChecked(),
+                shadow_opacity=self.overlay_shadow_opacity.value() / 100,
+                shadow_offset_x=self.overlay_shadow_x.value(),
+                shadow_offset_y=self.overlay_shadow_y.value(),
                 font_file=Path(raw_font).expanduser() if raw_font else None,
             )
             if resolve_fallback:
@@ -813,6 +1123,28 @@ class ChronicleWindow(QMainWindow):
             return config
         except (ValueError, RuntimeError) as exc:
             raise RequestValidationError(str(exc)) from exc
+
+    def _update_overlay_control_state(self) -> None:
+        active = self.overlay_enabled.isChecked()
+        self.overlay_show_date.setEnabled(active)
+        self.overlay_show_time.setEnabled(active)
+        self.overlay_format_combo.setEnabled(active and self.overlay_show_date.isChecked())
+        self.overlay_custom_date_format.setEnabled(
+            active
+            and self.overlay_show_date.isChecked()
+            and self.overlay_format_combo.currentData() == "CUSTOM"
+        )
+        self.overlay_time_format_combo.setEnabled(active and self.overlay_show_time.isChecked())
+        both = active and self.overlay_show_date.isChecked() and self.overlay_show_time.isChecked()
+        self.overlay_layout_combo.setEnabled(both)
+        self.overlay_separator.setEnabled(
+            both and self.overlay_layout_combo.currentData() == "separator"
+        )
+        self.overlay_outline_color.setEnabled(active and self.overlay_outline_enabled.isChecked())
+        self.overlay_outline_width.setEnabled(active and self.overlay_outline_enabled.isChecked())
+        self.overlay_shadow_opacity.setEnabled(active and self.overlay_shadow_enabled.isChecked())
+        self.overlay_shadow_x.setEnabled(active and self.overlay_shadow_enabled.isChecked())
+        self.overlay_shadow_y.setEnabled(active and self.overlay_shadow_enabled.isChecked())
 
     @Slot(int)
     def _on_mode_changed(self, _index: int) -> None:
@@ -854,6 +1186,7 @@ class ChronicleWindow(QMainWindow):
 
     @Slot()
     def _invalidate_overlay(self, *_args: object) -> None:
+        self._update_overlay_control_state()
         if self._building_ui or self._legacy_mode:
             return
         self._visual_preview_current = False
@@ -928,9 +1261,15 @@ class ChronicleWindow(QMainWindow):
     def _on_application_started(self, operation: str) -> None:
         if operation == "analysis":
             self.status_label.setText("Анализ медиафайлов…")
+            self.analysis_cancel_button.setVisible(self._analysis_cancel_ui_enabled)
+            self.analysis_cancel_button.setEnabled(self._analysis_cancel_ui_enabled)
+            self.cancel_button.setVisible(False)
         else:
             self.status_label.setText("Медиаконвейер выполняется…")
-            self.cancel_button.setEnabled(False)
+            self.analysis_cancel_button.setVisible(False)
+            is_export = operation == "export"
+            self.cancel_button.setVisible(is_export and self._cancel_ui_enabled)
+            self.cancel_button.setEnabled(is_export and self._cancel_ui_enabled)
 
     @Slot(object)
     def _on_progress_event(self, value: object) -> None:
@@ -958,15 +1297,32 @@ class ChronicleWindow(QMainWindow):
     @Slot(str)
     def _on_execution_state(self, state: str) -> None:
         if state == "cancel-requested":
-            self.status_label.setText("Отмена экспорта…")
-            self.cancel_button.setEnabled(False)
+            operation = (
+                self._adapter.current_operation
+                if isinstance(self._adapter, ApplicationServiceAdapter)
+                else None
+            )
+            if operation == "analysis":
+                self.status_label.setText("Остановка анализа…")
+                self.analysis_cancel_button.setEnabled(False)
+            else:
+                self.status_label.setText("Остановка экспорта…")
+                self.cancel_button.setEnabled(False)
+
+    @Slot()
+    def _cancel_analysis(self) -> None:
+        if not isinstance(self._adapter, ApplicationServiceAdapter):
+            return
+        if self._adapter.cancel_analysis():
+            self.status_label.setText("Остановка анализа…")
+            self.analysis_cancel_button.setEnabled(False)
 
     @Slot()
     def _cancel_export(self) -> None:
         if not isinstance(self._adapter, ApplicationServiceAdapter):
             return
         if self._adapter.cancel_export():
-            self.status_label.setText("Отмена экспорта…")
+            self.status_label.setText("Остановка экспорта…")
             self.cancel_button.setEnabled(False)
 
     @Slot(object)
@@ -1010,16 +1366,25 @@ class ChronicleWindow(QMainWindow):
     def _refresh_edited_plan(self) -> None:
         if self._analyzed_plan is None or self._project_state is None:
             return
+        selected_ids = set(self._selected_item_ids())
         self._plan = apply_project_state(self._analyzed_plan, self._project_state)
-        self._populate_preview(self._plan)
+        signals_were_blocked = self.preview_tree.blockSignals(True)
+        try:
+            self._populate_preview(self._plan)
+            for index in range(self.preview_tree.topLevelItemCount()):
+                item = self.preview_tree.topLevelItem(index)
+                if item.data(0, Qt.ItemDataRole.UserRole) in selected_ids:
+                    item.setSelected(True)
+        finally:
+            self.preview_tree.blockSignals(signals_were_blocked)
         self._visual_preview_current = False
         self.visual_preview_state_label.setText("Предпросмотр устарел")
         self.preview_button.setEnabled(True)
         self.preview_state_label.setText("План изменён; обновите preview")
         self.run_button.setEnabled(False)
+        self._update_action_states()
 
     def _selected_item_ids(self) -> tuple[str, ...]:
-        self._ensure_project_state()
         return tuple(
             item_id
             for item in self.preview_tree.selectedItems()
@@ -1028,17 +1393,93 @@ class ChronicleWindow(QMainWindow):
             )
         )
 
+    def _move_candidate(self, direction: int) -> ProjectState | None:
+        ids = self._selected_item_ids()
+        if not ids or self._plan is None:
+            return None
+        try:
+            state = self._ensure_project_state()
+        except RuntimeError:
+            return None
+        assert state.layout is not None
+        selected = set(ids)
+        positions = [
+            index
+            for index, entry in enumerate(state.layout.entries)
+            if entry.item_id in selected
+        ]
+        if not positions:
+            return None
+        target = min(positions) - 1 if direction < 0 else max(positions) + 2
+        if target < 0 or target > len(state.layout.entries):
+            return None
+        before = (
+            state.layout.entries[target].item_id
+            if target < len(state.layout.entries)
+            else None
+        )
+        try:
+            candidate = state.move_items(ids, before)
+        except ValueError:
+            return None
+        return candidate if candidate.layout != state.layout else None
+
+    @Slot()
+    def _update_action_states(self) -> None:
+        running = self._adapter.is_running
+        editable = not self._legacy_mode and not running and self._plan is not None
+        ids = self._selected_item_ids() if editable else ()
+        state = self._project_state
+        if editable and ids and state is None:
+            try:
+                state = self._ensure_project_state()
+            except RuntimeError:
+                state = None
+
+        self.project_save_button.setEnabled(
+            not self._legacy_mode and not running and self._plan is not None
+        )
+        self.move_up_button.setEnabled(editable and self._move_candidate(-1) is not None)
+        self.move_down_button.setEnabled(editable and self._move_candidate(1) is not None)
+
+        can_group = False
+        if editable and state is not None and len(ids) >= 2:
+            try:
+                state.create_group(
+                    f"group-{state.revision + 1}",
+                    f"Группа {state.revision + 1}",
+                    ids,
+                )
+            except ValueError:
+                pass
+            else:
+                can_group = True
+        self.group_button.setEnabled(can_group)
+
+        groups: set[str] = set()
+        if editable and state is not None and state.layout is not None:
+            selected = set(ids)
+            groups = {
+                entry.group_id
+                for entry in state.layout.entries
+                if entry.item_id in selected and entry.group_id is not None
+            }
+        self.ungroup_button.setEnabled(len(groups) == 1)
+        single_item = editable and len(ids) == 1
+        self.trim_in_spin.setEnabled(single_item)
+        self.trim_out_spin.setEnabled(single_item)
+        self.trim_apply_button.setEnabled(single_item)
+        self.preset_save_version_button.setEnabled(editable)
+        self.preset_apply_button.setEnabled(
+            editable and state is not None and state.active_preset is not None
+        )
+
     @Slot()
     def _move_selected(self, direction: int) -> None:
-        ids = self._selected_item_ids()
-        if not ids: return
-        state = self._ensure_project_state(); assert state.layout is not None
-        positions = [i for i, entry in enumerate(state.layout.entries) if entry.item_id in set(ids)]
-        target = min(positions) - 1 if direction < 0 else max(positions) + 2
-        if target < 0 or target > len(state.layout.entries): return
-        before = state.layout.entries[target].item_id if target < len(state.layout.entries) else None
-        try: self._project_state = state.move_items(ids, before)
-        except ValueError as exc: QMessageBox.warning(self, "Редактирование", str(exc)); return
+        candidate = self._move_candidate(direction)
+        if candidate is None:
+            return
+        self._project_state = candidate
         self._refresh_edited_plan()
 
     @Slot()
@@ -1078,13 +1519,62 @@ class ChronicleWindow(QMainWindow):
             QMessageBox.warning(self, "Preset", str(exc)); return
         self._refresh_edited_plan()
 
+    @staticmethod
+    def _set_combo_data(combo: QComboBox, value: object) -> None:
+        index = combo.findData(value)
+        if index >= 0:
+            combo.setCurrentIndex(index)
+
+    def _apply_render_settings_to_form(self, settings: RenderSettings) -> None:
+        previous = self._building_ui
+        self._building_ui = True
+        try:
+            self._set_combo_data(self.mode_combo, settings.mode.value)
+            overlay = settings.overlay
+            self.overlay_enabled.setChecked(overlay.enabled)
+            self.overlay_show_date.setChecked(overlay.show_date)
+            self.overlay_show_time.setChecked(overlay.show_time)
+            self._set_combo_data(self.overlay_format_combo, overlay.date_format)
+            self.overlay_custom_date_format.setText(overlay.custom_date_format or "")
+            self._set_combo_data(self.overlay_time_format_combo, overlay.time_format)
+            self._set_combo_data(self.overlay_layout_combo, overlay.layout)
+            self.overlay_separator.setText(overlay.separator)
+            self.overlay_position_combo.setCurrentText(overlay.position)
+            self.overlay_horizontal_margin.setValue(overlay.horizontal_margin)
+            self.overlay_vertical_margin.setValue(overlay.vertical_margin)
+            if overlay.font_family is not None and self.overlay_font_combo.findData(overlay.font_family) < 0:
+                self.overlay_font_combo.addItem(
+                    f"{overlay.font_family} (недоступен — будет fallback)",
+                    overlay.font_family,
+                )
+            self._set_combo_data(self.overlay_font_combo, overlay.font_family)
+            self.overlay_font_edit.setText(
+                "" if overlay.font_file is None else str(overlay.font_file)
+            )
+            self.overlay_font_size.setValue(overlay.font_size)
+            self.overlay_bold.setChecked(overlay.bold)
+            self.overlay_italic.setChecked(overlay.italic)
+            self.overlay_text_color.setText(overlay.text_color)
+            self.overlay_opacity.setValue(round(overlay.opacity * 100))
+            self.overlay_outline_enabled.setChecked(overlay.outline_enabled)
+            self.overlay_outline_color.setText(overlay.outline_color)
+            self.overlay_outline_width.setValue(overlay.outline_width)
+            self.overlay_shadow_enabled.setChecked(overlay.shadow_enabled)
+            self.overlay_shadow_opacity.setValue(round(overlay.shadow_opacity * 100))
+            self.overlay_shadow_x.setValue(overlay.shadow_offset_x)
+            self.overlay_shadow_y.setValue(overlay.shadow_offset_y)
+            self.crf_spin.setValue(settings.crf)
+            self.preset_combo.setCurrentText(settings.encoder_preset)
+        finally:
+            self._building_ui = previous
+        self._update_overlay_control_state()
+
     @Slot()
     def _apply_active_preset(self) -> None:
         state = self._ensure_project_state()
         if state.active_preset is None: return
         preset = state.resolve_active_preset()
-        self.crf_spin.setValue(preset.settings.crf)
-        self.preset_combo.setCurrentText(preset.settings.encoder_preset)
+        self._apply_render_settings_to_form(preset.settings)
         self._project_state = state.apply_preset(preset.ref)
         self._refresh_edited_plan()
 
@@ -1117,6 +1607,7 @@ class ChronicleWindow(QMainWindow):
         if not isinstance(state, ProjectState): return
         self._project_state = state
         self._persisted_project_revision = state.revision
+        self._apply_render_settings_to_form(state.resolve_active_preset().settings)
         try: self._refresh_edited_plan()
         except ValueError as exc: QMessageBox.warning(self, "Проект", str(exc))
 
@@ -1186,6 +1677,7 @@ class ChronicleWindow(QMainWindow):
             f"CRF {request.crf}, preset {request.preset} | "
             "overwrite: только после отдельного подтверждения"
         )
+        self._update_action_states()
 
     @Slot(str, bool, str)
     def _on_application_completed(
@@ -1200,6 +1692,11 @@ class ChronicleWindow(QMainWindow):
         self.result_label.setText(message)
         self._append_output(f"\n{message}\n")
         if operation == "analysis":
+            terminal_state = (
+                self._adapter.last_terminal_state
+                if isinstance(self._adapter, ApplicationServiceAdapter)
+                else None
+            )
             if success and self._plan is not None:
                 if self._plan.request.mode is ExportMode.JOIN:
                     self.status_label.setText("План Join готов к экспорту")
@@ -1214,7 +1711,11 @@ class ChronicleWindow(QMainWindow):
             self._plan = None
             self.run_button.setEnabled(False)
             self.progress.setValue(0)
-            if "no supported videos or photos found" in message:
+            if terminal_state == "cancelled":
+                self.preview_state_label.setText("Анализ остановлен")
+                self.plan_summary_label.setText("Частичный план отброшен.")
+                self.status_label.setText("Анализ остановлен")
+            elif "no supported videos or photos found" in message:
                 self.preview_state_label.setText("Поддерживаемые медиафайлы не найдены")
                 self.plan_summary_label.setText(
                     "Папка пуста или не содержит поддерживаемых фото и видео."
@@ -1467,19 +1968,30 @@ class ChronicleWindow(QMainWindow):
         else:
             self.progress.setRange(0, 1)
             self.progress.setTextVisible(False)
-        self.cancel_button.setEnabled(
-            running
-            and self._cancel_ui_enabled
-            and isinstance(self._adapter, ApplicationServiceAdapter)
-            and self._adapter.current_operation == "export"
-        )
+        if not running:
+            self.analysis_cancel_button.setEnabled(False)
+            self.analysis_cancel_button.setVisible(False)
+            self.cancel_button.setEnabled(False)
+            self.cancel_button.setVisible(False)
+        self._update_action_states()
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt API
+        if (
+            self._tool_setup_process is not None
+            and self._tool_setup_process.state() != QProcess.ProcessState.NotRunning
+        ):
+            QMessageBox.warning(
+                self,
+                "Установка FFmpeg ещё выполняется",
+                "Дождитесь завершения автоматической установки FFmpeg.",
+            )
+            event.ignore()
+            return
         if self._adapter.is_running:
             QMessageBox.warning(
                 self,
-                "Экспорт ещё выполняется",
-                "Дождитесь завершения операции или сначала отмените активный экспорт.",
+                "Операция ещё выполняется",
+                "Дождитесь завершения операции или используйте доступную кнопку остановки.",
             )
             event.ignore()
             return
@@ -1488,6 +2000,16 @@ class ChronicleWindow(QMainWindow):
 
 STYLE_SHEET = """
 QWidget#central { background: #f4f7f8; color: #182528; }
+QWidget#mainViewport { background: #f4f7f8; }
+QWidget#mainSettingsTab,
+QWidget#timelineTab,
+QWidget#timelineViewport,
+QFrame#timelineContent,
+QFrame#logPanel {
+    background: #ffffff;
+    color: #182528;
+    border: 0;
+}
 QLabel { color: #233b3f; }
 QLabel#eyebrow { color: #0d7d79; font-size: 11px; font-weight: 700; letter-spacing: 1px; }
 QLabel#title { color: #102a2e; font-size: 30px; font-weight: 700; }
@@ -1520,19 +2042,20 @@ QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QPlainTextEdit:focus, QTreeWid
 QPushButton {
     background: #e7efef;
     color: #233b3f;
-    border: 1px solid #cbd9da;
+    border: 1px solid transparent;
     border-radius: 7px;
     padding: 8px 14px;
     font-weight: 600;
 }
 QPushButton:hover { background: #dce9e9; }
-QPushButton:disabled { color: #8d9b9d; background: #edf1f1; }
+QPushButton:focus { border-color: #278b87; }
+QPushButton:disabled { color: #8d9b9d; background: #edf1f1; border-color: transparent; }
 QPushButton#primary { background: #176f6b; border-color: #176f6b; color: white; padding: 9px 20px; }
 QPushButton#primary:hover { background: #0f5f5b; }
-QPushButton#primary:disabled { color: #8d9b9d; background: #edf1f1; border-color: #d2dddd; }
+QPushButton#primary:disabled { color: #8d9b9d; background: #edf1f1; border-color: transparent; }
 QComboBox QAbstractItemView { background: #ffffff; color: #182528; selection-background-color: #2f918d; }
 QCheckBox { color: #233b3f; spacing: 8px; }
-QTabWidget::pane { border: 1px solid #d5e1e2; border-radius: 8px; top: -1px; }
+QTabWidget::pane { background: #ffffff; border: 1px solid #d5e1e2; border-radius: 8px; top: -1px; }
 QTabBar::tab { background: #e7efef; color: #40575b; padding: 8px 16px; margin-right: 2px; }
 QTabBar::tab:selected { background: #ffffff; color: #176f6b; font-weight: 700; }
 QTreeWidget { alternate-background-color: #f5f9f9; }
@@ -1553,6 +2076,7 @@ def main() -> int:
     legacy_adapter = CliProcessAdapter() if mode == "legacy-cli" else None
     window = ChronicleWindow(adapter=legacy_adapter)
     window.show()
+    QTimer.singleShot(0, window.ensure_encoding_tools)
     return app.exec()
 
 

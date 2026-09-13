@@ -1,7 +1,7 @@
 # Timeline Builder / Video Chronicle
 
 - Статус: черновик product SPEC; требования требуют утверждения до реализации
-- Версия: 0.2
+- Версия: 0.3
 - Область: построение одного видео по набору фотографий и видеозаписей
 - Утверждённый contract этапа 11 вынесен в
   `specs/features/nondestructive-editing.spec.md` и дополняет эту SPEC.
@@ -52,6 +52,80 @@ SPEC сохраняет статус черновика. Срез начинае
 - безопасная отмена и процент выполнения;
 - пакетирование приложения.
 
+## Утверждённое расширение GUI-TOOLS-001 — автоматические инструменты
+
+Этот раздел утверждён прямым запросом пользователя от 2026-09-13 и уточняет
+GUI-001 для desktop-запуска на Windows.
+
+- **GUI-TOOLS-001 — Автоматическое разрешение.** При запуске GUI разрешает
+  `VIDEO_CHRONICLE_FFMPEG`/`VIDEO_CHRONICLE_FFPROBE`, затем команды из `PATH`,
+  и заполняет поля абсолютными путями без ручного выбора пользователя.
+- **GUI-TOOLS-002 — Идемпотентная установка.** Если хотя бы один инструмент
+  отсутствует на Windows, GUI асинхронно запускает WinGet list-argv без shell и
+  устанавливает user-scope пакет `Gyan.FFmpeg` закреплённой версии `9.0.1`.
+  Если оба инструмента уже доступны, WinGet не запускается.
+- **GUI-TOOLS-003 — Неблокирующий fallback.** Во время установки окно остаётся
+  отзывчивым. Отсутствие WinGet, ошибка установки или невозможность разрешить
+  оба пути отображаются пользователю и сохраняют ручные поля в разделе
+  «Дополнительно»; экспорт не выдаётся за готовый автоматически.
+- **GUI-TOOLS-004 — Приоритет основной задачи.** По умолчанию открыта вкладка
+  «Основное», а кодек, CRF, preset, пути инструментов и cache находятся во
+  вторичной вкладке «Дополнительно».
+- **GUI-TOOLS-005 — Объяснимый cache.** GUI поясняет, что cache хранит только
+  проверенные нормализованные клипы для ускорения повторных экспортов,
+  расходует локальное место и не хранит исходники, project state или итоговый
+  MP4.
+
+### Критерии приёмки расширения
+
+- **GUI-TOOLS-AC-001.** Доступные env/PATH-инструменты разрешаются в абсолютные
+  regular-file пути; при наличии обоих installer не запускается.
+- **GUI-TOOLS-AC-002.** При отсутствии инструмента Windows installer получает
+  точные package/version/source/scope и agreement arguments отдельным argv;
+  успешное завершение обновляет process PATH и оба видимых поля.
+- **GUI-TOOLS-AC-003.** Ошибка bootstrap возвращает actions в доступное
+  состояние, показывает понятную диагностику и оставляет ручной fallback.
+- **GUI-TOOLS-AC-004.** Component test подтверждает default-вкладку «Основное»,
+  вторичную вкладку «Дополнительно» и видимое объяснение cache.
+
+## Утверждённое расширение GUI-NAV-001 — основная навигация и reorder
+
+Этот раздел утверждён прямым запросом пользователя от 2026-09-13. Он меняет
+только presentation/navigation layer и использует существующий EDIT-001
+`TimelineLayout.move_items`, не создавая второй порядок или mutable timeline.
+
+- **GUI-NAV-001 — Основное.** Первая и открытая при запуске вкладка называется
+  «Основное» и содержит выбор исходников, результата и режима экспорта.
+- **GUI-NAV-002 — План хронологии.** Состав, effective order, editor actions и
+  representative preview находятся в отдельной вкладке «План хронологии» рядом
+  с «Основное», «Дата и время» и «Дополнительно».
+- **GUI-NAV-003 — Изменение порядка.** После анализа пользователь выбирает один
+  или несколько accepted clips и перемещает их кнопками «Выше»/«Ниже» через
+  EDIT-001. Новый порядок немедленно отображается; skipped rows не участвуют в
+  reorder; preview и export становятся stale до обновления preview.
+- **GUI-NAV-004 — Meaningful actions.** Кнопка действия disabled, если в
+  текущем состоянии её нажатие не может вызвать допустимый переход: нет
+  подходящего выбора, элемент уже на границе, отсутствует plan/project state
+  либо операция несовместима с selection. Во время worker operation применимо
+  существующее общее блокирование controls.
+- **GUI-NAV-005 — Единая светлая поверхность.** Main/timeline tab, вложенный
+  scroll viewport, timeline content и журнал имеют явный светлый background и
+  не наследуют тёмную системную палитру. Обычные и disabled buttons не повторяют
+  рамку внешнего card; keyboard focus остаётся различим отдельной focus-рамкой.
+
+### Критерии приёмки расширения
+
+- **GUI-NAV-AC-001.** Component test подтверждает порядок вкладок «Основное»,
+  «План хронологии», «Дата и время», «Дополнительно», default index 0 и наличие
+  input/output/mode controls только в основной вкладке.
+- **GUI-NAV-AC-002.** Component test выбирает clip, перемещает его вниз и видит
+  изменившиеся номера/порядок без изменения source bytes; boundary move disabled.
+- **GUI-NAV-AC-003.** До анализа и без selection editor buttons disabled;
+  selection и group membership включают только действия с допустимым эффектом.
+- **GUI-NAV-AC-004.** Offscreen component render с application QSS подтверждает
+  белые пиксели viewport/content; style contract фиксирует transparent button
+  border в normal/disabled и отдельный видимый border в focus state.
+
 ## Утверждённый срез GUI-APP-001 — preview через application services
 
 Этот срез утверждён прямой командой пользователя от 2026-08-14 последовательно
@@ -73,9 +147,9 @@ execution path, но сохраняет GUI-001 как временный диа
   `execute_plan` через worker boundary; widgets не выполняют FFprobe/FFmpeg и не
   повторяют date/order/publish policy. CLI продолжает использовать те же
   application services.
-- **GUI-APP-005 — Lifecycle до safe cancel.** Повторный анализ/экспорт и закрытие
-  окна блокируются, пока worker активен. Этот срез не имитирует process-tree
-  cancellation; безопасная отмена относится к этапу 09.
+- **GUI-APP-005 — Lifecycle и safe cancel.** Повторный анализ/экспорт и закрытие
+  окна блокируются, пока worker активен. Реализованные process-tree guarantees
+  и раздельные stop actions определены в EXEC-001/002.
 
 ### Критерии приёмки среза
 
@@ -142,6 +216,61 @@ execution path, но сохраняет GUI-001 как временный диа
 - произвольный текст/FFmpeg expression, animation/keyframes и templates;
 - полноценное воспроизведение видео или timeline editor;
 - аппаратный preview acceleration, cache и persistence.
+
+## Утверждённое расширение OVERLAY-002 — configurable date/time typography
+
+Этот раздел утверждён прямым запросом пользователя от 2026-09-12. Он расширяет
+существующий OVERLAY-001 и обязан использовать тот же immutable config,
+formatter, representative preview и FFmpeg export path.
+
+- **OVERLAY-007 — Семантическая дата и время.** Config хранит независимо
+  `show_date`, `show_time`, стабильные date/time format IDs, layout и separator,
+  а не готовую строку. Разрешены date formats `DD.MM.YYYY`, `DD/MM/YYYY`,
+  `YYYY-MM-DD`, `MM/DD/YYYY`, `DD MMM YYYY`, `DD MMMM YYYY` и legacy
+  `DD.MM.YY ddd`; time formats `HH:mm`, `HH:mm:ss`, `hh:mm A`,
+  `hh:mm:ss A`. При включённом overlay видима хотя бы дата или время.
+- **OVERLAY-008 — Layout и custom format.** Совместная дата/время выводится
+  inline через пробел, через проверенный пользовательский separator либо в две
+  строки. Optional custom date format принимает только документированные date
+  tokens и безопасные literal separators, имеет bounded length и отклоняется до
+  FFmpeg boundary.
+- **OVERLAY-009 — Typography.** Config хранит переносимое system font family,
+  size, bold/italic, text color/opacity, outline on/off/color/width и shadow
+  on/off/opacity/offset. Явный font file остаётся поддержанным exact-face
+  override. System family резолвится в локальный `.ttf`/`.otf` face с учётом
+  bold/italic; неизвестное/исчезнувшее family безопасно переходит к проверенному
+  default font, а отсутствие любого допустимого fallback даёт явную ошибку.
+- **OVERLAY-010 — Единый formatter.** Один Qt-free formatter преобразует
+  wall-clock `datetime` и `OverlayConfig` в текст. Preview и export получают
+  один и тот же config object и строят один drawtext contract, включая newline,
+  font face, size, opacity, outline, shadow и position.
+- **OVERLAY-011 — Persistence compatibility.** Project preset сохраняет
+  семантические поля и family, но не готовую timestamp string. Legacy overlay
+  mapping без новых полей загружается с прежним appearance; повреждённые поля
+  отклоняются как диагностируемая project validation error. Отсутствующее
+  system family не мешает открыть проект и использует runtime fallback.
+
+### Критерии приёмки расширения
+
+- **OVERLAY-AC-004 (OVERLAY-007/008).** Unit matrix покрывает обязательные date
+  и time formats, date-only/time-only/date+time, inline/custom separator/
+  multiline и invalid custom formats.
+- **OVERLAY-AC-005 (OVERLAY-009/011).** Font inventory/resolution выбирает
+  requested regular/bold/italic face, неизвестное family использует fallback,
+  typography round-trip сохраняется, а legacy mapping загружается без ручной
+  миграции.
+- **OVERLAY-AC-006 (OVERLAY-010, NFR-003/004).** Component/integration tests
+  подтверждают, что GUI invalidation, preview и export используют один config;
+  generated drawtext содержит тот же formatted text, font face, size, stroke,
+  shadow и position.
+
+### Не входит в расширение
+
+- arbitrary FFmpeg expressions и locale-driven implicit format switching;
+- загрузка web fonts, встраивание font files в project и полноценный typography
+  editor;
+- синтетическое начертание для explicit custom font file: такой файл считается
+  exact face, а bold/italic выбирают варианты только для system family.
 
 ## Утверждённый срез MODE-001 — Join и Chronicle
 
@@ -268,8 +397,38 @@ application/pipeline path и не меняет CLI argv или атомарну�
 - duration-weighted ETA и парсинг FFmpeg stderr/progress protocol;
 - resume/cache, durable/background queue и parallel exports;
 - `taskkill`, `psutil`, `pywin32` или второй subprocess pipeline;
-- cancel analysis/representative preview: они остаются текущими bounded tool
-  calls, а safe cancel в этом срезе относится к export.
+- cancel representative preview: он остаётся текущим bounded tool call.
+
+## Утверждённое расширение EXEC-002 — остановка анализа и экспорта
+
+Этот раздел утверждён прямым запросом пользователя от 2026-09-13 и расширяет
+EXEC-001 без ослабления process-tree и publication guarantees.
+
+- **EXEC-009 — Раздельные actions.** GUI показывает «Остановить анализ» только
+  во время cancellable analysis и «Остановить экспорт» только во время
+  cancellable export. Неактивная или неподдерживаемая action скрыта.
+- **EXEC-010 — Analysis cancellation.** Analysis получает thread-safe token,
+  проверяет его до/после каждого media item и передаёт тот же token в bounded
+  FFprobe/FFmpeg process boundary. Новый item не начинается после принятой
+  отмены.
+- **EXEC-011 — Terminal analysis state.** Частичный `ExportPlan` после отмены
+  не публикуется. `cancelled` показывается только после остановки активного
+  process tree и завершения worker thread; unconfirmed termination остаётся
+  `failed`.
+- **EXEC-012 — Export compatibility.** Существующая отмена export сохраняет
+  cooperative `q`/kill/reap, cleanup и atomic publication contract; изменение
+  ограничено отдельной понятной кнопкой и operation-specific status.
+
+### Критерии приёмки расширения
+
+- **EXEC-AC-005.** Component test запускает cancellable analysis, видит только
+  его stop-кнопку, принимает отмену, не получает plan и завершает worker как
+  `cancelled` без блокировки event loop.
+- **EXEC-AC-006.** Component test export видит только export stop-кнопку;
+  cancellation сохраняет существующий результат, удаляет partial workspace и
+  завершается `cancelled` только после подтверждённого terminal state.
+- **EXEC-AC-007.** Injected/legacy backend без explicit cancellation keyword и
+  safe platform capability не рекламирует stop action.
 
 ## Утверждённый срез CACHE-001 — resume normalized clips
 
@@ -277,7 +436,8 @@ application/pipeline path и не меняет CLI argv или атомарну�
 выполнить оставшиеся этапы. Cache является отключаемой оптимизацией единственного
 `execute_plan` и не меняет результат, immutable preview plan или legacy default.
 
-- **CACHE-001 — Opt-in policy.** GUI checkbox «Использовать кэш» и CLI
+- **CACHE-001 — Opt-in policy.** GUI checkbox «Ускорять повторные экспорты
+  (кэш)» с видимым объяснением и CLI
   `--cache` выключены по умолчанию. `--cache-dir` выбирает private root,
   `--purge-cache` выполняет отдельную explicit purge. Без opt-in persistent
   artifacts не создаются; legacy CLI argv/результат остаются прежними.
