@@ -33,7 +33,8 @@ services и сохраняется прямой CLI-интерфейс.
   items кнопками «Выше»/«Ниже», задавать trim в миллисекундах, группировать/разгруппировать
   contiguous items и сохранять/применять versioned render presets;
 - editor actions disabled без подходящего selection, на границе списка и при
-  нарушении group constraints; disabled action не маскирует no-op;
+  нарушении group constraints; disabled action не маскирует no-op, а один
+  выбор item не создаёт persistent project snapshot до edit mutation;
 - сохранённый `item_id`, а не номер строки, связывает edits с source; partial
   success не переназначает edit соседнему элементу;
 - preview summary показывает input/output, количество элементов, CRF, preset и
@@ -53,8 +54,9 @@ services и сохраняется прямой CLI-интерфейс.
 - tab/scroll/content/log surfaces явно окрашены в белый и не наследуют тёмный
   platform background; normal/disabled buttons используют прозрачную рамку,
   отличную от card boundary, а keyboard focus получает бирюзовую рамку;
-- любое изменение формы инвалидирует план, а экспорт остаётся недоступен до
-  повторного успешного анализа;
+- изменение input/output/mode/encoding инвалидирует план, а overlay-only
+  изменение сохраняет analysis и инвалидирует только representative preview;
+  повторный успешный анализ или обновление preview снова разрешает экспорт;
 - переключение mode инвалидирует plan, но не меняет сохранённый пользовательский
   checkbox Chronicle overlay; в Join overlay controls недоступны;
 - существующий файл требует модального подтверждения непосредственно перед
