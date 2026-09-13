@@ -43,7 +43,8 @@ services и сохраняется прямой CLI-интерфейс.
 - loading, empty, error, stale и populated состояния имеют явный текст;
 - representative-frame preview имеет отдельные stale/loading/ready/disabled/
   error состояния; Chronicle экспорт доступен только для актуального preview,
-  а Join показывает явное disabled-состояние и доступен после анализа;
+  который автоматически строится после thumbnail batch; Join показывает явное
+  disabled-состояние preview и доступен после анализа;
 - determinate progress после появления известного total: analysis считает
   inspected/skipped sources, export — items + concat + publication; ETA не
   показывается, failure/cancel не переводятся искусственно в 100%;

@@ -82,6 +82,8 @@
    хронологии». Следующая worker-операция последовательно создаёт overlay-free
    temporary PNG для accepted items через тот же trusted FFmpeg preview port;
    GUI синхронно копирует их в `QPixmap`, после чего adapter удаляет PNG.
+   В Chronicle успешный batch запускает автоматический representative preview;
+   только его успех включает export. Join не требует этого шага.
    Presentation layer включает move actions только для допустимого EDIT-001
    перехода; изменение формы инвалидирует plan, а overwrite подтверждается
    непосредственно перед запуском.

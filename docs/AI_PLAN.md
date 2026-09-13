@@ -18,6 +18,8 @@
   table повторяют project order, partial-group move отклоняется без revision;
 - PASS: анализ автоматически заполняет карточки кадрами и синхронизирует
   stable-ID selection;
+- PASS: Chronicle автоматически продолжает analysis цепочкой representative
+  preview и включает export после success; failure сохраняет safe disabled;
 - полный локальный gate: `329 passed, 12 skipped`;
 - baseline перед срезом: `326 passed, 12 skipped`.
 

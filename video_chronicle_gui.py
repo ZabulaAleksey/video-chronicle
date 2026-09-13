@@ -1962,6 +1962,13 @@ class ChronicleWindow(QMainWindow):
             )
             self.progress.setRange(0, 1)
             self.progress.setValue(1 if success else 0)
+            if (
+                success
+                and self._plan is not None
+                and self._selected_mode() is not ExportMode.JOIN
+            ):
+                self._start_visual_preview()
+                return
             self.run_button.setEnabled(
                 self._plan is not None and self._visual_preview_current
             )

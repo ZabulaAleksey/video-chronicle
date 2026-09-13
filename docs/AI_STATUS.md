@@ -14,6 +14,9 @@
 - Focused gate: `47 passed, 1 skipped`; полный локальный gate:
   `329 passed, 12 skipped`. Offscreen render подтвердил светлую поверхность и
   отсутствие clipping у четырёх карточек на размере 1060×860.
+- Исправлен post-analysis lifecycle: после thumbnails Chronicle автоматически
+  строит актуальный representative preview и включает «Экспортировать» при
+  успехе; ошибка preview по-прежнему блокирует export и допускает ручной retry.
 
 ## Unified light GUI surface — 2026-09-13
 

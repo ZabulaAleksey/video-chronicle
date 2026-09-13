@@ -299,7 +299,11 @@ def test_analysis_automatically_loads_thumbnail_cards_and_syncs_selection(
     window.analyze_button.click()
     _wait_until(
         qapp,
-        lambda: not adapter.is_running and len(window._thumbnail_pixmaps) == 2,
+        lambda: (
+            not adapter.is_running
+            and len(window._thumbnail_pixmaps) == 2
+            and window.run_button.isEnabled()
+        ),
     )
 
     assert window.thumbnail_list.count() == 2
@@ -312,6 +316,8 @@ def test_analysis_automatically_loads_thumbnail_cards_and_syncs_selection(
     qapp.processEvents()
     assert window.preview_tree.topLevelItem(0).isSelected() is True
     assert window._selected_item_ids() == (first_id,)
+    assert window._visual_preview_current is True
+    assert window.run_button.isEnabled() is True
     window.close()
 
 
@@ -984,8 +990,9 @@ def test_overlay_only_change_keeps_plan_and_preview_temp_is_cleaned(
     assert window._plan.request.overlay.font_size == 32
     assert window._plan.request.overlay.outline_enabled is False
     assert window._plan.request.overlay.shadow_enabled is True
-    assert preview_configs == [window._plan.request.overlay]
-    assert preview_configs[0] is window._plan.request.overlay
+    assert len(preview_configs) == 2
+    assert preview_configs[-1] == window._plan.request.overlay
+    assert preview_configs[-1] is window._plan.request.overlay
     assert window.visual_preview_state_label.text() == "Готов"
     assert window.run_button.isEnabled() is True
     window.close()
@@ -1011,6 +1018,8 @@ def test_preview_error_is_visible_and_export_stays_disabled(qapp, tmp_path: Path
     window.output_edit.setText(str(output))
     window.analyze_button.click()
     _wait_until(qapp, lambda: not adapter.is_running)
+    assert window.visual_preview_state_label.text() == "Ошибка предпросмотра"
+    assert window.run_button.isEnabled() is False
     window.overlay_enabled.setChecked(False)
     window.preview_button.click()
     _wait_until(qapp, lambda: not adapter.is_running)

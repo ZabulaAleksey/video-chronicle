@@ -185,6 +185,10 @@ adapter без shell. Для видео/фото используется effect
 без date/time overlay. Ошибка одного item оставляет его placeholder и понятный
 tooltip, не удаляя остальные карточки. Все временные PNG удаляются после
 синхронной загрузки `QPixmap` либо при failure.
+После thumbnail batch режим Chronicle автоматически строит актуальный
+representative preview с выбранной подписью. Кнопка экспорта включается только
+после его успешной загрузки; ошибка оставляет экспорт disabled и сохраняет
+ручное действие повторного preview. В Join отдельный preview не требуется.
 
 ### EDIT-010 — Drag-and-drop reorder
 
@@ -241,6 +245,9 @@ order и selection. Button move и drag-and-drop дают один доменн�
 - **EDIT-AC-009 (EDIT-010/011).** Component drag одной и нескольких cards
   создаёт точный EDIT-001 order в grid/table/project snapshot; invalid group
   drop восстанавливает прежний order, а source bytes остаются неизменны.
+- **EDIT-AC-010 (EDIT-009).** Успешный analysis → thumbnails → representative
+  preview автоматически включает export в Chronicle; preview failure сохраняет
+  export disabled, а Join становится доступен без representative preview.
 
 ## 9. Rollback
 
