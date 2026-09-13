@@ -16,6 +16,31 @@ cd "$env:PROJECTS_ROOT\video-chronicle"
 uv sync --locked --extra dev
 ```
 
+### Быстрая установка FFmpeg на Windows
+
+Следующий PowerShell-фрагмент устанавливает проверенную для проекта версию
+FFmpeg/FFprobe через WinGet, только если хотя бы одна из команд ещё недоступна.
+Если обе команды уже находятся в `PATH`, установка и обновление не выполняются:
+
+```powershell
+if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or
+    -not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
+    winget install --exact --id Gyan.FFmpeg --version 9.0.1 --source winget --scope user --accept-package-agreements --accept-source-agreements --disable-interactivity
+    $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
+}
+```
+
+Проверить доступность и версию после установки:
+
+```powershell
+ffmpeg -version
+ffprobe -version
+```
+
+Минимальная версия, подтверждённая smoke-тестами проекта, — `9.0.1`. Если уже
+установлена более ранняя версия, условие выше намеренно не обновляет её
+автоматически.
+
 Optional native OTIO interchange устанавливается отдельно и не нужен обычному
 CLI/GUI экспорту:
 
