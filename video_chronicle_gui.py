@@ -1426,15 +1426,34 @@ class ChronicleWindow(QMainWindow):
     def _ensure_project_state(self) -> ProjectState:
         if self._project_state is not None:
             return self._project_state
+        self._project_state = self._build_project_state()
+        return self._project_state
+
+    def _build_project_state(self) -> ProjectState:
         if self._analyzed_plan is None:
             raise RuntimeError("Сначала выполните анализ.")
-        timeline = Timeline.build(TimelineItem.from_media_item(item) for item in self._analyzed_plan.items)
+        timeline = Timeline.build(
+            TimelineItem.from_media_item(item) for item in self._analyzed_plan.items
+        )
         request = self._analyzed_plan.request
-        settings = RenderSettings(request.mode, request.overlay, request.crf, request.preset)
+        settings = RenderSettings(
+            request.mode,
+            request.overlay,
+            request.crf,
+            request.preset,
+        )
         preset = RenderPreset("gui-default", 1, "GUI default", settings)
-        digest = hashlib.sha256(str(request.input_dir).encode("utf-8")).hexdigest()[:16]
-        self._project_state = ProjectState(f"project-{digest}", timeline, revision=0, layout=TimelineLayout.identity(timeline), presets=(preset,), active_preset=preset.ref)
-        return self._project_state
+        digest = hashlib.sha256(
+            str(request.input_dir).encode("utf-8")
+        ).hexdigest()[:16]
+        return ProjectState(
+            f"project-{digest}",
+            timeline,
+            revision=0,
+            layout=TimelineLayout.identity(timeline),
+            presets=(preset,),
+            active_preset=preset.ref,
+        )
 
     def _refresh_edited_plan(self) -> None:
         if self._analyzed_plan is None or self._project_state is None:
@@ -1554,12 +1573,16 @@ class ChronicleWindow(QMainWindow):
         self._project_state = candidate
         self._refresh_edited_plan()
 
-    def _move_candidate(self, direction: int) -> ProjectState | None:
+    def _move_candidate(
+        self,
+        direction: int,
+        state: ProjectState | None = None,
+    ) -> ProjectState | None:
         ids = self._selected_item_ids()
         if not ids or self._plan is None:
             return None
         try:
-            state = self._ensure_project_state()
+            state = state or self._project_state or self._build_project_state()
         except RuntimeError:
             return None
         assert state.layout is not None
@@ -1593,15 +1616,19 @@ class ChronicleWindow(QMainWindow):
         state = self._project_state
         if editable and ids and state is None:
             try:
-                state = self._ensure_project_state()
+                state = self._build_project_state()
             except RuntimeError:
                 state = None
 
         self.project_save_button.setEnabled(
             not self._legacy_mode and not running and self._plan is not None
         )
-        self.move_up_button.setEnabled(editable and self._move_candidate(-1) is not None)
-        self.move_down_button.setEnabled(editable and self._move_candidate(1) is not None)
+        self.move_up_button.setEnabled(
+            editable and self._move_candidate(-1, state) is not None
+        )
+        self.move_down_button.setEnabled(
+            editable and self._move_candidate(1, state) is not None
+        )
 
         can_group = False
         if editable and state is not None and len(ids) >= 2:

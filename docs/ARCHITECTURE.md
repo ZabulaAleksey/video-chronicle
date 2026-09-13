@@ -89,9 +89,10 @@
    GUI синхронно копирует их в `QPixmap`, после чего adapter удаляет PNG.
    В Chronicle успешный batch запускает автоматический representative preview;
    только его успех включает export. Join не требует этого шага.
-   Presentation layer включает move actions только для допустимого EDIT-001
-   перехода; изменение формы инвалидирует plan, а overwrite подтверждается
-   непосредственно перед запуском.
+   Presentation layer вычисляет доступность move actions через provisional
+   EDIT-001 state без сохранения project snapshot от одного выбора item;
+   постоянный state появляется только после edit mutation. Изменение формы
+   инвалидирует plan, а overwrite подтверждается непосредственно перед запуском.
 4. Изменение только `OverlayConfig` сохраняет уже проанализированные items, но
    инвалидирует визуальный preview. Первый принятый item рендерится через тот же
    filter adapter в 640×360 PNG до разблокировки экспорта.

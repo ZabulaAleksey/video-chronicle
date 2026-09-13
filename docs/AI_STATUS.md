@@ -1,5 +1,16 @@
 # Состояние проекта для AI
 
+## GUI export после смены date/time format — 2026-09-13
+
+- Выбор timeline item больше не создаёт persistent `ProjectState` только ради
+  вычисления доступности editor actions; state сохраняется после реальной edit
+  mutation.
+- Для media с неизвестной длительностью смена date/time format больше не
+  оставляет GUI в невалидном editing snapshot: повторный analysis доходит до
+  automatic representative preview и снова включает export после success.
+- Focused GUI/editing gate: `48 passed, 1 skipped`; полный локальный gate:
+  `341 passed, 12 skipped`.
+
 ## Stage 15 security hardening — 2026-09-13
 
 - Добавлены release threat model/spec и отдельный audit report.

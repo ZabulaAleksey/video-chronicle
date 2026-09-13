@@ -998,6 +998,64 @@ def test_overlay_only_change_keeps_plan_and_preview_temp_is_cleaned(
     window.close()
 
 
+def test_reanalysis_after_datetime_format_change_reenables_export(
+    qapp, tmp_path: Path
+) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    output = tmp_path / "output.mp4"
+    canonical = replace(
+        _canonical_request(input_dir, output),
+        overlay=OverlayConfig(format=None),
+    )
+    preview_configs: list[OverlayConfig] = []
+
+    def preview_service(item, overlay, ffmpeg, destination, runner):
+        preview_configs.append(overlay)
+        destination.write_bytes(_PNG_1X1)
+
+    adapter = ApplicationServiceAdapter(
+        plan_service=lambda request, ports, logger: _preview_plan(request),
+        preview_service=preview_service,
+        ports_factory=_preview_ports,  # type: ignore[arg-type]
+        request_factory=lambda gui: replace(canonical, overlay=gui.overlay),
+    )
+    window = ChronicleWindow(application_adapter=adapter)
+    window.input_edit.setText(str(input_dir))
+    window.output_edit.setText(str(output))
+
+    window.analyze_button.click()
+    _wait_until(
+        qapp,
+        lambda: not adapter.is_running and window.run_button.isEnabled(),
+    )
+    window.thumbnail_list.item(0).setSelected(True)
+    qapp.processEvents()
+    assert window._project_state is None
+
+    window.overlay_show_time.setChecked(True)
+    window.overlay_format_combo.setCurrentIndex(
+        window.overlay_format_combo.findData("YYYY-MM-DD")
+    )
+    window.overlay_time_format_combo.setCurrentIndex(
+        window.overlay_time_format_combo.findData("hh:mm:ss A")
+    )
+    qapp.processEvents()
+    assert window.run_button.isEnabled() is False
+
+    window.analyze_button.click()
+    _wait_until(
+        qapp,
+        lambda: not adapter.is_running and window.run_button.isEnabled(),
+    )
+
+    assert window._plan is not None
+    assert window._plan.request.overlay.date_format == "YYYY-MM-DD"
+    assert window._plan.request.overlay.time_format == "hh:mm:ss A"
+    assert preview_configs[-1] is window._plan.request.overlay
+    window.close()
+
+
 def test_preview_error_is_visible_and_export_stays_disabled(qapp, tmp_path: Path) -> None:
     input_dir = tmp_path / "input"
     input_dir.mkdir()

@@ -248,6 +248,9 @@ order и selection. Button move и drag-and-drop дают один доменн�
 - **EDIT-AC-010 (EDIT-009).** Успешный analysis → thumbnails → representative
   preview автоматически включает export в Chronicle; preview failure сохраняет
   export disabled, а Join становится доступен без representative preview.
+  Простой выбор timeline item не создаёт project snapshot; после изменения
+  date/time format повторный analysis снова доходит до актуального preview и
+  включает export без зависимости от известной длительности выбранного item.
 
 ## 9. Rollback
 
