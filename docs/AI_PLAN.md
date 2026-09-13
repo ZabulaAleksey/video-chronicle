@@ -1,14 +1,10 @@
 # Текущий план для AI
 
-## Срез 2026-09-13 — thumbnail cards и drag-and-drop
+## Continuous track 2026-09-13 — этапы 13–17
 
-- Статус: **реализовано и проверено локально; ожидает пользовательской проверки/merge**
-- Ветка: `feature/timeline-thumbnail-dnd`
-- SPEC: `EDIT-008–011`, `EDIT-AC-008/009` в
-  `specs/features/nondestructive-editing.spec.md`
-- Scope: icon-grid accepted clips, actual local thumbnails через existing
-  managed FFmpeg preview adapter, placeholder/error state, synchronized
-  grid/table selection и drag-and-drop через `ProjectState.move_items`.
+- Статус: **этапы 13–15 implemented_unverified; этапы 16–17 blocked**
+- Ветка: `feature/v1-release-track`
+- Текущий scope завершён до обязательного external review gate.
 
 ## Acceptance evidence
 
@@ -22,11 +18,23 @@
   preview и включает export после success; failure сохраняет safe disabled;
 - полный локальный gate: `329 passed, 12 skipped`;
 - baseline перед срезом: `326 passed, 12 skipped`.
+- Stage 13 PASS: `5 passed`; CLI help и `uv lock --check` PASS.
+- Stage 13 UNVERIFIED: WER/CER на real whisper.cpp/model не выполнялся, потому
+  что модель не входит в project и не загружается автоматически.
+- Stage 14 PASS: 10 focused tests для transcription/hardware; CLI help PASS.
+- Stage 14 UNVERIFIED: FFmpeg отсутствует в текущем PATH, поэтому real
+  hardware/driver quality benchmark не выполнялся и hardware не promoted.
+- Stage 15 PASS: `340 passed, 12 skipped`; `uv lock --check`, `uv pip check`,
+  pip-audit (0 known vulnerabilities) и Bandit (0 high/medium, 7 low) выполнены.
+- Stage 15 UNVERIFIED: отсутствует независимый semantic reviewer; automated
+  scanners не повышаются до этой evidence-категории.
 
 ## NEXT
 
-Передать пользователю для визуальной проверки; merge выполнять только после
-явного подтверждения.
+Получить independent security review без high findings. Только затем начать
+этап 16 на clean supported Windows VM с утверждённой project license; этап 17
+дополнительно требует утверждённых hypothesis/dataset/metrics/resource budget.
+Merge, push и publication остаются approval-gated.
 
 ## Сохраняющиеся release blockers
 

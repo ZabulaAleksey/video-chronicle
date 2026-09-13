@@ -104,16 +104,15 @@ interprocess lifecycle. Clean и resumed mixed-media exports эквивален�
 
 - **[11 — завершён](../prompts/stages/11-nondestructive-editing.md):** schema v2, durable project, неразрушающие reorder/trim/groups и versioned presets;
 - **[12 — завершён](../prompts/stages/12-timeline-interchange-scene.md):** removable native OTIO adapter и прошедшие benchmark FFmpeg scene suggestions за default-off flags;
-- **Следующий, но не начат — [13](../prompts/stages/13-local-transcription.md):** optional локальная транскрипция с provenance модели; работа приостановлена до новой команды пользователя;
-- **[14](../prompts/stages/14-hardware-quality.md):** проверка возможностей оборудования, метрики качества и обязательный
-  software fallback;
-- **[15](../prompts/stages/15-security-hardening.md):** аудит недоверенных медиа, subprocess, путей, кэша и зависимостей;
-- **[16](../prompts/stages/16-windows-packaging.md):** Windows-пакетирование с явной стратегией FFmpeg/metadata tools,
+- **[13 — implemented_unverified](../prompts/stages/13-local-transcription.md):** optional local whisper.cpp adapter принят fixture tests; real model WER/CER остаётся внешним gate;
+- **[14 — implemented_unverified](../prompts/stages/14-hardware-quality.md):** capability/benchmark policy реализована, software fallback обязателен; real driver benchmark не выполнен и hardware не promoted;
+- **[15 — implemented_unverified](../prompts/stages/15-security-hardening.md):** hardening, negative/full suite и tool audits выполнены; independent semantic review остаётся обязательным gate;
+- **[16 — blocked](../prompts/stages/16-windows-packaging.md):** Windows-пакетирование с явной стратегией FFmpeg/metadata tools,
   лицензиями и smoke-тестом на чистой машине.
 
 ## Экспериментально / optional — этап 17
 
-- **[17 — Experimental adapters](../prompts/stages/17-experimental-adapters.md):**
+- **[17 — blocked](../prompts/stages/17-experimental-adapters.md):**
   дополнительные ML/scene/timeline-адаптеры и автоматизация качества;
 - каждое направление требует цели, feature flag, fallback, тестов, benchmark
   и ADR, если меняются архитектурные границы.

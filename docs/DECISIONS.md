@@ -1,5 +1,16 @@
 # Технические решения
 
+## 2026-09-13 — whisper.cpp только как explicit local adapter
+
+- Решение: реализовать транскрипцию отдельным opt-in CLI к пользовательским
+  local `whisper-cli`/model paths с обязательным strict manifest; downloads и
+  ML dependency отсутствуют в default runtime.
+- Причина: media не должна покидать устройство, model provenance/license должны
+  быть проверяемы, а основной GUI/export обязан работать без модели.
+- Последствие: fixture contract подтверждён автоматически, но release-quality
+  WER/CER конкретной модели остаётся `UNVERIFIED`, пока не предоставлены
+  лицензированные model bytes и golden corpus.
+
 ## 2026-08-24 — uv lock является каноническим dependency contract
 
 - Решение: использовать `pyproject.toml` + `uv.lock` и `uv sync --locked`; общий uv cache разрешён, `.venv` считается disposable projection.
@@ -303,3 +314,13 @@
   `0` FP/min, p95 `0 µs`, determinism `3/3` и wall/media `0.080509`.
   `ffmpeg-scdet-v1` остаётся default-off removable adapter; PySceneDetect не
   вводится.
+
+## 2026-09-13 — Hardware encoding не включается только по capability probe
+
+- **Решение:** software `libx264` остаётся default; hardware выбирается явно и
+  может считаться promoted только после same-source SSIM/runtime benchmark с
+  зафиксированными tool/platform identities.
+- **Причина:** строка encoder в FFmpeg не доказывает работоспособность driver,
+  качество либо ускорение на конкретной машине.
+- **Последствие:** отсутствие реального benchmark безопасно сохраняет текущий
+  byte-compatible software/cache path.

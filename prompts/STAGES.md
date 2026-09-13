@@ -1,5 +1,18 @@
 # Канонические этапы video-chronicle  Единый источник stage-prompts. Ниже сохранено полное содержание ранее существовавших этапов.
 
+- Stage ID: 15-security-hardening
+- Lifecycle: implemented_unverified
+- Track: `feature/v1-release-track`
+- Previous: `14-hardware-quality` implemented_unverified — capability/selection/
+  benchmark contracts и 10 focused tests PASS; real driver benchmark не
+  выполнялся, hardware не promoted, production остаётся software.
+- Evidence: 340 passed, 12 skipped; lock/pip compatibility PASS; pip-audit 0
+  known vulnerabilities; Bandit 0 high/medium и 7 triaged low.
+- Blocker: обязательный independent semantic security review недоступен;
+  automated scanners его не заменяют. Stage 16 не dependency-ready, а stage 17
+  дополнительно не имеет approved hypothesis/dataset/metrics/budget.
+- NEXT: независимый review без high findings, затем clean-VM packaging stage 16.
+
 ## 01-discovery-baseline
 # Р­С‚Р°Рї 01 вЂ” Discovery Рё baseline
 

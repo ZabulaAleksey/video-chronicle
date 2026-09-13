@@ -191,4 +191,23 @@ Optional OTIO/scene adapters не входят в project schema v2 и удал�
 migration. Проект пока не имеет утверждённой `LICENSE`, а локальная FFmpeg
 сборка не распространяется; release требует отдельного license/packaging review.
 
+### Optional локальная транскрипция
+
+Транскрипция выключена по умолчанию и не скачивает executable или модель.
+Для явно установленного локального `whisper.cpp` используется отдельная команда:
+
+```powershell
+video-chronicle-transcribe "C:\media\clip.mp4" `
+  --item-id item-local --duration-us 120000000 --language auto `
+  --whisper-cli "C:\tools\whisper-cli.exe" `
+  --model "C:\models\ggml-base.bin" `
+  --model-manifest "C:\models\ggml-base.manifest.json" `
+  --ffmpeg "C:\tools\ffmpeg.exe" --output "C:\media\clip.transcript.json"
+```
+
+Manifest — strict JSON с полями `model_id`, `version`, `sha256`, `size_bytes`,
+`license`, HTTPS `source_url`, массивом `languages` и `engine: "whisper.cpp"`.
+Media обрабатывается локально; JSON содержит provenance и явное предупреждение,
+что автоматическую расшифровку необходимо проверять.
+
 Если FFmpeg уже добавлен в `PATH`, параметры `--ffmpeg` и `--ffprobe` можно не указывать.

@@ -46,6 +46,11 @@
   source-relative timestamps, managed process tree и source/tool identity.
 - `src/video_chronicle/scene_benchmark.py` — deterministic synthetic corpus,
   maximum-cardinality matching и воспроизводимый quality/performance report.
+- `src/video_chronicle/transcription.py` — disabled-by-default local
+  `whisper.cpp` adapter, strict model manifest/provenance, bounded transcript
+  schema и atomic JSON sidecar без download path.
+- `src/video_chronicle/transcription_cli.py` — отдельный explicit CLI для
+  локальной транскрипции; default export CLI и GUI от ML не зависят.
 - `src/video_chronicle/pipeline.py` — production adapters FFprobe/FFmpeg и
   атомарной публикации.
 - `src/video_chronicle/cli.py` — парсинг/валидация CLI и mapping в application
@@ -153,7 +158,11 @@ application backend либо явно объявленному совмести�
 сторонними зависимостями и не входят в историю основного репозитория.
 OTIO extra и scene adapter выключены по умолчанию, не входят в schema v2/cache
 authority и удаляются без migration. Любой imported proposal или scene
-suggestion остаётся недоверенным transient data до явной проверки/применения.
+   suggestion остаётся недоверенным transient data до явной проверки/применения.
+20. Optional hardware policy отдельно опрашивает утверждённые FFmpeg H.264
+   encoders и формирует evidence report. Наличие encoder не меняет production
+   path: default остаётся `libx264`, а promotion требует явного benchmark на
+   одном source с tool/source identity, SSIM и wall-time thresholds.
 
 ## Контракт зависимостей
 
