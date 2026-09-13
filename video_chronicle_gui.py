@@ -10,7 +10,7 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, Qt, Signal, Slot
+from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QCloseEvent, QPixmap, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
@@ -62,6 +62,14 @@ from video_chronicle.project import (
     TrimRange,
 )
 from video_chronicle.repository import JsonProjectRepository
+from video_chronicle.tooling import (
+    FFMPEG_WINGET_VERSION,
+    refresh_windows_process_path,
+    resolve_encoding_tool,
+    resolve_encoding_tools,
+    resolve_winget,
+    winget_ffmpeg_install_arguments,
+)
 from video_chronicle.overlay import (
     DATE_FORMATS,
     OVERLAY_POSITIONS,
@@ -78,9 +86,9 @@ MAX_LOG_CHARACTERS = 500_000
 
 
 def default_tool_value(tool_name: str) -> str:
-    """Use the platform PATH until the user explicitly selects another tool."""
+    """Show an absolute tool path when the configured executable is available."""
 
-    return tool_name
+    return resolve_encoding_tool(tool_name) or tool_name
 
 
 def file_identity(path: Path) -> tuple[int, int, int, int] | None:
@@ -232,6 +240,8 @@ class ChronicleWindow(QMainWindow):
         self._project_repository: JsonProjectRepository | None = None
         self._persisted_project_revision = 0
         self._visual_preview_current = False
+        self._tool_setup_process: QProcess | None = None
+        self._tool_setup_started = False
         self._cancel_ui_enabled = (
             not self._legacy_mode
             and os.environ.get("VIDEO_CHRONICLE_CANCEL_UI", "1") != "0"
@@ -392,9 +402,12 @@ class ChronicleWindow(QMainWindow):
         tool_warning.setWordWrap(True)
         advanced_layout.addWidget(tool_warning, 4, 0, 1, 3)
 
-        self.cache_enabled = QCheckBox("Использовать кэш")
+        self.cache_enabled = QCheckBox("Ускорять повторные экспорты (кэш)")
         self.cache_enabled.setChecked(False)
-        self.cache_enabled.setToolTip("Повторно использовать только проверенные нормализованные клипы")
+        self.cache_enabled.setToolTip(
+            "Сохранять проверенные подготовленные клипы и не кодировать их заново, "
+            "если исходник и настройки не изменились"
+        )
         self.cache_dir_edit = QLineEdit("")
         self._allow_widget_to_shrink_horizontally(self.cache_dir_edit)
         self.cache_dir_edit.setPlaceholderText("Системная папка кэша")
@@ -407,6 +420,14 @@ class ChronicleWindow(QMainWindow):
         advanced_layout.addWidget(self.cache_dir_edit, 5, 1)
         advanced_layout.addWidget(self.cache_dir_button, 5, 2)
         advanced_layout.addWidget(self.cache_purge_button, 6, 2)
+        cache_hint = QLabel(
+            "Кэш ускоряет повторный экспорт, сохраняя проверенные подготовленные "
+            "клипы на локальном диске. Он не изменяет исходники и не хранит project "
+            "state или итоговый MP4; при необходимости его можно очистить."
+        )
+        cache_hint.setObjectName("hint")
+        cache_hint.setWordWrap(True)
+        advanced_layout.addWidget(cache_hint, 7, 0, 1, 3)
 
         self.overlay_group = QGroupBox("Дата, время и оформление")
         overlay_layout = QGridLayout(self.overlay_group)
@@ -559,15 +580,15 @@ class ChronicleWindow(QMainWindow):
         overlay_layout.addWidget(self.overlay_font_button, 10, 3)
         overlay_layout.setColumnStretch(1, 1)
         overlay_layout.setColumnStretch(3, 1)
-        settings_tabs = QTabWidget()
-        settings_tabs.setObjectName("settingsTabs")
-        settings_tabs.setMinimumHeight(520)
-        self._allow_widget_to_shrink_horizontally(settings_tabs)
+        self.settings_tabs = QTabWidget()
+        self.settings_tabs.setObjectName("settingsTabs")
+        self.settings_tabs.setMinimumHeight(520)
+        self._allow_widget_to_shrink_horizontally(self.settings_tabs)
         advanced.setTitle("")
         self.overlay_group.setTitle("")
-        settings_tabs.addTab(advanced, "Кодирование")
-        settings_tabs.addTab(self.overlay_group, "Дата и время")
-        card_layout.addWidget(settings_tabs)
+        self.settings_tabs.addTab(self.overlay_group, "Дата и время")
+        self.settings_tabs.addTab(advanced, "Дополнительно")
+        card_layout.addWidget(self.settings_tabs)
         root.addWidget(settings_card)
 
         action_row = QHBoxLayout()
@@ -818,6 +839,98 @@ class ChronicleWindow(QMainWindow):
         policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
         widget.setSizePolicy(policy)
         widget.setMinimumWidth(0)
+
+    def ensure_encoding_tools(self) -> None:
+        """Resolve tools or asynchronously install the pinned Windows package."""
+
+        if self._tool_setup_started:
+            return
+        self._tool_setup_started = True
+        ffmpeg, ffprobe = resolve_encoding_tools()
+        if ffmpeg and ffprobe:
+            self._apply_encoding_tool_paths(ffmpeg, ffprobe)
+            self.status_label.setText("FFmpeg и FFprobe найдены автоматически")
+            return
+        if sys.platform != "win32":
+            self.status_label.setText(
+                "FFmpeg/FFprobe не найдены. Установите их через системный package manager "
+                "или укажите пути в разделе «Дополнительно»."
+            )
+            return
+        winget = resolve_winget()
+        if winget is None:
+            self.status_label.setText(
+                "FFmpeg/FFprobe не найдены, а WinGet недоступен. Установите Microsoft "
+                "App Installer или укажите пути в разделе «Дополнительно»."
+            )
+            return
+
+        self.status_label.setText(
+            f"FFmpeg {FFMPEG_WINGET_VERSION} не найден — выполняется автоматическая установка…"
+        )
+        self.analyze_button.setEnabled(False)
+        self.run_button.setEnabled(False)
+        process = QProcess(self)
+        process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        process.setProgram(winget)
+        process.setArguments(winget_ffmpeg_install_arguments())
+        process.errorOccurred.connect(self._on_encoding_tool_setup_error)
+        process.finished.connect(self._on_encoding_tool_setup_finished)
+        self._tool_setup_process = process
+        process.start()
+
+    def _apply_encoding_tool_paths(self, ffmpeg: str, ffprobe: str) -> None:
+        self.ffmpeg_edit.setText(ffmpeg)
+        self.ffprobe_edit.setText(ffprobe)
+
+    def _restore_actions_after_tool_setup(self) -> None:
+        if self._legacy_mode:
+            self.run_button.setEnabled(True)
+        else:
+            self.analyze_button.setEnabled(True)
+
+    def _release_tool_setup_process(self) -> None:
+        process = self._tool_setup_process
+        self._tool_setup_process = None
+        if process is not None:
+            process.deleteLater()
+
+    @Slot(QProcess.ProcessError)
+    def _on_encoding_tool_setup_error(self, error: QProcess.ProcessError) -> None:
+        if error != QProcess.ProcessError.FailedToStart:
+            return
+        self.status_label.setText(
+            "Не удалось запустить WinGet. Укажите FFmpeg/FFprobe в разделе «Дополнительно»."
+        )
+        self._release_tool_setup_process()
+        self._restore_actions_after_tool_setup()
+
+    @Slot(int, QProcess.ExitStatus)
+    def _on_encoding_tool_setup_finished(
+        self, exit_code: int, exit_status: QProcess.ExitStatus
+    ) -> None:
+        self._release_tool_setup_process()
+        if exit_status != QProcess.ExitStatus.NormalExit or exit_code != 0:
+            self.status_label.setText(
+                f"Автоматическая установка FFmpeg завершилась с кодом {exit_code}. "
+                "Укажите пути в разделе «Дополнительно»."
+            )
+            self._restore_actions_after_tool_setup()
+            return
+        refresh_windows_process_path()
+        ffmpeg, ffprobe = resolve_encoding_tools()
+        if not ffmpeg or not ffprobe:
+            self.status_label.setText(
+                "FFmpeg установлен, но новые пути пока не найдены. Перезапустите GUI "
+                "или укажите их в разделе «Дополнительно»."
+            )
+            self._restore_actions_after_tool_setup()
+            return
+        self._apply_encoding_tool_paths(ffmpeg, ffprobe)
+        self.status_label.setText(
+            f"FFmpeg {FFMPEG_WINGET_VERSION} установлен и готов к работе"
+        )
+        self._restore_actions_after_tool_setup()
 
     @staticmethod
     def _path_row(line_edit: QLineEdit, button: QPushButton) -> QWidget:
@@ -1714,6 +1827,17 @@ class ChronicleWindow(QMainWindow):
         )
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt API
+        if (
+            self._tool_setup_process is not None
+            and self._tool_setup_process.state() != QProcess.ProcessState.NotRunning
+        ):
+            QMessageBox.warning(
+                self,
+                "Установка FFmpeg ещё выполняется",
+                "Дождитесь завершения автоматической установки FFmpeg.",
+            )
+            event.ignore()
+            return
         if self._adapter.is_running:
             QMessageBox.warning(
                 self,
@@ -1792,6 +1916,7 @@ def main() -> int:
     legacy_adapter = CliProcessAdapter() if mode == "legacy-cli" else None
     window = ChronicleWindow(adapter=legacy_adapter)
     window.show()
+    QTimer.singleShot(0, window.ensure_encoding_tools)
     return app.exec()
 
 

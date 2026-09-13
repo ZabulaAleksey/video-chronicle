@@ -19,7 +19,8 @@
 фильтрация исходников, FFmpeg normalize/concat argv, пустой и повреждённый
 входы, частичный успех, коллизии результата, неизменность источников,
 построение GUI argv, реальный legacy `QProcess`, application-service worker,
-preview states, invalidation, overwrite timing и responsive scrolling.
+preview states, invalidation, overwrite timing, automatic encoding-tool
+bootstrap и responsive scrolling.
 Overlay покрыт validation/golden tests всех date/time/visibility/layout
 вариантов, invalid custom values, font family/style/fallback, project
 persistence, preview lifecycle, synthetic multi-item export и реальными FFmpeg
@@ -44,6 +45,7 @@ preview/normalize, включая multiline typography при доступном
 | DATE-001 priority, raw provenance, timezone и conflicts | unit/table | `tests/test_metadata_date_engine.py` | `DATE-AC-001–003`, `AC-002` |
 | MODEL-001 IDs/order, job transitions, schema v1 и repository | unit/table | `tests/test_project_queue_model.py` | `MODEL-AC-001–003` |
 | GUI application preview, async lifecycle, Unicode, stale plan и overwrite | GUI/contract | `tests/test_gui_application.py` | `GUI-APP-AC-001–003`, `AC-001/002/010` |
+| Absolute FFmpeg discovery, pinned WinGet argv, default tab и cache explanation | unit/GUI/contract | `tests/test_tooling.py`, `tests/test_gui_application.py` | `GUI-TOOLS-AC-001–004` |
 | Единый date/time formatter, typography, font fallback, preview и multi-item export | unit/GUI/integration | `tests/test_overlay.py`, `tests/test_gui_application.py`, `tests/test_nondestructive_editing.py` | `OVERLAY-AC-001–003`, `OVERLAY-007–009`, `AC-004/010` |
 | Join/Chronicle invariant, CLI parity, GUI round-trip и оба real exports | matrix/GUI/integration | `tests/test_modes.py`, `tests/test_gui_application.py`, `tests/test_ffmpeg_smoke.py` | `MODE-AC-001–003`, `AC-003/004/008` |
 | Structured progress, cancel checkpoints, publication race и cleanup | unit/integration/GUI | `tests/test_execution.py`, `tests/test_gui_application.py` | `EXEC-AC-001/003/004`, `AC-003/005/009/010` |
@@ -92,6 +94,7 @@ ffprobe version 9.0.1-essentials_build-www.gyan.dev
 - Contract: процессы получают argv-списки; CLI и будущий GUI используют один
   и тот же наблюдаемый план и правила ошибок.
 - GUI: loading/error/empty/populated/stale preview, Unicode, worker cleanup,
+  automatic tool discovery/bootstrap, default-вкладка и cache explanation,
   repeat-run guard, отсутствие horizontal scroll при 820×660, видимость правых
   browse/editor buttons, structured progress/cancel и отсутствие блокировки
   event loop.

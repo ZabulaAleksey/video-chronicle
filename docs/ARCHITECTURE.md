@@ -53,6 +53,8 @@
 - `src/video_chronicle/gui_services.py` — PySide6 `QThread`/worker boundary для
   `plan_export`, representative-frame preview и `execute_plan`, без widgets и
   собственного медиаконвейера.
+- `src/video_chronicle/tooling.py` — Qt-independent разрешение абсолютных путей
+  FFmpeg/FFprobe и pinned list-argv для Windows WinGet bootstrap.
 - `join_media.py` — тонкий legacy compatibility shim и direct-source entry point.
 - `gui_contract.py` — чистая конфигурация одного GUI-запуска и построение argv.
 - `video_chronicle_gui.py` — PySide6 Widgets UI, preview presenter и временный
@@ -65,7 +67,11 @@
 ## Поток данных
 
 1. Пользователь запускает `video-chronicle`, `python -m video_chronicle`,
-   совместимый `join_media.py` либо заполняет GUI-форму.
+   совместимый `join_media.py` либо открывает GUI. GUI сначала разрешает
+   FFmpeg/FFprobe из project environment и `PATH`; отсутствие инструмента на
+   Windows асинхронно запускает user-scope WinGet bootstrap 9.0.1, а success
+   заполняет абсолютные пути. Failure сохраняет ручной fallback во вкладке
+   «Дополнительно».
 2. GUI валидирует форму и вне UI thread создаёт `ExportRequest`, разрешает
    инструменты и вызывает `plan_export` с явным набором `PipelinePorts`.
    Chronicle разрешает OVERLAY-001 on/off; Join канонически отключает overlay.

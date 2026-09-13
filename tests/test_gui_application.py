@@ -9,9 +9,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QProcess, QTimer
 from PySide6.QtGui import QCloseEvent
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QLabel, QMessageBox
 from PySide6.QtWidgets import QScrollArea
 from PySide6.QtWidgets import QTabWidget
 
@@ -29,6 +29,7 @@ from video_chronicle.execution import ProgressEvent
 from video_chronicle.overlay import OverlayConfig
 from video_chronicle.ports import PipelinePorts
 from video_chronicle.project import RenderSettings
+import video_chronicle_gui as gui_module
 from video_chronicle_gui import ChronicleWindow, CliProcessAdapter
 
 
@@ -448,29 +449,45 @@ def test_minimum_window_keeps_full_form_accessible_via_scroll(qapp) -> None:
     assert scroll is not None
     assert scroll.verticalScrollBar().maximum() > 0
     assert scroll.horizontalScrollBar().maximum() == 0
-    assert window.crf_spin.isVisible() is True
-    assert window.preset_combo.isVisible() is True
+    settings_tabs = window.findChild(QTabWidget, "settingsTabs")
+    assert settings_tabs is not None
+    assert settings_tabs.currentWidget() is window.overlay_group
+    assert settings_tabs.tabText(0) == "Дата и время"
+    assert settings_tabs.tabText(1) == "Дополнительно"
+    assert window.crf_spin.isVisible() is False
+    assert window.preset_combo.isVisible() is False
     viewport_width = scroll.viewport().width()
     for button in (
         window.input_button,
         window.output_button,
-        window.ffmpeg_button,
-        window.ffprobe_button,
-        window.cache_dir_button,
         window.project_save_button,
         window.preset_apply_button,
         window.trim_apply_button,
     ):
         button_right = button.mapTo(scroll.viewport(), button.rect().bottomRight()).x()
         assert 0 <= button_right < viewport_width
-    settings_tabs = window.findChild(QTabWidget, "settingsTabs")
-    assert settings_tabs is not None
-    settings_tabs.setCurrentWidget(window.overlay_group)
-    qapp.processEvents()
     font_button_right = window.overlay_font_button.mapTo(
         scroll.viewport(), window.overlay_font_button.rect().bottomRight()
     ).x()
     assert 0 <= font_button_right < viewport_width
+    settings_tabs.setCurrentIndex(1)
+    qapp.processEvents()
+    assert window.crf_spin.isVisible() is True
+    assert window.preset_combo.isVisible() is True
+    for button in (
+        window.ffmpeg_button,
+        window.ffprobe_button,
+        window.cache_dir_button,
+    ):
+        button_right = button.mapTo(scroll.viewport(), button.rect().bottomRight()).x()
+        assert 0 <= button_right < viewport_width
+    cache_hint = next(
+        label
+        for label in window.findChildren(QLabel)
+        if label.text().startswith("Кэш ускоряет повторный экспорт")
+    )
+    assert "не изменяет исходники" in cache_hint.text()
+    assert "итоговый MP4" in cache_hint.text()
     scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
     qapp.processEvents()
     assert scroll.verticalScrollBar().value() > 0
@@ -745,6 +762,89 @@ def test_legacy_mode_round_trip_preserves_chronicle_default_and_cli_parity(
     assert request.overlay.enabled is True
     assert window.mode_combo.currentText() == "Chronicle"
     assert "--mode" not in arguments
+    window.close()
+
+
+def test_gui_resolves_existing_encoding_tools_without_installer(
+    qapp, tmp_path: Path, monkeypatch
+) -> None:
+    ffmpeg = tmp_path / "ffmpeg.exe"
+    ffprobe = tmp_path / "ffprobe.exe"
+    ffmpeg.write_bytes(b"tool")
+    ffprobe.write_bytes(b"tool")
+    monkeypatch.setattr(
+        gui_module,
+        "resolve_encoding_tools",
+        lambda: (str(ffmpeg.resolve()), str(ffprobe.resolve())),
+    )
+    window = ChronicleWindow()
+
+    window.ensure_encoding_tools()
+
+    assert window.ffmpeg_edit.text() == str(ffmpeg.resolve())
+    assert window.ffprobe_edit.text() == str(ffprobe.resolve())
+    assert window._tool_setup_process is None
+    assert "найдены автоматически" in window.status_label.text()
+    window.close()
+
+
+def test_gui_starts_pinned_winget_install_and_applies_paths(
+    qapp, tmp_path: Path, monkeypatch
+) -> None:
+    ffmpeg = tmp_path / "ffmpeg.exe"
+    ffprobe = tmp_path / "ffprobe.exe"
+    ffmpeg.write_bytes(b"tool")
+    ffprobe.write_bytes(b"tool")
+    resolutions = iter(
+        [(None, None), (str(ffmpeg.resolve()), str(ffprobe.resolve()))]
+    )
+    monkeypatch.setattr(gui_module, "resolve_encoding_tools", lambda: next(resolutions))
+    monkeypatch.setattr(gui_module, "resolve_winget", lambda: "C:/Windows/winget.exe")
+    monkeypatch.setattr(gui_module.sys, "platform", "win32")
+    refreshed: list[bool] = []
+    monkeypatch.setattr(
+        gui_module, "refresh_windows_process_path", lambda: refreshed.append(True)
+    )
+    starts: list[bool] = []
+    monkeypatch.setattr(QProcess, "start", lambda self: starts.append(True))
+    window = ChronicleWindow()
+
+    window.ensure_encoding_tools()
+
+    process = window._tool_setup_process
+    assert process is not None
+    assert process.program() == "C:/Windows/winget.exe"
+    assert process.arguments() == gui_module.winget_ffmpeg_install_arguments()
+    assert starts == [True]
+    assert window.analyze_button.isEnabled() is False
+
+    window._on_encoding_tool_setup_finished(0, QProcess.ExitStatus.NormalExit)
+
+    assert refreshed == [True]
+    assert window.ffmpeg_edit.text() == str(ffmpeg.resolve())
+    assert window.ffprobe_edit.text() == str(ffprobe.resolve())
+    assert window.analyze_button.isEnabled() is True
+    assert "установлен и готов" in window.status_label.text()
+    window.close()
+
+
+def test_gui_winget_failure_restores_manual_fallback(
+    qapp, monkeypatch
+) -> None:
+    monkeypatch.setattr(gui_module, "resolve_encoding_tools", lambda: (None, None))
+    monkeypatch.setattr(gui_module, "resolve_winget", lambda: "C:/Windows/winget.exe")
+    monkeypatch.setattr(gui_module.sys, "platform", "win32")
+    monkeypatch.setattr(QProcess, "start", lambda self: None)
+    window = ChronicleWindow()
+
+    window.ensure_encoding_tools()
+    window._on_encoding_tool_setup_finished(37, QProcess.ExitStatus.NormalExit)
+
+    assert window.analyze_button.isEnabled() is True
+    assert window.ffmpeg_edit.text() == "ffmpeg"
+    assert window.ffprobe_edit.text() == "ffprobe"
+    assert "кодом 37" in window.status_label.text()
+    assert "Дополнительно" in window.status_label.text()
     window.close()
 
 

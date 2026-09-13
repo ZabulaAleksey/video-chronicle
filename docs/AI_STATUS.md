@@ -1,5 +1,19 @@
 # Состояние проекта для AI
 
+## Automatic encoding tools и GUI focus — 2026-09-13
+
+- В `feature/configurable-datetime-overlay` GUI по умолчанию открывает «Дата и
+  время», а технические параметры перенесены во вкладку «Дополнительно».
+- Существующие FFmpeg/FFprobe разрешаются в абсолютные env/PATH-пути; при
+  отсутствии на Windows неблокирующий `QProcess` запускает pinned user-scope
+  `Gyan.FFmpeg==9.0.1` через WinGet без shell и заполняет оба поля после success.
+- Failure сохраняет ручной fallback; существующие инструменты не обновляются.
+- UI и README поясняют, что opt-in cache повторно использует только проверенные
+  normalized clips и не хранит исходники, project state или итоговый MP4.
+- Focused GUI/tooling gate: `23 passed`; полный локальный gate: `319 passed,
+  12 skipped`. WinGet metadata подтверждает доступность `Gyan.FFmpeg 9.0.1`;
+  live system installation тестами намеренно не выполнялась.
+
 ## Configurable date/time overlay — 2026-09-12
 
 - В `feature/configurable-datetime-overlay` существующий OVERLAY-001 расширен
