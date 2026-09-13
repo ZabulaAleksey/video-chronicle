@@ -51,9 +51,11 @@ services и сохраняется прямой CLI-интерфейс.
   как хранилище исходников, project state или итогового MP4; пользователь может
   включить reuse, выбрать приватную папку, увидеть `hit`/`miss` в progress и
   отдельно подтвердить асинхронную очистку только в idle-состоянии;
-- default application backend показывает «Отменить экспорт» только во время
-  export; после запроса различаются `cancel-requested`, `cancelled`, `failed` и
-  `succeeded`; закрытие окна блокируется до terminal state.
+- default application backend показывает раздельные «Остановить анализ» и
+  «Остановить экспорт» только во время соответствующей cancellable operation;
+  после запроса различаются `cancel-requested`, `cancelled`, `failed` и
+  `succeeded`, partial analysis plan не отображается, а закрытие окна
+  блокируется до terminal state.
 - при размере 820×660 используется только вертикальная центральная прокрутка:
   path/tool/overlay fields сжимаются внутри доступной ширины, browse/action
   buttons справа остаются видимыми, а editor actions складываются в компактную
@@ -62,7 +64,7 @@ services и сохраняется прямой CLI-интерфейс.
 
 GUI пока не поддерживает воспроизведение timeline, drag-and-drop, undo/redo,
 multi-track, transitions или nested groups. Cache хранит только проверенные
-normalized clips и не является persistence проекта. Cancel скрыт для
+normalized clips и не является persistence проекта. Stop actions скрыты для
 legacy/injected backend без явной safe capability и через
 `VIDEO_CHRONICLE_CANCEL_UI=0`. Overlay ограничен утверждёнными token formats;
 custom date не принимает `strftime`/FFmpeg expressions, animation и keyframes

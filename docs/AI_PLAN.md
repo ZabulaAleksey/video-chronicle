@@ -1,20 +1,21 @@
 # Текущий план для AI
 
-## Срез 2026-09-12–13 — configurable overlay и automatic encoding tools
+## Срез 2026-09-12–13 — configurable overlay, automatic tools и stop actions
 
 - Статус: **реализован и валидирован локально в feature-ветке**
 - Ветка: `feature/configurable-datetime-overlay`
-- SPEC: `OVERLAY-007–009` и `GUI-TOOLS-001–005` в
+- SPEC: `OVERLAY-007–009`, `GUI-TOOLS-001–005` и `EXEC-009–012` в
   `specs/features/timeline-builder.spec.md`
 - Scope: семантические форматы даты/времени, visibility/layout, system font
   family resolution/fallback, practical typography, project persistence и
   общий formatter для preview/export, automatic env/PATH discovery и Windows
-  WinGet bootstrap, secondary technical settings tab и объяснимый cache UX.
+  WinGet bootstrap, secondary technical settings tab, объяснимый cache UX и
+  раздельная безопасная остановка анализа/экспорта.
 
 ## Acceptance evidence
 
-- focused GUI/tooling gate нового UX: `23 passed`;
-- полный Python gate: `319 passed, 12 skipped`;
+- focused analysis/export cancellation gate: `53 passed, 1 skipped`;
+- полный Python gate: `324 passed, 12 skipped`;
 - локальный system font inventory: `284` family / `437` file-backed faces;
 - skips относятся к недоступным FFmpeg/FFprobe и platform privilege tests;
   новый real FFmpeg multiline/typography test добавлен, но локально не выполнен.

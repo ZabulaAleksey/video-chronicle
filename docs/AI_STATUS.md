@@ -1,5 +1,17 @@
 # Состояние проекта для AI
 
+## Analysis/export stop actions — 2026-09-13
+
+- В `feature/configurable-datetime-overlay` GUI показывает раздельные кнопки
+  «Остановить анализ» и «Остановить экспорт» только для активной cancellable
+  операции; неподдерживаемые и legacy adapters их не рекламируют.
+- Analysis использует cooperative token на границах items и managed FFprobe;
+  после принятой остановки частичный plan не публикуется.
+- Export сохраняет прежние process-tree, cleanup и atomic publication
+  guarantees; terminal `cancelled` появляется только после завершения worker.
+- Focused cancellation gate: `53 passed, 1 skipped`; полный локальный gate после
+  `uv sync --locked --extra dev --extra otio`: `324 passed, 12 skipped`.
+
 ## Automatic encoding tools и GUI focus — 2026-09-13
 
 - В `feature/configurable-datetime-overlay` GUI по умолчанию открывает «Дата и
@@ -10,8 +22,9 @@
 - Failure сохраняет ручной fallback; существующие инструменты не обновляются.
 - UI и README поясняют, что opt-in cache повторно использует только проверенные
   normalized clips и не хранит исходники, project state или итоговый MP4.
-- Focused GUI/tooling gate: `23 passed`; полный локальный gate: `319 passed,
-  12 skipped`. WinGet metadata подтверждает доступность `Gyan.FFmpeg 9.0.1`;
+- Focused GUI/tooling gate: `23 passed`; полный локальный gate с последующим
+  stop-actions срезом: `324 passed, 12 skipped`. WinGet metadata подтверждает
+  доступность `Gyan.FFmpeg 9.0.1`;
   live system installation тестами намеренно не выполнялась.
 
 ## Configurable date/time overlay — 2026-09-12
@@ -124,7 +137,8 @@ project schema v2 и opt-in normalized-clip cache являются разным�
   переключении и показывает mode в plan summary;
 - CLI без `--mode` эквивалентен legacy Chronicle; новый `--mode join` проходит
   тот же mixed photo/video production path без `drawtext`;
-- GUI показывает determinate progress и безопасно отменяет default export;
+- GUI показывает determinate progress и раздельно останавливает default
+  analysis/export; partial plan и partial export не публикуются;
   cancel/timeout/output-limit завершают всё дерево процессов в bounded time;
 - cancellation/publication race, strict private-workspace cleanup и terminal
   states `succeeded/failed/cancelled` имеют явный Qt-free контракт;
@@ -149,7 +163,7 @@ project schema v2 и opt-in normalized-clip cache являются разным�
   возвращает proposal, неизвестные/неоднозначные local refs не auto-bind;
 - synthetic scene benchmark на FFmpeg 9.0.1 дал P/R/F1 `1.0/1.0/1.0`,
   `0` FP/min, p95 `0 µs`, deterministic `3/3` и wall/media `0.080509`;
-- 313 тестов проходят, включая configurable overlay,
+- 324 теста проходят, включая configurable overlay, stop actions,
   interchange/parser/security/scene benchmark; 12 platform/runtime checks
   пропущены в текущем worktree, включая недоступные FFmpeg/FFprobe.
 

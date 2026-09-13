@@ -29,6 +29,11 @@ release gate для будущего пакетирования, но ещё н�
   legacy fallback запускает `sys.executable` и `join_media.py` через list-argv
   `QProcess`. Пути не склеиваются в shell-команду. Overwrite разрешается только
   после отдельного подтверждения и повторной проверки коллизии.
+- Analysis и export используют отдельные cooperative cancellation contexts.
+  Analysis проверяет token на item boundaries и передаёт его managed FFprobe;
+  принятая остановка не публикует partial plan. `cancelled` показывается только
+  после подтверждённого reap process tree и завершения worker; unconfirmed
+  termination остаётся failure.
 - Без `--overwrite` итог публикуется атомарным no-replace rename на Windows
   (включая FAT/exFAT) или create-if-absent hard link на POSIX; файл,
   появившийся во время рендера, сохраняется и приводит к отказу. С

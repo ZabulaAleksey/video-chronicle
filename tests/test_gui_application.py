@@ -546,8 +546,10 @@ def test_application_export_progress_cancel_is_responsive_and_terminal(
     assert ticks == [True]
     assert window.cancel_button.isHidden() is False
     assert window.cancel_button.isEnabled() is True
+    assert window.cancel_button.text() == "Остановить экспорт"
+    assert window.analysis_cancel_button.isHidden() is True
     window.cancel_button.click()
-    assert window.status_label.text() == "Отмена экспорта…"
+    assert window.status_label.text() == "Остановка экспорта…"
     release.set()
     _wait_until(qapp, lambda: not adapter.is_running)
 
@@ -558,12 +560,63 @@ def test_application_export_progress_cancel_is_responsive_and_terminal(
     window.close()
 
 
+def test_application_analysis_can_be_stopped_without_publishing_partial_plan(
+    qapp, tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.delenv("VIDEO_CHRONICLE_CANCEL_UI", raising=False)
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    output = tmp_path / "output.mp4"
+    canonical = _canonical_request(input_dir, output)
+    entered = threading.Event()
+
+    def plan_service(request, ports, logger, *, cancellation, progress=None):
+        entered.set()
+        while not cancellation.cancel_requested:
+            time.sleep(0.005)
+        cancellation.checkpoint()
+
+    adapter = ApplicationServiceAdapter(
+        plan_service=plan_service,
+        ports_factory=lambda: object(),  # type: ignore[arg-type]
+        request_factory=lambda gui: canonical,
+        cancel_capable=True,
+    )
+    window = ChronicleWindow(application_adapter=adapter)
+    window.input_edit.setText(str(input_dir))
+    window.output_edit.setText(str(output))
+
+    window.analyze_button.click()
+    _wait_until(qapp, entered.is_set)
+
+    assert window.analysis_cancel_button.isHidden() is False
+    assert window.analysis_cancel_button.isEnabled() is True
+    assert window.analysis_cancel_button.text() == "Остановить анализ"
+    assert window.cancel_button.isHidden() is True
+    ticks: list[bool] = []
+    QTimer.singleShot(0, lambda: ticks.append(True))
+    qapp.processEvents()
+    assert ticks == [True]
+
+    window.analysis_cancel_button.click()
+    assert window.status_label.text() == "Остановка анализа…"
+    _wait_until(qapp, lambda: not adapter.is_running)
+
+    assert adapter.last_terminal_state == "cancelled"
+    assert window._plan is None
+    assert window.preview_state_label.text() == "Анализ остановлен"
+    assert window.status_label.text() == "Анализ остановлен"
+    assert window.analysis_cancel_button.isHidden() is True
+    window.close()
+
+
 def test_cancel_ui_flag_and_legacy_execute_fallback_hide_button(
     qapp, monkeypatch
 ) -> None:
     monkeypatch.setenv("VIDEO_CHRONICLE_CANCEL_UI", "0")
     flagged = ChronicleWindow(application_adapter=ApplicationServiceAdapter())
     assert flagged.cancel_button.isHidden() is True
+    assert flagged.analysis_cancel_button.isHidden() is True
     flagged.close()
 
     monkeypatch.delenv("VIDEO_CHRONICLE_CANCEL_UI", raising=False)
@@ -573,6 +626,7 @@ def test_cancel_ui_flag_and_legacy_execute_fallback_hide_button(
         )
     )
     assert fallback.cancel_button.isHidden() is True
+    assert fallback.analysis_cancel_button.isHidden() is True
     fallback.close()
 
     injected_backend = ChronicleWindow(
@@ -581,6 +635,7 @@ def test_cancel_ui_flag_and_legacy_execute_fallback_hide_button(
         )
     )
     assert injected_backend.cancel_button.isHidden() is True
+    assert injected_backend.analysis_cancel_button.isHidden() is True
     assert (
         isinstance(injected_backend._adapter, ApplicationServiceAdapter)
         and injected_backend._adapter.supports_cancel is False

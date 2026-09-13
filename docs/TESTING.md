@@ -48,7 +48,7 @@ preview/normalize, включая multiline typography при доступном
 | Absolute FFmpeg discovery, pinned WinGet argv, default tab и cache explanation | unit/GUI/contract | `tests/test_tooling.py`, `tests/test_gui_application.py` | `GUI-TOOLS-AC-001–004` |
 | Единый date/time formatter, typography, font fallback, preview и multi-item export | unit/GUI/integration | `tests/test_overlay.py`, `tests/test_gui_application.py`, `tests/test_nondestructive_editing.py` | `OVERLAY-AC-001–003`, `OVERLAY-007–009`, `AC-004/010` |
 | Join/Chronicle invariant, CLI parity, GUI round-trip и оба real exports | matrix/GUI/integration | `tests/test_modes.py`, `tests/test_gui_application.py`, `tests/test_ffmpeg_smoke.py` | `MODE-AC-001–003`, `AC-003/004/008` |
-| Structured progress, cancel checkpoints, publication race и cleanup | unit/integration/GUI | `tests/test_execution.py`, `tests/test_gui_application.py` | `EXEC-AC-001/003/004`, `AC-003/005/009/010` |
+| Structured progress, analysis/export stop, cancellation races и cleanup | unit/integration/GUI | `tests/test_execution.py`, `tests/test_gui_application.py` | `EXEC-AC-001/003–007`, `AC-003/005/009/010` |
 | Windows Job/POSIX group, descendants, timeout/output-limit и real FFmpeg cancel | platform/integration/security | `tests/test_process_control.py` | `EXEC-AC-002`, `AC-006` |
 | Cache key/manifest, corruption fallback, bounds, purge и interprocess lock | unit/integration/security | `tests/test_cache.py`, `tests/test_execution.py` | `CACHE-AC-001–004`, `AC-007` |
 | Interrupted/repeated mixed-media export и byte-identical clean/resumed result | integration smoke | `tests/test_execution.py`, `tests/test_ffmpeg_smoke.py` | `CACHE-AC-002/003`, `AC-005/007/010` |
@@ -94,7 +94,8 @@ ffprobe version 9.0.1-essentials_build-www.gyan.dev
 - Contract: процессы получают argv-списки; CLI и будущий GUI используют один
   и тот же наблюдаемый план и правила ошибок.
 - GUI: loading/error/empty/populated/stale preview, Unicode, worker cleanup,
-  automatic tool discovery/bootstrap, default-вкладка и cache explanation,
+  automatic tool discovery/bootstrap, default-вкладка, cache explanation и
+  раздельные analysis/export stop actions,
   repeat-run guard, отсутствие horizontal scroll при 820×660, видимость правых
   browse/editor buttons, structured progress/cancel и отсутствие блокировки
   event loop.

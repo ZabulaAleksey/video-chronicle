@@ -13,7 +13,13 @@ import pytest
 
 from video_chronicle.application import SourceChangedError, execute_plan, plan_export
 from video_chronicle.domain import ExportPlan, ExportRequest, MediaItem, SourceFingerprint
-from video_chronicle.execution import ExecutionContext, ExportCancelled, ProgressEvent
+from video_chronicle.execution import (
+    ExecutionContext,
+    ExportCancelled,
+    OperationCancellation,
+    ProgressEvent,
+    current_execution_context,
+)
 from video_chronicle.overlay import OverlayConfig
 from video_chronicle.ports import PipelinePorts
 from video_chronicle.project import JobState
@@ -481,6 +487,76 @@ def test_analysis_progress_counts_each_inspected_or_skipped_source(
     assert [event.completed_units for event in events] == [0, 1, 2]
     assert [event.outcome for event in events] == [None, "completed", "skipped"]
     assert all(event.total_units == 2 for event in events)
+
+
+def test_analysis_cancellation_discards_partial_plan_before_next_item(
+    tmp_path: Path,
+) -> None:
+    seed = _plan(tmp_path, count=2)
+    cancellation = OperationCancellation()
+    inspected: list[Path] = []
+
+    def inspect(path, *args):
+        assert current_execution_context() is cancellation
+        inspected.append(path)
+        cancellation.request_cancel()
+        cancellation.checkpoint()
+
+    ports, _ = _ports(tmp_path)
+    ports = replace(
+        ports,
+        collect_source_paths=lambda *args: [item.path for item in seed.items],
+        inspect_item=inspect,
+    )
+
+    with pytest.raises(ExportCancelled, match="operation cancelled"):
+        plan_export(seed.request, ports, cancellation=cancellation)
+
+    assert inspected == [seed.items[0].path]
+
+
+def test_analysis_completion_rejects_late_cancel() -> None:
+    cancellation = OperationCancellation()
+
+    assert cancellation.complete() is True
+    assert cancellation.request_cancel() is False
+    cancellation.checkpoint()
+
+
+def test_analysis_cancellation_during_source_collection_wins_over_empty_result(
+    tmp_path: Path,
+) -> None:
+    seed = _plan(tmp_path)
+    cancellation = OperationCancellation()
+    ports, _ = _ports(tmp_path)
+
+    def collect(*args):
+        cancellation.request_cancel()
+        return []
+
+    ports = replace(ports, collect_source_paths=collect)
+
+    with pytest.raises(ExportCancelled, match="operation cancelled"):
+        plan_export(seed.request, ports, cancellation=cancellation)
+
+
+def test_analysis_process_tree_safety_failure_is_not_a_skipped_item(
+    tmp_path: Path,
+) -> None:
+    seed = _plan(tmp_path)
+    ports, _ = _ports(tmp_path)
+
+    def inspect(*args):
+        raise ProcessTreeTerminationError("tree still active")
+
+    ports = replace(
+        ports,
+        collect_source_paths=lambda *args: [seed.items[0].path],
+        inspect_item=inspect,
+    )
+
+    with pytest.raises(ProcessTreeTerminationError, match="tree still active"):
+        plan_export(seed.request, ports, cancellation=OperationCancellation())
 
 
 def test_unconfirmed_cancel_failure_is_failed_not_cancelled(tmp_path: Path) -> None:

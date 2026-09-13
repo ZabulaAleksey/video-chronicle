@@ -55,6 +55,40 @@ class ExportCancelled(RuntimeError):
     """Application-level cancellation after confirmed process-tree shutdown."""
 
 
+class OperationCancellation:
+    """Thread-safe cooperative token for non-publishing operations."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._requested = False
+        self._completed = False
+
+    @property
+    def cancel_requested(self) -> bool:
+        with self._lock:
+            return self._requested
+
+    def request_cancel(self) -> bool:
+        with self._lock:
+            if self._completed:
+                return False
+            self._requested = True
+        return True
+
+    def checkpoint(self) -> None:
+        if self.cancel_requested:
+            raise ExportCancelled("operation cancelled")
+
+    def complete(self) -> bool:
+        """Let normal completion and cancellation race through one lock."""
+
+        with self._lock:
+            if self._requested:
+                return False
+            self._completed = True
+            return True
+
+
 class ExecutionContext:
     """Thread-safe state machine for one export invocation."""
 
@@ -148,17 +182,20 @@ class ExecutionContext:
                 pass
 
 
-_CURRENT_EXECUTION: ContextVar[ExecutionContext | None] = ContextVar(
+CancellationContext = ExecutionContext | OperationCancellation
+
+
+_CURRENT_EXECUTION: ContextVar[CancellationContext | None] = ContextVar(
     "video_chronicle_execution", default=None
 )
 
 
-def current_execution_context() -> ExecutionContext | None:
+def current_execution_context() -> CancellationContext | None:
     return _CURRENT_EXECUTION.get()
 
 
 @contextmanager
-def bind_execution_context(context: ExecutionContext) -> Iterator[None]:
+def bind_execution_context(context: CancellationContext) -> Iterator[None]:
     token = _CURRENT_EXECUTION.set(context)
     try:
         yield

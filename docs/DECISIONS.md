@@ -228,6 +228,10 @@
 - Последствия: cancel принимается только до atomic publication commit; grace
   2 секунды и force/reap budget 3 секунды; source identity и workspace cleanup
   подтверждаются; unsafe/legacy backend не показывает кнопку отмены.
+- Расширение 2026-09-13: analysis использует отдельный non-publishing
+  `OperationCancellation`, но связывает его с тем же managed-process context.
+  Completion/cancel race решается одним lock; частичный plan отбрасывается, а
+  GUI показывает раздельные stop actions только для активной операции.
 
 ## 2026-08-14 — CACHE-001: opt-in cache нормализованных клипов
 

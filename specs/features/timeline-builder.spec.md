@@ -109,9 +109,9 @@ execution path, но сохраняет GUI-001 как временный диа
   `execute_plan` через worker boundary; widgets не выполняют FFprobe/FFmpeg и не
   повторяют date/order/publish policy. CLI продолжает использовать те же
   application services.
-- **GUI-APP-005 — Lifecycle до safe cancel.** Повторный анализ/экспорт и закрытие
-  окна блокируются, пока worker активен. Этот срез не имитирует process-tree
-  cancellation; безопасная отмена относится к этапу 09.
+- **GUI-APP-005 — Lifecycle и safe cancel.** Повторный анализ/экспорт и закрытие
+  окна блокируются, пока worker активен. Реализованные process-tree guarantees
+  и раздельные stop actions определены в EXEC-001/002.
 
 ### Критерии приёмки среза
 
@@ -359,8 +359,38 @@ application/pipeline path и не меняет CLI argv или атомарну�
 - duration-weighted ETA и парсинг FFmpeg stderr/progress protocol;
 - resume/cache, durable/background queue и parallel exports;
 - `taskkill`, `psutil`, `pywin32` или второй subprocess pipeline;
-- cancel analysis/representative preview: они остаются текущими bounded tool
-  calls, а safe cancel в этом срезе относится к export.
+- cancel representative preview: он остаётся текущим bounded tool call.
+
+## Утверждённое расширение EXEC-002 — остановка анализа и экспорта
+
+Этот раздел утверждён прямым запросом пользователя от 2026-09-13 и расширяет
+EXEC-001 без ослабления process-tree и publication guarantees.
+
+- **EXEC-009 — Раздельные actions.** GUI показывает «Остановить анализ» только
+  во время cancellable analysis и «Остановить экспорт» только во время
+  cancellable export. Неактивная или неподдерживаемая action скрыта.
+- **EXEC-010 — Analysis cancellation.** Analysis получает thread-safe token,
+  проверяет его до/после каждого media item и передаёт тот же token в bounded
+  FFprobe/FFmpeg process boundary. Новый item не начинается после принятой
+  отмены.
+- **EXEC-011 — Terminal analysis state.** Частичный `ExportPlan` после отмены
+  не публикуется. `cancelled` показывается только после остановки активного
+  process tree и завершения worker thread; unconfirmed termination остаётся
+  `failed`.
+- **EXEC-012 — Export compatibility.** Существующая отмена export сохраняет
+  cooperative `q`/kill/reap, cleanup и atomic publication contract; изменение
+  ограничено отдельной понятной кнопкой и operation-specific status.
+
+### Критерии приёмки расширения
+
+- **EXEC-AC-005.** Component test запускает cancellable analysis, видит только
+  его stop-кнопку, принимает отмену, не получает plan и завершает worker как
+  `cancelled` без блокировки event loop.
+- **EXEC-AC-006.** Component test export видит только export stop-кнопку;
+  cancellation сохраняет существующий результат, удаляет partial workspace и
+  завершается `cancelled` только после подтверждённого terminal state.
+- **EXEC-AC-007.** Injected/legacy backend без explicit cancellation keyword и
+  safe platform capability не рекламирует stop action.
 
 ## Утверждённый срез CACHE-001 — resume normalized clips
 

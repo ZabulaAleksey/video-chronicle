@@ -248,6 +248,12 @@ class ChronicleWindow(QMainWindow):
             and isinstance(self._adapter, ApplicationServiceAdapter)
             and self._adapter.supports_cancel
         )
+        self._analysis_cancel_ui_enabled = (
+            not self._legacy_mode
+            and os.environ.get("VIDEO_CHRONICLE_CANCEL_UI", "1") != "0"
+            and isinstance(self._adapter, ApplicationServiceAdapter)
+            and self._adapter.supports_analysis_cancel
+        )
         self._building_ui = True
 
         default_input = Path.home() / "Input"
@@ -603,13 +609,18 @@ class ChronicleWindow(QMainWindow):
         self.run_button.setObjectName("primary")
         self.run_button.setMinimumHeight(42)
         self.run_button.clicked.connect(self._start_export)
-        self.cancel_button = QPushButton("Отменить экспорт")
+        self.analysis_cancel_button = QPushButton("Остановить анализ")
+        self.analysis_cancel_button.setEnabled(False)
+        self.analysis_cancel_button.setVisible(False)
+        self.analysis_cancel_button.clicked.connect(self._cancel_analysis)
+        self.cancel_button = QPushButton("Остановить экспорт")
         self.cancel_button.setEnabled(False)
-        self.cancel_button.setVisible(self._cancel_ui_enabled)
+        self.cancel_button.setVisible(False)
         self.cancel_button.clicked.connect(self._cancel_export)
         action_row.addWidget(self.status_label, 1)
         action_row.addWidget(self.analyze_button)
         action_row.addWidget(self.run_button)
+        action_row.addWidget(self.analysis_cancel_button)
         action_row.addWidget(self.cancel_button)
         root.addLayout(action_row)
 
@@ -1230,9 +1241,15 @@ class ChronicleWindow(QMainWindow):
     def _on_application_started(self, operation: str) -> None:
         if operation == "analysis":
             self.status_label.setText("Анализ медиафайлов…")
+            self.analysis_cancel_button.setVisible(self._analysis_cancel_ui_enabled)
+            self.analysis_cancel_button.setEnabled(self._analysis_cancel_ui_enabled)
+            self.cancel_button.setVisible(False)
         else:
             self.status_label.setText("Медиаконвейер выполняется…")
-            self.cancel_button.setEnabled(False)
+            self.analysis_cancel_button.setVisible(False)
+            is_export = operation == "export"
+            self.cancel_button.setVisible(is_export and self._cancel_ui_enabled)
+            self.cancel_button.setEnabled(is_export and self._cancel_ui_enabled)
 
     @Slot(object)
     def _on_progress_event(self, value: object) -> None:
@@ -1260,15 +1277,32 @@ class ChronicleWindow(QMainWindow):
     @Slot(str)
     def _on_execution_state(self, state: str) -> None:
         if state == "cancel-requested":
-            self.status_label.setText("Отмена экспорта…")
-            self.cancel_button.setEnabled(False)
+            operation = (
+                self._adapter.current_operation
+                if isinstance(self._adapter, ApplicationServiceAdapter)
+                else None
+            )
+            if operation == "analysis":
+                self.status_label.setText("Остановка анализа…")
+                self.analysis_cancel_button.setEnabled(False)
+            else:
+                self.status_label.setText("Остановка экспорта…")
+                self.cancel_button.setEnabled(False)
+
+    @Slot()
+    def _cancel_analysis(self) -> None:
+        if not isinstance(self._adapter, ApplicationServiceAdapter):
+            return
+        if self._adapter.cancel_analysis():
+            self.status_label.setText("Остановка анализа…")
+            self.analysis_cancel_button.setEnabled(False)
 
     @Slot()
     def _cancel_export(self) -> None:
         if not isinstance(self._adapter, ApplicationServiceAdapter):
             return
         if self._adapter.cancel_export():
-            self.status_label.setText("Отмена экспорта…")
+            self.status_label.setText("Остановка экспорта…")
             self.cancel_button.setEnabled(False)
 
     @Slot(object)
@@ -1552,6 +1586,11 @@ class ChronicleWindow(QMainWindow):
         self.result_label.setText(message)
         self._append_output(f"\n{message}\n")
         if operation == "analysis":
+            terminal_state = (
+                self._adapter.last_terminal_state
+                if isinstance(self._adapter, ApplicationServiceAdapter)
+                else None
+            )
             if success and self._plan is not None:
                 if self._plan.request.mode is ExportMode.JOIN:
                     self.status_label.setText("План Join готов к экспорту")
@@ -1566,7 +1605,11 @@ class ChronicleWindow(QMainWindow):
             self._plan = None
             self.run_button.setEnabled(False)
             self.progress.setValue(0)
-            if "no supported videos or photos found" in message:
+            if terminal_state == "cancelled":
+                self.preview_state_label.setText("Анализ остановлен")
+                self.plan_summary_label.setText("Частичный план отброшен.")
+                self.status_label.setText("Анализ остановлен")
+            elif "no supported videos or photos found" in message:
                 self.preview_state_label.setText("Поддерживаемые медиафайлы не найдены")
                 self.plan_summary_label.setText(
                     "Папка пуста или не содержит поддерживаемых фото и видео."
@@ -1819,12 +1862,11 @@ class ChronicleWindow(QMainWindow):
         else:
             self.progress.setRange(0, 1)
             self.progress.setTextVisible(False)
-        self.cancel_button.setEnabled(
-            running
-            and self._cancel_ui_enabled
-            and isinstance(self._adapter, ApplicationServiceAdapter)
-            and self._adapter.current_operation == "export"
-        )
+        if not running:
+            self.analysis_cancel_button.setEnabled(False)
+            self.analysis_cancel_button.setVisible(False)
+            self.cancel_button.setEnabled(False)
+            self.cancel_button.setVisible(False)
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt API
         if (
@@ -1841,8 +1883,8 @@ class ChronicleWindow(QMainWindow):
         if self._adapter.is_running:
             QMessageBox.warning(
                 self,
-                "Экспорт ещё выполняется",
-                "Дождитесь завершения операции или сначала отмените активный экспорт.",
+                "Операция ещё выполняется",
+                "Дождитесь завершения операции или используйте доступную кнопку остановки.",
             )
             event.ignore()
             return

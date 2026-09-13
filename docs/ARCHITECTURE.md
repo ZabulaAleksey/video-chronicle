@@ -30,8 +30,8 @@
   normalization, concatenation, publication и source discovery.
 - `src/video_chronicle/application.py` — orchestration одного экспорта и
   partial-success policy, structured progress и checkpoints отмены.
-- `src/video_chronicle/execution.py` — Qt-free lifecycle одного экспорта,
-  `ProgressEvent`, cancellation token и atomic publication commit point.
+- `src/video_chronicle/execution.py` — Qt-free progress, общий cooperative token
+  анализа и export lifecycle с atomic publication commit point.
 - `src/video_chronicle/process_control.py` — platform-owned subprocess tree:
   Windows Job Object либо POSIX process group с bounded terminate/reap.
 - `src/video_chronicle/cache.py` — opt-in immutable normalized-clip cache:
@@ -73,7 +73,9 @@
    заполняет абсолютные пути. Failure сохраняет ручной fallback во вкладке
    «Дополнительно».
 2. GUI валидирует форму и вне UI thread создаёт `ExportRequest`, разрешает
-   инструменты и вызывает `plan_export` с явным набором `PipelinePorts`.
+   инструменты и вызывает `plan_export` с явным набором `PipelinePorts` и
+   cancellable operation token. Принятая остановка прерывает текущий managed
+   FFprobe tree, не начинает следующий item и отбрасывает частичный plan.
    Chronicle разрешает OVERLAY-001 on/off; Join канонически отключает overlay.
 3. Immutable `ExportPlan` возвращается в GUI: accepted/skipped элементы,
    date provenance и порядок показываются до экспорта. Изменение формы
@@ -85,8 +87,9 @@
    layout: применяет reorder, resolved trim/groups и active preset, создавая
    `plan-v2`. Любой edit инвалидирует representative preview и export.
 6. GUI передаёт тот же plan в `execute_plan` через отдельный worker; execution
-   context транслирует typed progress и принимает отмену только до publication
-   commit. CLI создаёт тот же `ExportRequest` и вызывает тот же application path.
+   context транслирует typed progress и принимает остановку export только до
+   publication commit. CLI создаёт тот же `ExportRequest` и вызывает тот же
+   application path.
 7. Source adapter находит поддерживаемые медиафайлы во входном каталоге.
 8. FFprobe adapter возвращает метаданные, kind и effective duration `0:v:0`.
 9. DATE-001 engine собирает кандидатов, выбирает дату из метаданных или имени
@@ -134,9 +137,9 @@ service. Root-level CLI только экспортирует каноничес
 Join и Chronicle являются policy-данными одного `ExportRequest`: inspection,
 normalization, concat и publication adapters у них общие.
 Legacy whole-CLI `QProcess` остаётся только явным adapter fallback и может быть
-удалён без изменения core. Safe cancel доступен только default application
-backend либо явно объявленному совместимому backend; feature flag может скрыть
-его без изменения pipeline. Каталоги `ffmpeg/` и `ffmpeg1/` являются локальными
+удалён без изменения core. Safe stop анализа/export доступен только default
+application backend либо явно объявленному совместимому backend; feature flag
+может скрыть actions без изменения pipeline. Каталоги `ffmpeg/` и `ffmpeg1/` являются локальными
 сторонними зависимостями и не входят в историю основного репозитория.
 OTIO extra и scene adapter выключены по умолчанию, не входят в schema v2/cache
 authority и удаляются без migration. Любой imported proposal или scene
