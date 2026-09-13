@@ -1,5 +1,13 @@
 # Состояние проекта для AI
 
+## Unified light GUI surface — 2026-09-13
+
+- Timeline tab/viewport/content и журнал получили явные светлые surfaces,
+  поэтому Windows dark palette больше не создаёт чёрный фон между controls.
+- Normal/disabled buttons используют transparent border и визуально отделены
+  от внешнего card boundary; keyboard focus сохраняет бирюзовую рамку.
+- Render regression и полный локальный gate: `326 passed, 12 skipped`.
+
 ## Main/timeline navigation и reorder — 2026-09-13
 
 - В `feature/configurable-datetime-overlay` первой открывается вкладка
@@ -11,7 +19,7 @@
 - Move/group/ungroup/trim/preset/project-save actions disabled, когда текущий
   plan/selection/boundary не допускает meaningful transition.
 - Focused navigation/editing gate: `53 passed, 1 skipped`; полный локальный
-  gate: `325 passed, 12 skipped`.
+  gate с последующим visual fix: `326 passed, 12 skipped`.
 
 ## Analysis/export stop actions — 2026-09-13
 
@@ -36,7 +44,7 @@
 - UI и README поясняют, что opt-in cache повторно использует только проверенные
   normalized clips и не хранит исходники, project state или итоговый MP4.
 - Focused GUI/tooling gate: `23 passed`; полный локальный gate с последующим
-  последующими GUI-срезами: `325 passed, 12 skipped`. WinGet metadata подтверждает
+  последующими GUI-срезами: `326 passed, 12 skipped`. WinGet metadata подтверждает
   доступность `Gyan.FFmpeg 9.0.1`;
   live system installation тестами намеренно не выполнялась.
 
@@ -176,7 +184,7 @@ project schema v2 и opt-in normalized-clip cache являются разным�
   возвращает proposal, неизвестные/неоднозначные local refs не auto-bind;
 - synthetic scene benchmark на FFmpeg 9.0.1 дал P/R/F1 `1.0/1.0/1.0`,
   `0` FP/min, p95 `0 µs`, deterministic `3/3` и wall/media `0.080509`;
-- 325 тестов проходят, включая configurable overlay, navigation/reorder, stop actions,
+- 326 тестов проходят, включая configurable overlay, navigation/reorder, stop actions,
   interchange/parser/security/scene benchmark; 12 platform/runtime checks
   пропущены в текущем worktree, включая недоступные FFmpeg/FFprobe.
 

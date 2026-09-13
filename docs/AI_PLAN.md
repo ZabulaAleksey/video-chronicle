@@ -5,7 +5,7 @@
 - Статус: **реализован и валидирован локально в feature-ветке**
 - Ветка: `feature/configurable-datetime-overlay`
 - SPEC: `OVERLAY-007–009`, `GUI-TOOLS-001–005`, `EXEC-009–012` и
-  `GUI-NAV-001–004` в
+  `GUI-NAV-001–005` в
   `specs/features/timeline-builder.spec.md`
 - Scope: семантические форматы даты/времени, visibility/layout, system font
   family resolution/fallback, practical typography, project persistence и
@@ -18,7 +18,7 @@
 
 - focused analysis/export cancellation gate: `53 passed, 1 skipped`;
 - focused navigation/editing gate: `53 passed, 1 skipped`;
-- полный Python gate: `325 passed, 12 skipped`;
+- полный Python gate: `326 passed, 12 skipped`;
 - локальный system font inventory: `284` family / `437` file-backed faces;
 - skips относятся к недоступным FFmpeg/FFprobe и platform privilege tests;
   новый real FFmpeg multiline/typography test добавлен, но локально не выполнен.

@@ -31,7 +31,7 @@ from video_chronicle.overlay import OverlayConfig
 from video_chronicle.ports import PipelinePorts
 from video_chronicle.project import RenderSettings
 import video_chronicle_gui as gui_module
-from video_chronicle_gui import ChronicleWindow, CliProcessAdapter
+from video_chronicle_gui import ChronicleWindow, CliProcessAdapter, STYLE_SHEET
 
 
 _PNG_1X1 = base64.b64decode(
@@ -570,6 +570,31 @@ def test_application_export_progress_cancel_is_responsive_and_terminal(
     assert output.exists() is False
     assert workspace.exists() is False
     window.close()
+
+
+def test_timeline_surface_and_buttons_do_not_inherit_dark_container_style(qapp) -> None:
+    previous_style_sheet = qapp.styleSheet()
+    window = None
+    try:
+        qapp.setStyleSheet(STYLE_SHEET)
+        window = ChronicleWindow()
+        window.settings_tabs.setCurrentWidget(window.timeline_tab)
+        window.show()
+        qapp.processEvents()
+
+        viewport_image = window.timeline_scroll.viewport().grab().toImage()
+        content_image = window.timeline_scroll.widget().grab().toImage()
+        assert viewport_image.pixelColor(5, 5).name() == "#ffffff"
+        assert content_image.pixelColor(5, 5).name() == "#ffffff"
+        assert "QPushButton {" in STYLE_SHEET
+        assert "border: 1px solid transparent;" in STYLE_SHEET
+        assert "QPushButton:focus" in STYLE_SHEET
+        assert "QPushButton:disabled" in STYLE_SHEET
+        assert "border-color: transparent;" in STYLE_SHEET
+    finally:
+        if window is not None:
+            window.close()
+        qapp.setStyleSheet(previous_style_sheet)
 
 
 def test_timeline_reorder_buttons_follow_selection_and_boundaries(

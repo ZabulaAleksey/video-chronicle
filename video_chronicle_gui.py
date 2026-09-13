@@ -361,6 +361,7 @@ class ChronicleWindow(QMainWindow):
         timeline_tab_layout.setContentsMargins(0, 0, 0, 0)
         self.timeline_scroll = QScrollArea()
         self.timeline_scroll.setObjectName("timelineScroll")
+        self.timeline_scroll.viewport().setObjectName("timelineViewport")
         self.timeline_scroll.setWidgetResizable(True)
         self.timeline_scroll.setFrameShape(QFrame.Shape.NoFrame)
         timeline_tab_layout.addWidget(self.timeline_scroll)
@@ -650,6 +651,7 @@ class ChronicleWindow(QMainWindow):
         root.addWidget(self.progress)
 
         preview_panel = QFrame()
+        preview_panel.setObjectName("timelineContent")
         preview_layout = QVBoxLayout(preview_panel)
         preview_layout.setContentsMargins(0, 0, 8, 0)
         preview_layout.setSpacing(10)
@@ -758,6 +760,7 @@ class ChronicleWindow(QMainWindow):
         preview_layout.addWidget(self.visual_preview_label)
 
         log_panel = QFrame()
+        log_panel.setObjectName("logPanel")
         log_layout = QVBoxLayout(log_panel)
         log_layout.setContentsMargins(8, 0, 0, 0)
         log_layout.setSpacing(10)
@@ -787,6 +790,7 @@ class ChronicleWindow(QMainWindow):
 
         scroll = QScrollArea(self)
         scroll.setObjectName("mainScroll")
+        scroll.viewport().setObjectName("mainViewport")
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setWidget(central)
@@ -1996,6 +2000,16 @@ class ChronicleWindow(QMainWindow):
 
 STYLE_SHEET = """
 QWidget#central { background: #f4f7f8; color: #182528; }
+QWidget#mainViewport { background: #f4f7f8; }
+QWidget#mainSettingsTab,
+QWidget#timelineTab,
+QWidget#timelineViewport,
+QFrame#timelineContent,
+QFrame#logPanel {
+    background: #ffffff;
+    color: #182528;
+    border: 0;
+}
 QLabel { color: #233b3f; }
 QLabel#eyebrow { color: #0d7d79; font-size: 11px; font-weight: 700; letter-spacing: 1px; }
 QLabel#title { color: #102a2e; font-size: 30px; font-weight: 700; }
@@ -2028,19 +2042,20 @@ QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QPlainTextEdit:focus, QTreeWid
 QPushButton {
     background: #e7efef;
     color: #233b3f;
-    border: 1px solid #cbd9da;
+    border: 1px solid transparent;
     border-radius: 7px;
     padding: 8px 14px;
     font-weight: 600;
 }
 QPushButton:hover { background: #dce9e9; }
-QPushButton:disabled { color: #8d9b9d; background: #edf1f1; }
+QPushButton:focus { border-color: #278b87; }
+QPushButton:disabled { color: #8d9b9d; background: #edf1f1; border-color: transparent; }
 QPushButton#primary { background: #176f6b; border-color: #176f6b; color: white; padding: 9px 20px; }
 QPushButton#primary:hover { background: #0f5f5b; }
-QPushButton#primary:disabled { color: #8d9b9d; background: #edf1f1; border-color: #d2dddd; }
+QPushButton#primary:disabled { color: #8d9b9d; background: #edf1f1; border-color: transparent; }
 QComboBox QAbstractItemView { background: #ffffff; color: #182528; selection-background-color: #2f918d; }
 QCheckBox { color: #233b3f; spacing: 8px; }
-QTabWidget::pane { border: 1px solid #d5e1e2; border-radius: 8px; top: -1px; }
+QTabWidget::pane { background: #ffffff; border: 1px solid #d5e1e2; border-radius: 8px; top: -1px; }
 QTabBar::tab { background: #e7efef; color: #40575b; padding: 8px 16px; margin-right: 2px; }
 QTabBar::tab:selected { background: #ffffff; color: #176f6b; font-weight: 700; }
 QTreeWidget { alternate-background-color: #f5f9f9; }

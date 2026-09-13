@@ -108,6 +108,10 @@ GUI-001 для desktop-запуска на Windows.
   подходящего выбора, элемент уже на границе, отсутствует plan/project state
   либо операция несовместима с selection. Во время worker operation применимо
   существующее общее блокирование controls.
+- **GUI-NAV-005 — Единая светлая поверхность.** Main/timeline tab, вложенный
+  scroll viewport, timeline content и журнал имеют явный светлый background и
+  не наследуют тёмную системную палитру. Обычные и disabled buttons не повторяют
+  рамку внешнего card; keyboard focus остаётся различим отдельной focus-рамкой.
 
 ### Критерии приёмки расширения
 
@@ -118,6 +122,9 @@ GUI-001 для desktop-запуска на Windows.
   изменившиеся номера/порядок без изменения source bytes; boundary move disabled.
 - **GUI-NAV-AC-003.** До анализа и без selection editor buttons disabled;
   selection и group membership включают только действия с допустимым эффектом.
+- **GUI-NAV-AC-004.** Offscreen component render с application QSS подтверждает
+  белые пиксели viewport/content; style contract фиксирует transparent button
+  border в normal/disabled и отдельный видимый border в focus state.
 
 ## Утверждённый срез GUI-APP-001 — preview через application services
 
