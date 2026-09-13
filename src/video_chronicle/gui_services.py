@@ -12,7 +12,7 @@ import logging
 import os
 import tempfile
 from collections.abc import Callable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +25,8 @@ from .execution import ExecutionContext, ExportCancelled, OperationCancellation,
 from .ports import PipelinePorts
 from .overlay import OverlayConfig, require_resolved_overlay_font, resolve_overlay_font
 from .project import ProjectState
+from .project import stable_item_id
+from .process_control import ProcessSafetyError
 from .repository import ProjectRepository
 
 
@@ -111,6 +113,14 @@ PlanService = Callable[[ExportRequest, PipelinePorts, logging.Logger | None], Ex
 ExecuteService = Callable[[ExportPlan, logging.Logger, PipelinePorts], int]
 
 
+@dataclass(frozen=True, slots=True)
+class ThumbnailBatch:
+    """Temporary PNGs and isolated per-item errors returned to the GUI thread."""
+
+    images: tuple[tuple[str, Path], ...]
+    failures: tuple[tuple[str, str], ...]
+
+
 class ApplicationServiceAdapter(QObject):
     """Asynchronous GUI boundary around ``plan_export`` and ``execute_plan``."""
 
@@ -118,6 +128,7 @@ class ApplicationServiceAdapter(QObject):
     output_received = Signal(str)
     plan_ready = Signal(object)
     preview_ready = Signal(object)
+    thumbnails_ready = Signal(object)
     completed = Signal(str, bool, str)
     progress_received = Signal(object)
     execution_state_changed = Signal(str)
@@ -388,6 +399,57 @@ class ApplicationServiceAdapter(QObject):
 
         self._start("preview", task)
 
+    def start_thumbnails(self, plan: ExportPlan) -> None:
+        """Render one overlay-free thumbnail per accepted item off the UI thread."""
+
+        if self.is_running:
+            raise RuntimeError("Другая операция уже выполняется.")
+        if not plan.items:
+            raise RuntimeError("В плане нет принятых media items для миниатюр.")
+
+        def task() -> ThumbnailBatch:
+            from .application import require_source_fingerprint
+
+            ports = self._ports_factory()
+            images: list[tuple[str, Path]] = []
+            failures: list[tuple[str, str]] = []
+            try:
+                for item in plan.items:
+                    item_id = stable_item_id(item.path.absolute())
+                    descriptor, raw_path = tempfile.mkstemp(
+                        prefix="video_chronicle_thumbnail_", suffix=".png"
+                    )
+                    os.close(descriptor)
+                    path = Path(raw_path)
+                    try:
+                        ports.validate_source(plan.request.input_dir, item.path)
+                        require_source_fingerprint(item)
+                        self._preview_service(
+                            item,
+                            OverlayConfig(enabled=False),
+                            plan.request.ffmpeg,
+                            path,
+                            ports.command_runner,
+                        )
+                        require_source_fingerprint(item)
+                        if not path.is_file() or path.stat().st_size == 0:
+                            raise RuntimeError("FFmpeg не создал PNG миниатюры.")
+                    except ProcessSafetyError:
+                        path.unlink(missing_ok=True)
+                        raise
+                    except Exception as exc:
+                        path.unlink(missing_ok=True)
+                        failures.append((item_id, str(exc)))
+                    else:
+                        images.append((item_id, path))
+                return ThumbnailBatch(tuple(images), tuple(failures))
+            except Exception:
+                for _item_id, path in images:
+                    path.unlink(missing_ok=True)
+                raise
+
+        self._start("thumbnails", task)
+
     def _memory_logger(self, suffix: str) -> logging.Logger:
         logger = logging.getLogger(f"video_chronicle.gui.{suffix}.{id(self)}")
         logger.setLevel(logging.INFO)
@@ -489,6 +551,25 @@ class ApplicationServiceAdapter(QObject):
             result.unlink(missing_ok=True)
             self._preview_path = None
             self.completed.emit(operation, True, "Предпросмотр обновлён.")
+            return
+        if operation == "thumbnails":
+            if not isinstance(result, ThumbnailBatch):
+                self.completed.emit(
+                    operation, False, "Генерация миниатюр не вернула ожидаемый результат."
+                )
+                return
+            try:
+                self.thumbnails_ready.emit(result)
+            finally:
+                for _item_id, path in result.images:
+                    path.unlink(missing_ok=True)
+            ready = len(result.images)
+            failed = len(result.failures)
+            self.completed.emit(
+                operation,
+                True,
+                f"Миниатюры готовы: {ready}; без кадра: {failed}.",
+            )
             return
         if operation == "cache-purge":
             self.completed.emit(

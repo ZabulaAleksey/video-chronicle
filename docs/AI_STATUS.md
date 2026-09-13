@@ -1,5 +1,58 @@
 # Состояние проекта для AI
 
+## Stage 15 security hardening — 2026-09-13
+
+- Добавлены release threat model/spec и отдельный audit report.
+- Усилены symlink/reparse parent boundaries optional transcription/hardware;
+  benchmark использует no-replace `-n`, production assertions заменены явными
+  fail-closed checks.
+- Full gate: `340 passed, 12 skipped`; lock/installed compatibility PASS;
+  pip-audit — 0 known vulnerabilities; Bandit — 0 high, 0 medium, 7 low,
+  оставшиеся low triaged как intentional boundaries/handlers.
+- Статус `implemented_unverified`: независимый semantic reviewer не был
+  доступен. По fail-closed dependency stage 16 и следующий stage 17 не начаты.
+
+## Stage 14 hardware/quality gate — 2026-09-13
+
+- Добавлены typed capability report и managed FFmpeg probes для `libx264`,
+  `h264_nvenc`, `h264_qsv` и `h264_amf`; software остаётся default.
+- Явный недоступный hardware backend детерминированно возвращает
+  `software/libx264`; произвольные codec options не принимаются.
+- Quality promotion сравнивает один source с software reference по SSIM и
+  wall time, сохраняя tool/source identity и platform в JSON evidence.
+- Контрактные тесты проходят, но реальный hardware/driver benchmark в этой
+  среде не запускался. Ни один hardware backend не promoted; этап имеет статус
+  `implemented_unverified`, а production export/cache остаются software path.
+
+## Stage 13 local transcription — 2026-09-13
+
+- Добавлены `TRANSCRIBE-001`, explicit `video-chronicle-transcribe` и local
+  `whisper.cpp` adapter с model manifest/hash/license provenance.
+- FFmpeg extraction и inference идут через managed list argv; source/model/tool
+  проверяются до/после, JSON/resources bounded, temporary data очищается,
+  sidecar публикуется атомарно.
+- `5 passed`, CLI help и `uv lock --check` PASS. Реальный model WER/CER benchmark
+  не выполнялся: model bytes не входят в project и не скачиваются молча, поэтому
+  статус этапа — `implemented_unverified`, feature — optional/beta.
+
+## Main integration и thumbnail branch — 2026-09-13
+
+- `feature/configurable-datetime-overlay` слита локально в `main` merge-коммитом
+  `7af7f3e`; push не выполнялся.
+- В `feature/timeline-thumbnail-dnd` accepted media показываются 16:9
+  карточками: overlay-free PNG создаются последовательно в worker через managed
+  FFmpeg port, загружаются в `QPixmap` и удаляются; item failure сохраняет
+  placeholder и tooltip.
+- Internal drag одной или нескольких карточек направляется только через
+  `ProjectState.move_items`; grid/table selection и order синхронизированы,
+  partial-group move откатывает projection к canonical order.
+- Focused gate: `47 passed, 1 skipped`; полный локальный gate:
+  `329 passed, 12 skipped`. Offscreen render подтвердил светлую поверхность и
+  отсутствие clipping у четырёх карточек на размере 1060×860.
+- Исправлен post-analysis lifecycle: после thumbnails Chronicle автоматически
+  строит актуальный representative preview и включает «Экспортировать» при
+  успехе; ошибка preview по-прежнему блокирует export и допускает ручной retry.
+
 ## Unified light GUI surface — 2026-09-13
 
 - Timeline tab/viewport/content и журнал получили явные светлые surfaces,
@@ -77,15 +130,14 @@
 
 ## Текущий этап
 
-Этапы 00–12 завершены; целевой MVP, non-destructive editor и optional
-timeline-interchange/scene experiment приняты. Дальнейшая реализация
-приостановлена по указанию пользователя; этап 13 не начат. Default PySide6 GUI
+Этапы 00–12 завершены; этапы 13–14 реализованы с явно перечисленным внешним
+verification debt. Default PySide6 GUI
 строит plan и representative overlay preview через application services и
 запускает тот же immutable plan вне UI thread. Whole-CLI `QProcess` сохранён
 только как явный диагностический fallback. Runtime-очередь отсутствует; durable
 project schema v2 и opt-in normalized-clip cache являются разными storage boundaries.
 
-Принятый срез этапа 12 и точка продолжения хранятся в `docs/AI_PLAN.md`. Этапы 01–17
+Текущий непрерывный track и точка продолжения хранятся в `docs/AI_PLAN.md`. Этапы 01–17
 разделены на самостоятельные project prompts в `prompts/stages/`; они
 загружаются по одному и не заменяют SPEC или текущий план.
 
@@ -213,7 +265,8 @@ project schema v2 и opt-in normalized-clip cache являются разным�
 
 ## Следующая задача
 
-Работа приостановлена после принятия этапа 12. Следующим по roadmap остаётся
-этап 13 — optional local transcription, но он не начат и не является текущим
-срезом. Возобновлять его только по новой команде пользователя; точка
-продолжения зафиксирована в `docs/AI_PLAN.md`.
+Этапы 13–15 реализованы до доступного evidence. Следующий dependency-ready шаг
+— независимый semantic security review этапа 15. Этап 16 нельзя начинать до
+review без high findings; этап 17 дополнительно требует stable RC и явно
+утверждённых experiment hypothesis/dataset/metrics/resource budget. Точная
+точка продолжения зафиксирована в `docs/AI_PLAN.md`.

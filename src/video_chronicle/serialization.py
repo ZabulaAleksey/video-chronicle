@@ -76,7 +76,8 @@ def _path(value: Any, label: str, *, nullable: bool = False) -> Path | None:
 
 def _datetime(value: Any, label: str) -> datetime:
     text = _string(value, label)
-    assert text is not None
+    if text is None:
+        _fail(f"{label} must not be null")
     try:
         parsed = datetime.fromisoformat(text)
     except ValueError as exc:

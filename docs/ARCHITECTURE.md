@@ -46,6 +46,11 @@
   source-relative timestamps, managed process tree и source/tool identity.
 - `src/video_chronicle/scene_benchmark.py` — deterministic synthetic corpus,
   maximum-cardinality matching и воспроизводимый quality/performance report.
+- `src/video_chronicle/transcription.py` — disabled-by-default local
+  `whisper.cpp` adapter, strict model manifest/provenance, bounded transcript
+  schema и atomic JSON sidecar без download path.
+- `src/video_chronicle/transcription_cli.py` — отдельный explicit CLI для
+  локальной транскрипции; default export CLI и GUI от ML не зависят.
 - `src/video_chronicle/pipeline.py` — production adapters FFprobe/FFmpeg и
   атомарной публикации.
 - `src/video_chronicle/cli.py` — парсинг/валидация CLI и mapping в application
@@ -79,17 +84,23 @@
    Chronicle разрешает OVERLAY-001 on/off; Join канонически отключает overlay.
 3. Immutable `ExportPlan` возвращается в GUI: accepted/skipped элементы,
    date provenance и порядок показываются до экспорта во вкладке «План
-   хронологии». Presentation layer включает move actions только для допустимого
-   EDIT-001 перехода; изменение формы инвалидирует plan, а overwrite
-   подтверждается непосредственно перед запуском.
+   хронологии». Следующая worker-операция последовательно создаёт overlay-free
+   temporary PNG для accepted items через тот же trusted FFmpeg preview port;
+   GUI синхронно копирует их в `QPixmap`, после чего adapter удаляет PNG.
+   В Chronicle успешный batch запускает автоматический representative preview;
+   только его успех включает export. Join не требует этого шага.
+   Presentation layer включает move actions только для допустимого EDIT-001
+   перехода; изменение формы инвалидирует plan, а overwrite подтверждается
+   непосредственно перед запуском.
 4. Изменение только `OverlayConfig` сохраняет уже проанализированные items, но
    инвалидирует визуальный preview. Первый принятый item рендерится через тот же
    filter adapter в 640×360 PNG до разблокировки экспорта.
 5. При открытом/созданном project GUI связывает текущий analysis с immutable
    layout: применяет reorder, resolved trim/groups и active preset, создавая
-   `plan-v2`. Кнопки «Выше»/«Ниже» вызывают только `ProjectState.move_items`;
-   второй mutable order в widgets отсутствует. Любой edit инвалидирует
-   representative preview и export.
+   `plan-v2`. Кнопки «Выше»/«Ниже» и internal card drop вызывают только
+   `ProjectState.move_items`; второй mutable order в widgets отсутствует.
+   Невалидный partial-group drop восстанавливает canonical order. Любой edit
+   инвалидирует representative preview и export.
 6. GUI передаёт тот же plan в `execute_plan` через отдельный worker; execution
    context транслирует typed progress и принимает остановку export только до
    publication commit. CLI создаёт тот же `ExportRequest` и вызывает тот же
@@ -147,7 +158,11 @@ application backend либо явно объявленному совмести�
 сторонними зависимостями и не входят в историю основного репозитория.
 OTIO extra и scene adapter выключены по умолчанию, не входят в schema v2/cache
 authority и удаляются без migration. Любой imported proposal или scene
-suggestion остаётся недоверенным transient data до явной проверки/применения.
+   suggestion остаётся недоверенным transient data до явной проверки/применения.
+20. Optional hardware policy отдельно опрашивает утверждённые FFmpeg H.264
+   encoders и формирует evidence report. Наличие encoder не меняет production
+   path: default остаётся `libx264`, а promotion требует явного benchmark на
+   одном source с tool/source identity, SSIM и wall-time thresholds.
 
 ## Контракт зависимостей
 

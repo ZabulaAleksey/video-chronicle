@@ -71,7 +71,8 @@ class InterchangeTimeline:
     def from_project(cls, project: ProjectState) -> "InterchangeTimeline":
         if not isinstance(project, ProjectState):
             raise TypeError("project must be ProjectState")
-        assert project.layout is not None
+        if project.layout is None:
+            raise ValueError("project layout is unavailable")
         items = {item.stable_id: item for item in project.timeline.items}
         clips = tuple(
             InterchangeClip(
@@ -145,7 +146,8 @@ def apply_import_proposal(project: ProjectState, proposal: ImportResult) -> Proj
     if not proposal.is_fully_mapped:
         raise ValueError("proposal contains unmapped clips")
     item_ids = tuple(clip.item_id for clip in proposal.clips)
-    assert all(item_id is not None for item_id in item_ids)
+    if not all(item_id is not None for item_id in item_ids):
+        raise ValueError("proposal contains unmapped clips")
     if len(item_ids) != len(set(item_ids)) or set(item_ids) != set(project.timeline.item_ids):
         raise ValueError("proposal must be an exact permutation of project items")
 

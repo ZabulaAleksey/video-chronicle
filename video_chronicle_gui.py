@@ -10,8 +10,8 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, Qt, QTimer, Signal, Slot
-from PySide6.QtGui import QCloseEvent, QPixmap, QTextCursor
+from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, QSize, Qt, QTimer, Signal, Slot
+from PySide6.QtGui import QCloseEvent, QColor, QIcon, QPainter, QPixmap, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
     QAbstractItemView,
@@ -25,6 +25,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
@@ -48,7 +50,7 @@ from gui_contract import (
 )
 from video_chronicle.domain import ExportMode, ExportPlan
 from video_chronicle.execution import ProgressEvent
-from video_chronicle.gui_services import ApplicationServiceAdapter
+from video_chronicle.gui_services import ApplicationServiceAdapter, ThumbnailBatch
 from video_chronicle.gui_services import replace_plan_overlay
 from video_chronicle.application import apply_project_state
 from video_chronicle.project import (
@@ -82,6 +84,49 @@ from video_chronicle.overlay import (
 PROJECT_DIR = Path(__file__).resolve().parent
 CLI_SCRIPT = PROJECT_DIR / "join_media.py"
 MAX_LOG_CHARACTERS = 500_000
+
+
+class TimelineThumbnailList(QListWidget):
+    """Icon grid that reports a user drop without becoming order authority."""
+
+    reorder_requested = Signal(object, object)
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setViewMode(QListWidget.ViewMode.IconMode)
+        self.setMovement(QListWidget.Movement.Snap)
+        self.setResizeMode(QListWidget.ResizeMode.Adjust)
+        self.setWrapping(True)
+        self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self.setDefaultDropAction(Qt.DropAction.MoveAction)
+        self.setIconSize(QSize(160, 90))
+        self.setGridSize(QSize(190, 130))
+        self.setSpacing(6)
+        self.setMinimumHeight(150)
+        self.setMaximumHeight(300)
+
+    def dropEvent(self, event) -> None:  # noqa: N802 - Qt API
+        moved = tuple(
+            item.data(Qt.ItemDataRole.UserRole) for item in self.selectedItems()
+        )
+        super().dropEvent(event)
+        order = tuple(
+            self.item(index).data(Qt.ItemDataRole.UserRole)
+            for index in range(self.count())
+        )
+        moved_set = set(moved)
+        positions = [index for index, item_id in enumerate(order) if item_id in moved_set]
+        if not moved or not positions:
+            return
+        if positions != list(range(positions[0], positions[-1] + 1)):
+            self.reorder_requested.emit(moved, "__invalid_noncontiguous__")
+            return
+        before = next(
+            (item_id for item_id in order[positions[-1] + 1 :] if item_id not in moved_set),
+            None,
+        )
+        self.reorder_requested.emit(moved, before)
 
 
 def default_tool_value(tool_name: str) -> str:
@@ -228,6 +273,7 @@ class ChronicleWindow(QMainWindow):
             app_adapter.output_received.connect(self._append_output)
             app_adapter.plan_ready.connect(self._on_plan_ready)
             app_adapter.preview_ready.connect(self._on_visual_preview_ready)
+            app_adapter.thumbnails_ready.connect(self._on_thumbnails_ready)
             app_adapter.progress_received.connect(self._on_progress_event)
             app_adapter.execution_state_changed.connect(self._on_execution_state)
             app_adapter.project_ready.connect(self._on_project_ready)
@@ -239,6 +285,9 @@ class ChronicleWindow(QMainWindow):
         self._project_repository: JsonProjectRepository | None = None
         self._persisted_project_revision = 0
         self._visual_preview_current = False
+        self._thumbnail_pixmaps: dict[str, QPixmap] = {}
+        self._thumbnail_failures: dict[str, str] = {}
+        self._syncing_timeline_selection = False
         self._tool_setup_process: QProcess | None = None
         self._tool_setup_started = False
         self._cancel_ui_enabled = (
@@ -720,6 +769,17 @@ class ChronicleWindow(QMainWindow):
         self.trim_apply_button.clicked.connect(self._trim_selected)
         preview_layout.addLayout(editor_actions)
 
+        self.thumbnail_list = TimelineThumbnailList()
+        self.thumbnail_list.setObjectName("thumbnailList")
+        self.thumbnail_list.setAccessibleName(
+            "Миниатюры фрагментов; перетаскивайте для изменения порядка"
+        )
+        self.thumbnail_list.itemSelectionChanged.connect(
+            self._sync_tree_selection_from_thumbnails
+        )
+        self.thumbnail_list.reorder_requested.connect(self._apply_thumbnail_move)
+        preview_layout.addWidget(self.thumbnail_list)
+
         self.preview_tree = QTreeWidget()
         self.preview_tree.setObjectName("previewTree")
         self.preview_tree.setAccessibleName("Состав и порядок хронологии")
@@ -733,7 +793,9 @@ class ChronicleWindow(QMainWindow):
         )
         self.preview_tree.setUniformRowHeights(True)
         self.preview_tree.setMinimumHeight(165)
-        self.preview_tree.itemSelectionChanged.connect(self._update_action_states)
+        self.preview_tree.itemSelectionChanged.connect(
+            self._sync_thumbnail_selection_from_tree
+        )
         preview_layout.addWidget(self.preview_tree, 1)
 
         visual_header = QGridLayout()
@@ -824,6 +886,7 @@ class ChronicleWindow(QMainWindow):
             self.trim_in_spin,
             self.trim_out_spin,
             self.trim_apply_button,
+            self.thumbnail_list,
         ]
 
     def _connect_invalidation_signals(self) -> None:
@@ -1176,6 +1239,9 @@ class ChronicleWindow(QMainWindow):
         self.visual_preview_state_label.setText("Предпросмотр устарел")
         self.preview_button.setEnabled(False)
         self.preview_tree.clear()
+        self.thumbnail_list.clear()
+        self._thumbnail_pixmaps.clear()
+        self._thumbnail_failures.clear()
         self.preview_state_label.setText("План устарел — повторите анализ")
         self.plan_summary_label.setText(
             "Параметры изменены. Экспорт недоступен до повторного анализа."
@@ -1243,6 +1309,9 @@ class ChronicleWindow(QMainWindow):
         self._visual_preview_current = False
         self._active_request = request
         self.preview_tree.clear()
+        self.thumbnail_list.clear()
+        self._thumbnail_pixmaps.clear()
+        self._thumbnail_failures.clear()
         self.log_view.clear()
         self.result_label.clear()
         self.preview_state_label.setText("Анализ выполняется…")
@@ -1263,6 +1332,10 @@ class ChronicleWindow(QMainWindow):
             self.status_label.setText("Анализ медиафайлов…")
             self.analysis_cancel_button.setVisible(self._analysis_cancel_ui_enabled)
             self.analysis_cancel_button.setEnabled(self._analysis_cancel_ui_enabled)
+            self.cancel_button.setVisible(False)
+        elif operation == "thumbnails":
+            self.status_label.setText("Создание миниатюр…")
+            self.analysis_cancel_button.setVisible(False)
             self.cancel_button.setVisible(False)
         else:
             self.status_label.setText("Медиаконвейер выполняется…")
@@ -1368,15 +1441,14 @@ class ChronicleWindow(QMainWindow):
             return
         selected_ids = set(self._selected_item_ids())
         self._plan = apply_project_state(self._analyzed_plan, self._project_state)
-        signals_were_blocked = self.preview_tree.blockSignals(True)
+        tree_blocked = self.preview_tree.blockSignals(True)
+        cards_blocked = self.thumbnail_list.blockSignals(True)
         try:
             self._populate_preview(self._plan)
-            for index in range(self.preview_tree.topLevelItemCount()):
-                item = self.preview_tree.topLevelItem(index)
-                if item.data(0, Qt.ItemDataRole.UserRole) in selected_ids:
-                    item.setSelected(True)
+            self._select_timeline_ids(selected_ids)
         finally:
-            self.preview_tree.blockSignals(signals_were_blocked)
+            self.preview_tree.blockSignals(tree_blocked)
+            self.thumbnail_list.blockSignals(cards_blocked)
         self._visual_preview_current = False
         self.visual_preview_state_label.setText("Предпросмотр устарел")
         self.preview_button.setEnabled(True)
@@ -1385,6 +1457,15 @@ class ChronicleWindow(QMainWindow):
         self._update_action_states()
 
     def _selected_item_ids(self) -> tuple[str, ...]:
+        card_ids = tuple(
+            item_id
+            for item in self.thumbnail_list.selectedItems()
+            if isinstance(
+                (item_id := item.data(Qt.ItemDataRole.UserRole)), str
+            )
+        )
+        if card_ids:
+            return card_ids
         return tuple(
             item_id
             for item in self.preview_tree.selectedItems()
@@ -1392,6 +1473,86 @@ class ChronicleWindow(QMainWindow):
                 (item_id := item.data(0, Qt.ItemDataRole.UserRole)), str
             )
         )
+
+    def _select_timeline_ids(self, item_ids: set[str]) -> None:
+        for index in range(self.thumbnail_list.count()):
+            card = self.thumbnail_list.item(index)
+            card.setSelected(card.data(Qt.ItemDataRole.UserRole) in item_ids)
+        for index in range(self.preview_tree.topLevelItemCount()):
+            row = self.preview_tree.topLevelItem(index)
+            row.setSelected(row.data(0, Qt.ItemDataRole.UserRole) in item_ids)
+
+    @Slot()
+    def _sync_tree_selection_from_thumbnails(self) -> None:
+        if self._syncing_timeline_selection:
+            return
+        self._syncing_timeline_selection = True
+        try:
+            selected = {
+                item.data(Qt.ItemDataRole.UserRole)
+                for item in self.thumbnail_list.selectedItems()
+            }
+            blocked = self.preview_tree.blockSignals(True)
+            try:
+                for index in range(self.preview_tree.topLevelItemCount()):
+                    row = self.preview_tree.topLevelItem(index)
+                    row.setSelected(row.data(0, Qt.ItemDataRole.UserRole) in selected)
+            finally:
+                self.preview_tree.blockSignals(blocked)
+        finally:
+            self._syncing_timeline_selection = False
+        self._update_action_states()
+
+    @Slot()
+    def _sync_thumbnail_selection_from_tree(self) -> None:
+        if self._syncing_timeline_selection:
+            return
+        self._syncing_timeline_selection = True
+        try:
+            selected = {
+                row.data(0, Qt.ItemDataRole.UserRole)
+                for row in self.preview_tree.selectedItems()
+                if isinstance(row.data(0, Qt.ItemDataRole.UserRole), str)
+            }
+            blocked = self.thumbnail_list.blockSignals(True)
+            try:
+                for index in range(self.thumbnail_list.count()):
+                    card = self.thumbnail_list.item(index)
+                    card.setSelected(card.data(Qt.ItemDataRole.UserRole) in selected)
+            finally:
+                self.thumbnail_list.blockSignals(blocked)
+        finally:
+            self._syncing_timeline_selection = False
+        self._update_action_states()
+
+    @Slot(object, object)
+    def _apply_thumbnail_move(
+        self, moved_ids_value: object, before_item_id_value: object
+    ) -> None:
+        if self._adapter.is_running or self._plan is None:
+            if self._plan is not None:
+                self._populate_preview(self._plan)
+            return
+        moved_ids = tuple(moved_ids_value) if isinstance(moved_ids_value, tuple) else ()
+        before_item_id = (
+            before_item_id_value if isinstance(before_item_id_value, str) else None
+        )
+        if before_item_id == "__invalid_noncontiguous__":
+            self._populate_preview(self._plan)
+            self.status_label.setText("Перетаскивайте выбранные фрагменты единым блоком")
+            return
+        try:
+            current = self._ensure_project_state()
+            candidate = current.move_items(moved_ids, before_item_id)
+        except (RuntimeError, ValueError) as exc:
+            self._populate_preview(self._plan)
+            self.status_label.setText(f"Порядок не изменён: {exc}")
+            return
+        if candidate.layout == current.layout:
+            self._populate_preview(self._plan)
+            return
+        self._project_state = candidate
+        self._refresh_edited_plan()
 
     def _move_candidate(self, direction: int) -> ProjectState | None:
         ids = self._selected_item_ids()
@@ -1612,6 +1773,9 @@ class ChronicleWindow(QMainWindow):
         except ValueError as exc: QMessageBox.warning(self, "Проект", str(exc))
 
     def _populate_preview(self, plan: ExportPlan) -> None:
+        selected_ids = set(self._selected_item_ids())
+        cards_blocked = self.thumbnail_list.blockSignals(True)
+        self.thumbnail_list.clear()
         self.preview_tree.clear()
         for index, item in enumerate(plan.items, start=1):
             selected = item.date_decision.selected if item.date_decision else None
@@ -1622,6 +1786,28 @@ class ChronicleWindow(QMainWindow):
                 if item.date_decision and item.date_decision.conflicts
                 else "—"
             )
+            item_id = TimelineItem.from_media_item(item).stable_id
+            card = QListWidgetItem(f"{index}. {item.path.name}")
+            card.setData(Qt.ItemDataRole.UserRole, item_id)
+            card.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
+            card.setFlags(
+                card.flags()
+                | Qt.ItemFlag.ItemIsDragEnabled
+                | Qt.ItemFlag.ItemIsDropEnabled
+            )
+            card.setToolTip(str(item.path))
+            card_pixmap = self._thumbnail_pixmaps.get(item_id)
+            if card_pixmap is None:
+                card_pixmap = self._thumbnail_placeholder(
+                    failed=item_id in self._thumbnail_failures
+                )
+            card.setIcon(QIcon(card_pixmap))
+            if item_id in self._thumbnail_failures:
+                card.setToolTip(
+                    f"{item.path}\nМиниатюра недоступна: "
+                    f"{self._thumbnail_failures[item_id]}"
+                )
+            self.thumbnail_list.addItem(card)
             row = QTreeWidgetItem(
                 [
                     str(index),
@@ -1638,7 +1824,7 @@ class ChronicleWindow(QMainWindow):
             row.setData(
                 0,
                 Qt.ItemDataRole.UserRole,
-                TimelineItem.from_media_item(item).stable_id,
+                item_id,
             )
             row.setToolTip(2, str(item.path))
             if selected is not None:
@@ -1654,6 +1840,9 @@ class ChronicleWindow(QMainWindow):
             row.setToolTip(2, str(path))
             row.setToolTip(6, reason)
             self.preview_tree.addTopLevelItem(row)
+
+        self._select_timeline_ids(selected_ids)
+        self.thumbnail_list.blockSignals(cards_blocked)
 
         self.preview_tree.resizeColumnToContents(0)
         self.preview_tree.resizeColumnToContents(1)
@@ -1678,6 +1867,45 @@ class ChronicleWindow(QMainWindow):
             "overwrite: только после отдельного подтверждения"
         )
         self._update_action_states()
+
+    @staticmethod
+    def _thumbnail_placeholder(*, failed: bool = False) -> QPixmap:
+        pixmap = QPixmap(160, 90)
+        pixmap.fill(QColor("#eadfdd" if failed else "#dce8e8"))
+        painter = QPainter(pixmap)
+        painter.setPen(QColor("#7b4942" if failed else "#476363"))
+        painter.drawText(
+            pixmap.rect(),
+            Qt.AlignmentFlag.AlignCenter,
+            "Кадр\nнедоступен" if failed else "Кадр\nготовится…",
+        )
+        painter.end()
+        return pixmap
+
+    @Slot(object)
+    def _on_thumbnails_ready(self, batch_value: object) -> None:
+        if not isinstance(batch_value, ThumbnailBatch):
+            return
+        self._thumbnail_failures = dict(batch_value.failures)
+        for item_id, path in batch_value.images:
+            pixmap = QPixmap(str(path))
+            if pixmap.isNull():
+                self._thumbnail_failures[item_id] = "PNG не удалось загрузить."
+                continue
+            self._thumbnail_pixmaps[item_id] = pixmap.copy()
+        if self._plan is not None:
+            self._populate_preview(self._plan)
+
+    def _start_thumbnail_generation(self) -> None:
+        if self._legacy_mode or self._plan is None or self._adapter.is_running:
+            return
+        self.status_label.setText("Создание миниатюр…")
+        self._set_running(True)
+        try:
+            assert isinstance(self._adapter, ApplicationServiceAdapter)
+            self._adapter.start_thumbnails(self._plan)
+        except RuntimeError as exc:
+            self._on_application_completed("thumbnails", False, str(exc))
 
     @Slot(str, bool, str)
     def _on_application_completed(
@@ -1707,6 +1935,7 @@ class ChronicleWindow(QMainWindow):
                     self.run_button.setEnabled(False)
                     self.preview_button.setEnabled(True)
                 self.progress.setValue(1)
+                self._start_thumbnail_generation()
                 return
             self._plan = None
             self.run_button.setEnabled(False)
@@ -1725,6 +1954,28 @@ class ChronicleWindow(QMainWindow):
                 self.preview_state_label.setText("Ошибка анализа")
                 self.plan_summary_label.setText(message)
                 self.status_label.setText("Анализ не выполнен")
+            return
+
+        if operation == "thumbnails":
+            self.status_label.setText(
+                "Миниатюры готовы" if success else "Миниатюры недоступны"
+            )
+            self.progress.setRange(0, 1)
+            self.progress.setValue(1 if success else 0)
+            if (
+                success
+                and self._plan is not None
+                and self._selected_mode() is not ExportMode.JOIN
+            ):
+                self._start_visual_preview()
+                return
+            self.run_button.setEnabled(
+                self._plan is not None and self._visual_preview_current
+            )
+            self.preview_button.setEnabled(
+                self._plan is not None
+                and self._selected_mode() is not ExportMode.JOIN
+            )
             return
 
         if operation == "preview":
@@ -2028,7 +2279,7 @@ QFrame#card, QGroupBox {
 }
 QGroupBox { margin-top: 12px; padding: 14px 12px 10px; font-weight: 600; }
 QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 5px; }
-QLineEdit, QComboBox, QSpinBox, QPlainTextEdit, QTreeWidget {
+QLineEdit, QComboBox, QSpinBox, QPlainTextEdit, QTreeWidget, QListWidget {
     background: #ffffff;
     color: #182528;
     border: 1px solid #cbd9da;
@@ -2036,7 +2287,7 @@ QLineEdit, QComboBox, QSpinBox, QPlainTextEdit, QTreeWidget {
     padding: 7px 9px;
     selection-background-color: #2f918d;
 }
-QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QPlainTextEdit:focus, QTreeWidget:focus {
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QPlainTextEdit:focus, QTreeWidget:focus, QListWidget:focus {
     border: 1px solid #278b87;
 }
 QPushButton {
@@ -2059,6 +2310,19 @@ QTabWidget::pane { background: #ffffff; border: 1px solid #d5e1e2; border-radius
 QTabBar::tab { background: #e7efef; color: #40575b; padding: 8px 16px; margin-right: 2px; }
 QTabBar::tab:selected { background: #ffffff; color: #176f6b; font-weight: 700; }
 QTreeWidget { alternate-background-color: #f5f9f9; }
+QListWidget#thumbnailList { padding: 8px; }
+QListWidget#thumbnailList::item {
+    background: #f5f9f9;
+    color: #233b3f;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    padding: 6px;
+}
+QListWidget#thumbnailList::item:selected {
+    background: #d5ebea;
+    color: #174e4b;
+    border-color: #278b87;
+}
 QHeaderView::section { background: #e7efef; color: #233b3f; padding: 6px; border: 0; border-right: 1px solid #d3dfdf; }
 QProgressBar { border: 0; background: #dfe9e9; border-radius: 3px; height: 6px; }
 QProgressBar::chunk { background: #2b918c; border-radius: 3px; }

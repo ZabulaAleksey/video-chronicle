@@ -22,6 +22,8 @@ otio = [
 
 [project.scripts]
 video-chronicle = "video_chronicle.cli:main"
+video-chronicle-transcribe = "video_chronicle.transcription_cli:main"
+video-chronicle-hardware = "video_chronicle.hardware_cli:main"
 
 [project.gui-scripts]
 video-chronicle-gui = "video_chronicle.gui:main"

@@ -292,7 +292,8 @@ class ManagedProcess:
         )
 
         if os.name == "nt":
-            assert self._job is not None
+            if self._job is None:
+                raise ProcessTreeUnavailable("Windows Job Object is unavailable")
             if self._job.active_processes() != 0:
                 self._job.terminate()
             if not self._job.wait_empty(time.monotonic() + FORCE_KILL_SECONDS):

@@ -55,6 +55,8 @@ preview/normalize, включая multiline typography при доступном
 | Interrupted/repeated mixed-media export и byte-identical clean/resumed result | integration smoke | `tests/test_execution.py`, `tests/test_ffmpeg_smoke.py` | `CACHE-AC-002/003`, `AC-005/007/010` |
 | Reorder/trim/groups/presets, schema-v2 migration и revision rollback | unit/property/fault | `tests/test_nondestructive_editing.py` | `EDIT-AC-001–005` |
 | Exact trim preview/export, cache v1/v2 и immutable source | GUI/integration/real FFmpeg | `tests/test_nondestructive_editing.py` | `EDIT-AC-002/004/006/007` |
+| Async thumbnail batch, temporary cleanup, isolated item failure и domain-backed card reorder | GUI/component | `tests/test_gui_application.py` | `EDIT-AC-008/009` |
+| Disabled local transcription, model provenance/hash, argv, timestamp schema, cleanup и atomic sidecar | unit/contract | `tests/test_transcription.py` | `TRANSCRIBE-AC-001–004` |
 | Native OTIO 0/1/4096 clips, rational time, proposal apply и strict resource/path/schema negatives | golden/contract/security | `tests/test_timeline_interchange.py` | `INTEROP-AC-001–003`, `OPTIONAL-AC-001` |
 | FFmpeg scdet mapping, malformed output, cancel/tool identity и deterministic benchmark | unit/integration/benchmark | `tests/test_scene_suggestions.py` | `SCENE-AC-001/002` |
 
@@ -103,6 +105,9 @@ ffprobe version 9.0.1-essentials_build-www.gyan.dev
 - Resume/cache: повторный запуск, прерывание, изменение content/provenance/font/
   параметров/tool version, повреждённое состояние, bounded I/O, cap/retention,
   protected purge и межпроцессная сериализация мутаций.
+- Hardware quality: malformed/available capability matrix, software default,
+  explicit unavailable fallback, fixed encoder argv, same-source identity,
+  SSIM/runtime promotion thresholds и bounded managed commands.
 - Packaging (когда появится): запуск на чистой Windows-машине, обнаружение
   зависимостей и короткий экспорт.
 

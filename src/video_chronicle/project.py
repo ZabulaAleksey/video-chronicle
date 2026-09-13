@@ -665,19 +665,23 @@ class ProjectState:
         return replace(self, revision=self.revision + 1, current_plan=None, jobs=(), **changes)
 
     def move_items(self, item_ids: Iterable[str], before_item_id: str | None = None) -> "ProjectState":
-        assert self.layout is not None
+        if self.layout is None:
+            raise ValueError("project layout is unavailable")
         return self._edited(layout=self.layout.move_items(item_ids, before_item_id))
 
     def set_trim(self, item_id: str, trim: TrimRange) -> "ProjectState":
-        assert self.layout is not None
+        if self.layout is None:
+            raise ValueError("project layout is unavailable")
         return self._edited(layout=self.layout.set_trim(item_id, trim, self.timeline))
 
     def create_group(self, group_id: str, name: str, item_ids: Iterable[str]) -> "ProjectState":
-        assert self.layout is not None
+        if self.layout is None:
+            raise ValueError("project layout is unavailable")
         return self._edited(layout=self.layout.create_group(group_id, name, item_ids))
 
     def ungroup(self, group_id: str) -> "ProjectState":
-        assert self.layout is not None
+        if self.layout is None:
+            raise ValueError("project layout is unavailable")
         return self._edited(layout=self.layout.ungroup(group_id))
 
     def save_preset(self, preset_id: str, name: str, settings: RenderSettings) -> "ProjectState":

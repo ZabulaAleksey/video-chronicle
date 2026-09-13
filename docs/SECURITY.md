@@ -148,6 +148,28 @@ Output path, порядок, overwrite и workspace не дают права н�
   `scdet`; checkpoints учитывают cancel, stdout/stderr bounded, timestamps
   ограничены resolved trim. Suggestions не применяются автоматически.
 
+## Optional локальная транскрипция
+
+- Feature выключена по умолчанию и не содержит сетевого/download path.
+- Пользователь явно предоставляет local regular FFmpeg, `whisper-cli`, model и
+  strict manifest с SHA-256, bytes, license/source и languages.
+- Source/model/executable fingerprint проверяется до и после managed commands;
+  общий deadline — 30 минут, model — до 4 GiB, JSON — до 8 MiB, source duration
+  — до 12 часов и не более 20 000 segments.
+- Private temporary WAV/JSON удаляются во всех terminal states; sidecar
+  публикуется атомарно с explicit overwrite.
+- Transcript — недоверенное derived data с видимыми limitations, не команда,
+  путь или authority для timeline/export.
+
+## Hardware capability probe
+
+- Probe и benchmark используют только list argv через общий managed process
+  boundary; shell, ambient hooks и произвольные codec options отсутствуют.
+- Выбранный FFmpeg обязан быть local regular file; SHA-256 проверяется до и
+  после probe/benchmark, а source benchmark не может быть symlink/reparse.
+- Наличие hardware encoder не даёт права на automatic activation. Без
+  reproducible quality/performance evidence остаётся software fallback.
+
 ## Проверки перед выпуском
 
 Обязательны отрицательные сценарии из `docs/TESTING.md`, в особенности странные
@@ -155,3 +177,8 @@ Output path, порядок, overwrite и workspace не дают права н�
 рендер и подменённый кэш. Упакованная Windows-версия считается готовой только
 после smoke-теста на чистой машине без неявной зависимости от локальных путей
 разработчика.
+
+Текущий audit evidence и residual risks зафиксированы в
+[`docs/notes/stage-15-security-review.md`](notes/stage-15-security-review.md).
+Автоматические Bandit/pip-audit проверки не заменяют обязательный независимый
+semantic review перед этапом 16.

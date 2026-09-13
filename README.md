@@ -157,9 +157,15 @@ uv run --locked --extra dev video-chronicle-gui
 папка и итоговый MP4. Автоматически разрешённые пути FFmpeg/FFprobe, CRF, preset
 и cache доступны во вкладке «Дополнительно», а параметры подписи — во вкладке
 «Дата и время». Перед экспортом вкладка «План хронологии» показывает
-состав/order и representative кадр.
-После анализа можно выбрать один или несколько фрагментов и перемещать их
-кнопками «Выше»/«Ниже», сохранить/открыть project JSON,
+accepted-фрагменты карточками с автоматически созданными кадрами, подробный
+состав/order в таблице и representative кадр. Порядок меняется перетаскиванием
+одной или нескольких выбранных карточек, а также кнопками «Выше»/«Ниже».
+В Chronicle representative preview после анализа также строится автоматически;
+после его успеха кнопка «Экспортировать» становится активной без дополнительного
+нажатия. При ошибке preview экспорт остаётся заблокированным, а кадр можно
+повторить вручную.
+Skipped-файлы остаются в диагностической таблице. После анализа также можно
+сохранить/открыть project JSON,
 задать trim, создать contiguous groups и versioned render presets. Все edits
 записываются в project и не изменяют исходные медиа.
 Редакторские кнопки доступны только когда текущее selection допускает действие;
@@ -184,5 +190,24 @@ Cache не содержит project state или partial final: повреждё
 Optional OTIO/scene adapters не входят в project schema v2 и удаляются без
 migration. Проект пока не имеет утверждённой `LICENSE`, а локальная FFmpeg
 сборка не распространяется; release требует отдельного license/packaging review.
+
+### Optional локальная транскрипция
+
+Транскрипция выключена по умолчанию и не скачивает executable или модель.
+Для явно установленного локального `whisper.cpp` используется отдельная команда:
+
+```powershell
+video-chronicle-transcribe "C:\media\clip.mp4" `
+  --item-id item-local --duration-us 120000000 --language auto `
+  --whisper-cli "C:\tools\whisper-cli.exe" `
+  --model "C:\models\ggml-base.bin" `
+  --model-manifest "C:\models\ggml-base.manifest.json" `
+  --ffmpeg "C:\tools\ffmpeg.exe" --output "C:\media\clip.transcript.json"
+```
+
+Manifest — strict JSON с полями `model_id`, `version`, `sha256`, `size_bytes`,
+`license`, HTTPS `source_url`, массивом `languages` и `engine: "whisper.cpp"`.
+Media обрабатывается локально; JSON содержит provenance и явное предупреждение,
+что автоматическую расшифровку необходимо проверять.
 
 Если FFmpeg уже добавлен в `PATH`, параметры `--ffmpeg` и `--ffprobe` можно не указывать.

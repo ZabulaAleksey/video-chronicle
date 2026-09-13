@@ -1,33 +1,40 @@
 # Текущий план для AI
 
-## Срез 2026-09-12–13 — configurable GUI и safe actions
+## Continuous track 2026-09-13 — этапы 13–17
 
-- Статус: **реализован и валидирован локально в feature-ветке**
-- Ветка: `feature/configurable-datetime-overlay`
-- SPEC: `OVERLAY-007–009`, `GUI-TOOLS-001–005`, `EXEC-009–012` и
-  `GUI-NAV-001–005` в
-  `specs/features/timeline-builder.spec.md`
-- Scope: семантические форматы даты/времени, visibility/layout, system font
-  family resolution/fallback, practical typography, project persistence и
-  общий formatter для preview/export, automatic env/PATH discovery и Windows
-  WinGet bootstrap, secondary technical settings tab, объяснимый cache UX и
-  раздельная безопасная остановка анализа/экспорта; default «Основное»,
-  отдельный «План хронологии», reorder и meaningful editor button states.
+- Статус: **этапы 13–15 implemented_unverified; этапы 16–17 blocked**
+- Ветка: `feature/v1-release-track`
+- Текущий scope завершён до обязательного external review gate.
 
 ## Acceptance evidence
 
-- focused analysis/export cancellation gate: `53 passed, 1 skipped`;
-- focused navigation/editing gate: `53 passed, 1 skipped`;
-- полный Python gate: `326 passed, 12 skipped`;
-- локальный system font inventory: `284` family / `437` file-backed faces;
-- skips относятся к недоступным FFmpeg/FFprobe и platform privilege tests;
-  новый real FFmpeg multiline/typography test добавлен, но локально не выполнен.
+- PASS: thumbnail worker остаётся async, item failure изолирован, temporary PNG
+  существует при signal delivery и удаляется после синхронной загрузки;
+- PASS: single/multi-card reorder использует `ProjectState.move_items`, grid и
+  table повторяют project order, partial-group move отклоняется без revision;
+- PASS: анализ автоматически заполняет карточки кадрами и синхронизирует
+  stable-ID selection;
+- PASS: Chronicle автоматически продолжает analysis цепочкой representative
+  preview и включает export после success; failure сохраняет safe disabled;
+- полный локальный gate: `329 passed, 12 skipped`;
+- baseline перед срезом: `326 passed, 12 skipped`.
+- Stage 13 PASS: `5 passed`; CLI help и `uv lock --check` PASS.
+- Stage 13 UNVERIFIED: WER/CER на real whisper.cpp/model не выполнялся, потому
+  что модель не входит в project и не загружается автоматически.
+- Stage 14 PASS: 10 focused tests для transcription/hardware; CLI help PASS.
+- Stage 14 UNVERIFIED: FFmpeg отсутствует в текущем PATH, поэтому real
+  hardware/driver quality benchmark не выполнялся и hardware не promoted.
+- Stage 15 PASS: `340 passed, 12 skipped`; `uv lock --check`, `uv pip check`,
+  pip-audit (0 known vulnerabilities) и Bandit (0 high/medium, 7 low) выполнены.
+- Stage 15 UNVERIFIED: отсутствует независимый semantic reviewer; automated
+  scanners не повышаются до этой evidence-категории.
 
 ## NEXT
 
-Работа ожидает пользовательской проверки либо явного разрешения merge.
-Этап 13 optional local transcription остаётся приостановленным и не входит в
-этот срез.
+Получить independent security review без high findings. Только затем начать
+этап 16 на clean supported Windows VM с утверждённой project license; этап 17
+дополнительно требует утверждённых hypothesis/dataset/metrics/resource budget.
+Merge, push и publication остаются approval-gated.
 
 ## Сохраняющиеся release blockers
 
