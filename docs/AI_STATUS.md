@@ -2,6 +2,7 @@
 
 ## Local wall time для generic FFprobe creation_time — 2026-09-14
 
+- Исправление локально слито в `main`; push/release не выполнялись.
 - DATE-001/v3 переводит общий `creation_time` с `Z`/`UTC` из UTC instant в
   системное локальное wall time на дату записи; именно оно используется в
   timeline и overlay.

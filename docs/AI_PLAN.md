@@ -2,7 +2,7 @@
 
 ## Maintenance slice — local wall time для generic creation_time
 
-- Статус: **validated locally; independent review passed; ожидает merge approval**
+- Статус: **validated locally; merged locally into main; push pending**
 - Ветка: `fix/metadata-local-creation-time`
 - Scope: отображать generic FFprobe `creation_time` с `Z`/`UTC` в системном
   локальном wall time, сохраняя metadata priority/raw provenance и не
@@ -19,7 +19,7 @@
 
 ## NEXT
 
-Получить merge approval для fix-ветки.
+Локальный merge завершён; push `main` выполняется только по явному разрешению.
 Release track независимо заблокирован: нужен independent security review без
 high findings перед этапом 16; merge, push и publication approval-gated.
 
