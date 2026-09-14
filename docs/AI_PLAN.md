@@ -2,7 +2,7 @@
 
 ## Maintenance slice — явный GUI-режим объединения без даты и времени
 
-- Статус: **validated locally; ожидает merge approval**
+- Статус: **validated locally; merged locally into main; push pending**
 - Ветка: `feature/gui-combine-mode`
 - Scope: представить существующий typed `join` как понятный режим
   «Объединение — без даты и времени», не создавая второй media pipeline и не
@@ -21,7 +21,7 @@
 
 ## NEXT
 
-Получить merge approval для feature-ветки.
+Локальный merge завершён; push `main` выполняется только по явному разрешению.
 Release track независимо заблокирован: нужен independent security review без
 high findings перед этапом 16; merge, push и publication approval-gated.
 
