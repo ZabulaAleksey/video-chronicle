@@ -1,5 +1,16 @@
 # Состояние проекта для AI
 
+## Явный GUI-режим объединения без даты и времени — 2026-09-14
+
+- Typed `ExportMode.JOIN` представлен в selector как «Объединение — без даты и
+  времени»; описание, preview state, export status и plan summary используют
+  понятное русское название вместо внутреннего machine key.
+- Режим сохраняет единый date-sorted media pipeline, но request всегда получает
+  `overlay.enabled=False`, поэтому FFmpeg filtergraph не содержит `drawtext`.
+- CLI machine key `--mode join` и project persistence совместимы без миграции.
+- Focused GUI/mode gate: `14 passed`; полный локальный gate:
+  `333 passed, 31 skipped`.
+
 ## Local wall time для generic FFprobe creation_time — 2026-09-14
 
 - Исправление локально слито в `main`; push/release не выполнялись.

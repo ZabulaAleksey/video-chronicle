@@ -6,8 +6,8 @@ services и сохраняется прямой CLI-интерфейс.
 ## GUI baseline
 
 - одно окно с выбором входной папки и итогового MP4;
-- selector режима до input-полей: Chronicle по умолчанию разрешает подпись
-  даты, Join явно создаёт хронологический MP4 без неё;
+- selector режима до input-полей: «Хроника» по умолчанию разрешает подпись
+  даты и времени, «Объединение — без даты и времени» явно создаёт MP4 без неё;
 - вкладка «Основное» открывается первой и содержит mode, input и output;
   «План хронологии» содержит effective order/editor/representative preview,
   подпись настраивается в «Дата и время», а пути FFmpeg/FFprobe, CRF, preset и
@@ -43,9 +43,9 @@ services и сохраняется прямой CLI-интерфейс.
   read-only журнал остаётся отдельной областью под основными actions;
 - loading, empty, error, stale и populated состояния имеют явный текст;
 - representative-frame preview имеет отдельные stale/loading/ready/disabled/
-  error состояния; Chronicle экспорт доступен только для актуального preview,
-  который автоматически строится после thumbnail batch; Join показывает явное
-  disabled-состояние preview и доступен после анализа;
+  error состояния; Chronicle автоматически строит preview после thumbnail
+  batch, но export доступен после анализа независимо от кадра; Join показывает
+  явное disabled-состояние preview и доступен после анализа;
 - determinate progress после появления известного total: analysis считает
   inspected/skipped sources, export — items + concat + publication; ETA не
   показывается, failure/cancel не переводятся искусственно в 100%;
@@ -66,8 +66,8 @@ services и сохраняется прямой CLI-интерфейс.
   только debounced watcher callback и непосредственно перед export. Эти две
   safety-проверки выполняют bounded O(N) stat validation по source set;
 - переключение mode пересобирает plan без FFprobe и не меняет сохранённый
-  пользовательский checkbox Chronicle overlay; в Join overlay controls
-  недоступны;
+  пользовательский checkbox Chronicle overlay; в пользовательском режиме
+  «Объединение — без даты и времени» overlay controls недоступны;
 - существующий файл требует модального подтверждения непосредственно перед
   экспортом;
 - элементы настройки блокируются на время процесса;

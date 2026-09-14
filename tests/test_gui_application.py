@@ -1297,21 +1297,27 @@ def test_gui_mode_switch_invalidates_plan_and_join_skips_visual_preview(
     window.input_edit.setText(str(input_dir))
     window.output_edit.setText(str(output))
     assert window.mode_combo.currentData() == ExportMode.CHRONICLE.value
-    assert "Chronicle" in window.mode_description_label.text()
+    assert window.mode_combo.currentText() == "Хроника"
+    assert window.mode_combo.itemText(1) == "Объединение — без даты и времени"
+    assert "Хроника" in window.mode_description_label.text()
     window.overlay_enabled.setChecked(False)
 
     window.mode_combo.setCurrentIndex(1)
     qapp.processEvents()
     assert window.mode_combo.currentData() == ExportMode.JOIN.value
     assert window.overlay_group.isEnabled() is False
-    assert window.visual_preview_state_label.text() == "Отключён в режиме Join"
+    assert window.visual_preview_state_label.text() == (
+        "Отключён в режиме «Объединение»"
+    )
     assert window._plan is None
 
     window.analyze_button.click()
     _wait_until(qapp, lambda: not adapter.is_running)
     assert window._plan.request.mode is ExportMode.JOIN
     assert window._plan.request.overlay.enabled is False
-    assert "Режим: join" in window.plan_summary_label.text()
+    assert "Режим: Объединение — без даты и времени" in (
+        window.plan_summary_label.text()
+    )
     assert window.overlay_group.isEnabled() is False
     assert window.preview_button.isEnabled() is False
     assert window.run_button.isEnabled() is True
@@ -1344,7 +1350,7 @@ def test_legacy_mode_round_trip_preserves_chronicle_default_and_cli_parity(
     arguments = build_cli_arguments(request, tmp_path / "join_media.py")
     assert request.mode is ExportMode.CHRONICLE
     assert request.overlay.enabled is True
-    assert window.mode_combo.currentText() == "Chronicle"
+    assert window.mode_combo.currentText() == "Хроника"
     assert "--mode" not in arguments
     window.close()
 

@@ -95,6 +95,10 @@ PROJECT_DIR = Path(__file__).resolve().parent
 CLI_SCRIPT = PROJECT_DIR / "join_media.py"
 MAX_LOG_CHARACTERS = 500_000
 MAX_WATCHED_SOURCE_FILES = 4096
+MODE_DISPLAY_NAMES = {
+    ExportMode.CHRONICLE: "Хроника",
+    ExportMode.JOIN: "Объединение — без даты и времени",
+}
 
 
 class TimelineThumbnailList(QListWidget):
@@ -390,11 +394,13 @@ class ChronicleWindow(QMainWindow):
         mode_row.addWidget(QLabel("Режим"))
         self.mode_combo = QComboBox()
         self.mode_combo.setAccessibleName("Режим экспорта")
-        self.mode_combo.addItem("Chronicle", ExportMode.CHRONICLE.value)
-        self.mode_combo.addItem("Join", ExportMode.JOIN.value)
+        self.mode_combo.addItem("Хроника", ExportMode.CHRONICLE.value)
+        self.mode_combo.addItem(
+            "Объединение — без даты и времени", ExportMode.JOIN.value
+        )
         mode_row.addWidget(self.mode_combo)
         self.mode_description_label = QLabel(
-            "Chronicle создаёт хронологический MP4 и разрешает подпись даты."
+            "Хроника создаёт хронологический MP4 и позволяет настроить дату и время."
         )
         self.mode_description_label.setObjectName("hint")
         self.mode_description_label.setWordWrap(True)
@@ -1234,16 +1240,18 @@ class ChronicleWindow(QMainWindow):
         self.overlay_group.setEnabled(not is_join and not self._legacy_mode)
         if is_join:
             self.mode_description_label.setText(
-                "Join создаёт хронологический MP4 без подписи даты."
+                "Объединение создаёт один MP4 без добавления даты и времени."
             )
         else:
             self.mode_description_label.setText(
-                "Chronicle создаёт хронологический MP4 и разрешает подпись даты."
+                "Хроника создаёт хронологический MP4 и позволяет настроить дату и время."
             )
         self._invalidate_plan()
         if is_join:
-            self.visual_preview_state_label.setText("Отключён в режиме Join")
-            self.visual_preview_label.setText("Join не добавляет подпись даты")
+            self.visual_preview_state_label.setText(
+                "Отключён в режиме «Объединение»"
+            )
+            self.visual_preview_label.setText("Дата и время не добавляются")
             self.preview_button.setEnabled(False)
 
     @Slot()
@@ -1966,8 +1974,10 @@ class ChronicleWindow(QMainWindow):
         self.preview_state_label.setText("План готов")
         if request.mode is ExportMode.JOIN and self._project_state is None:
             self._visual_preview_current = True
-            self.visual_preview_state_label.setText("Отключён в режиме Join")
-            self.visual_preview_label.setText("Join не добавляет подпись даты")
+            self.visual_preview_state_label.setText(
+                "Отключён в режиме «Объединение»"
+            )
+            self.visual_preview_label.setText("Дата и время не добавляются")
             self.preview_button.setEnabled(False)
         else:
             self.visual_preview_state_label.setText("Требуется предпросмотр")
@@ -1979,7 +1989,7 @@ class ChronicleWindow(QMainWindow):
     def _update_plan_summary(self, plan: ExportPlan) -> None:
         request = plan.request
         self.plan_summary_label.setText(
-            f"Режим: {request.mode.value} | Вход: {request.input_dir} | Выход: {request.output} | "
+            f"Режим: {MODE_DISPLAY_NAMES[request.mode]} | Вход: {request.input_dir} | Выход: {request.output} | "
             f"принято: {len(plan.items)}, пропущено: {len(plan.inspection_failures)} | "
             f"CRF {request.crf}, preset {request.preset} | "
             "overwrite: только после отдельного подтверждения"
@@ -2044,7 +2054,7 @@ class ChronicleWindow(QMainWindow):
             )
             if success and self._plan is not None:
                 if self._plan.request.mode is ExportMode.JOIN:
-                    self.status_label.setText("План Join готов к экспорту")
+                    self.status_label.setText("План объединения готов к экспорту")
                     self.run_button.setEnabled(True)
                     self.preview_button.setEnabled(False)
                 else:

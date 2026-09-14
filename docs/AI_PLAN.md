@@ -1,25 +1,27 @@
 # Текущий план для AI
 
-## Maintenance slice — local wall time для generic creation_time
+## Maintenance slice — явный GUI-режим объединения без даты и времени
 
-- Статус: **validated locally; merged locally into main; push pending**
-- Ветка: `fix/metadata-local-creation-time`
-- Scope: отображать generic FFprobe `creation_time` с `Z`/`UTC` в системном
-  локальном wall time, сохраняя metadata priority/raw provenance и не
-  пересчитывая explicit camera/QuickTime wall-clock tags.
+- Статус: **validated locally; ожидает merge approval**
+- Ветка: `feature/gui-combine-mode`
+- Scope: представить существующий typed `join` как понятный режим
+  «Объединение — без даты и времени», не создавая второй media pipeline и не
+  меняя CLI machine key.
 
 ## Acceptance evidence
 
-- RED→GREEN regression: `creation_time=2026-07-21T06:41:11Z` при injected
-  timezone `+03:00` даёт `09:41:11`, оставаясь выбранным metadata-кандидатом;
-- PASS: raw UTC value, marker `Z`/`UTC` и filename fallback сохраняются;
-- PASS: explicit QuickTime wall-clock с offset не пересчитывается;
-- focused metadata/CLI/core/overlay gate: `112 passed, 6 skipped`;
+- PASS: GUI selector явно показывает «Объединение — без даты и времени»;
+- PASS: выбор режима строит `ExportMode.JOIN` с `overlay.enabled=False`;
+- PASS: preview/date-time controls явно отключены, plan summary не показывает
+  внутренний англоязычный machine key;
+- PASS: CLI `--mode join` и единый normalize/concat/publication pipeline
+  сохраняются;
+- focused GUI/mode gate: `14 passed`;
 - полный локальный gate: `333 passed, 31 skipped`.
 
 ## NEXT
 
-Локальный merge завершён; push `main` выполняется только по явному разрешению.
+Получить merge approval для feature-ветки.
 Release track независимо заблокирован: нужен independent security review без
 high findings перед этапом 16; merge, push и publication approval-gated.
 

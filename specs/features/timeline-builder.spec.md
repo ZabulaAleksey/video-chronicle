@@ -311,10 +311,13 @@ formatter, representative preview и FFmpeg export path.
   `--mode chronicle` эквивалентны прежнему CLI: текущие аргументы, порядок,
   overlay, коды и финализация сохраняются. `--mode join` является только новым
   opt-in; explicit `--font-file` с ним отклоняется как неприменимый параметр.
-- **MODE-005 — GUI policy.** GUI по умолчанию показывает Chronicle и до анализа
-  объясняет: Join создаёт хронологический MP4 без подписи, Chronicle разрешает
-  подпись даты. Переключение mode инвалидирует plan; в Join overlay controls
-  выключены, visual preview имеет явное disabled состояние.
+- **MODE-005 — GUI policy.** GUI по умолчанию показывает пользовательский режим
+  «Хроника», а typed `join` представляет как «Объединение — без даты и
+  времени». До анализа интерфейс объясняет, что объединение не добавляет
+  overlay, а хронология разрешает настраиваемую подпись. Переключение mode
+  инвалидирует plan; в Join overlay controls выключены, visual preview имеет
+  явное disabled состояние. Внутренние machine keys `chronicle`/`join` не
+  используются как основные пользовательские названия.
 - **MODE-006 — Один pipeline.** Mode-specific policy заканчивается на
   request/plan/overlay boundary. Inspection, normalize, concat и publication
   ports не дублируются и не получают widget-specific ветвлений.
@@ -328,9 +331,11 @@ formatter, representative preview и FFmpeg export path.
 - **MODE-AC-002 (MODE-004, FR-011, AC-008).** Characterization доказывает, что
   legacy invocation без `--mode` эквивалентен Chronicle, а новый `--mode join`
   не меняет прежние параметры, коды, overwrite и path handling.
-- **MODE-AC-003 (MODE-005/006, FR-005/012, NFR-001/004).** GUI показывает mode
-  и его последствия в plan summary, инвалидирует snapshot при переключении и
-  остаётся отзывчивым; review подтверждает один application/pipeline path.
+- **MODE-AC-003 (MODE-005/006, FR-005/012, NFR-001/004).** GUI показывает
+  «Объединение — без даты и времени» в selector и понятное русское название в
+  plan summary, инвалидирует snapshot при переключении и остаётся отзывчивым;
+  request получает `ExportMode.JOIN` и disabled overlay, а review подтверждает
+  один application/pipeline path.
 
 ### Не входит в срез
 
