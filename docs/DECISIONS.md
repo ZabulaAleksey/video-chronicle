@@ -354,3 +354,7 @@
 - **Последствие:** решение отменяет только timezone-часть решения DATE-001/v2
   от 2026-09-14. Приоритет metadata сохраняется, filename остаётся fallback и
   provenance; результат зависит от корректной системной timezone.
+
+## 2026-09-15 — Единственный owner execution state
+
+Решение: текущий selector, plan/status/evidence/NEXT принадлежат только `docs/STAGES.md`; исторический prompt catalog и AI pair сохранены в `docs/notes/` и Git parent. Это заменяет решение 2026-08-14 о двух active files. Пять локально слитых, но неопубликованных commits проходят отдельный GitHub publication/merge gate; release stage 15 не закрыт без независимого security review.

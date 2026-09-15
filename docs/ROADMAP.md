@@ -17,7 +17,6 @@
 
 ## Выполненный этап — 01. Discovery и baseline
 
-Самостоятельный prompt: [`01-discovery-baseline.md`](../prompts/stages/01-discovery-baseline.md).
 
 - описать наблюдаемое поведение `join_media.py`: входы, даты, сортировку,
   фильтры, временные файлы, ошибки и финализацию;
@@ -31,7 +30,6 @@ FFmpeg/FFprobe 9.0.1.
 
 ## Выполненный этап — 02. Package foundation
 
-Самостоятельный prompt: [`02-package-foundation.md`](../prompts/stages/02-package-foundation.md).
 
 Этап завершён: добавлены устанавливаемый `src`-package, runtime/dev dependency
 groups, console/GUI entry points и временные compatibility modules без изменения
@@ -39,7 +37,6 @@ groups, console/GUI entry points и временные compatibility modules б�
 
 ## Выполненный этап — 03. Core extraction
 
-Самостоятельный prompt: [`03-core-extraction.md`](../prompts/stages/03-core-extraction.md).
 
 Этап завершён: медиаконвейер извлечён в package `domain/ports/application/pipeline`,
 а root CLI оставлен тонким compatibility shim. CLI и переходный GUI сходятся в
@@ -47,7 +44,6 @@ groups, console/GUI entry points и временные compatibility modules б�
 
 ## Выполненный этап — 04. Metadata/date engine
 
-Самостоятельный prompt: [`04-metadata-date-engine.md`](../prompts/stages/04-metadata-date-engine.md).
 
 Этап завершён: DATE-001 engine детерминированно выбирает metadata/filename date,
 сохраняет raw provenance, timezone и conflicts; generic UTC `creation_time`
@@ -56,7 +52,6 @@ groups, console/GUI entry points и временные compatibility modules б�
 
 ## Выполненный этап — 05. Project/queue model
 
-Самостоятельный prompt: [`05-project-queue-model.md`](../prompts/stages/05-project-queue-model.md).
 
 Этап завершён: MODEL-001 определяет stable timeline/order, immutable export
 snapshot, job transitions, strict schema v1 и заменяемый repository port с
@@ -64,7 +59,6 @@ in-memory reference adapter.
 
 ## Выполненный этап — 06. GUI поверх application services
 
-Самостоятельный prompt: [`06-gui-application-services.md`](../prompts/stages/06-gui-application-services.md).
 
 Этап завершён: default GUI строит и показывает immutable `ExportPlan`, а анализ
 и экспорт вызывают канонические application services через `QThread` worker.
@@ -72,7 +66,6 @@ Whole-CLI `QProcess` сохранён только как явный диагн�
 
 ## Выполненный этап — 07. Overlay editor
 
-Самостоятельный prompt: [`07-overlay-editor.md`](../prompts/stages/07-overlay-editor.md).
 
 Этап завершён: один immutable `OverlayConfig` управляет representative preview
 и всеми элементами экспорта; GUI предоставляет ограниченные presets, а adapter
@@ -80,7 +73,6 @@ Whole-CLI `QProcess` сохранён только как явный диагн�
 
 ## Выполненный этап — 08. Join/Chronicle modes
 
-Самостоятельный prompt: [`08-join-chronicle-modes.md`](../prompts/stages/08-join-chronicle-modes.md).
 
 Этап завершён: mode является typed policy immutable plan; Chronicle сохраняет
 legacy overlay semantics, Join явно отключает подпись, а оба режима используют
@@ -88,7 +80,6 @@ legacy overlay semantics, Join явно отключает подпись, а о
 
 ## Выполненный этап — 09. Export/progress/cancel
 
-Самостоятельный prompt: [`09-export-progress-cancel.md`](../prompts/stages/09-export-progress-cancel.md).
 
 Этап завершён: typed progress и `JobState` lifecycle управляют одним export;
 Windows Job Object/POSIX process group обеспечивают bounded whole-tree cancel,
@@ -96,7 +87,6 @@ Windows Job Object/POSIX process group обеспечивают bounded whole-tr
 
 ## Выполненный MVP — этап 10
 
-Самостоятельный prompt: [`10-resume-cache.md`](../prompts/stages/10-resume-cache.md).
 
 Этап завершён: opt-in normalized-clip cache имеет canonical identity, строгую
 валидацию, clean fallback, private storage, 10 GiB/30-day policy и безопасный
@@ -104,19 +94,19 @@ interprocess lifecycle. Clean и resumed mixed-media exports эквивален�
 
 ## Текущий целевой v1 — этапы 11–16
 
-- **[11 — завершён](../prompts/stages/11-nondestructive-editing.md):** schema v2, durable project, неразрушающие reorder/trim/groups и versioned presets;
-- **[12 — завершён](../prompts/stages/12-timeline-interchange-scene.md):** removable native OTIO adapter и прошедшие benchmark FFmpeg scene suggestions за default-off flags;
-- **[13 — implemented_unverified](../prompts/stages/13-local-transcription.md):** optional local whisper.cpp adapter принят fixture tests; real model WER/CER остаётся внешним gate;
-- **[14 — implemented_unverified](../prompts/stages/14-hardware-quality.md):** capability/benchmark policy реализована, software fallback обязателен; real driver benchmark не выполнен и hardware не promoted;
-- **[15 — implemented_unverified](../prompts/stages/15-security-hardening.md):** hardening, negative/full suite и tool audits выполнены; independent semantic review остаётся обязательным gate;
-- **[16 — blocked](../prompts/stages/16-windows-packaging.md):** Windows-пакетирование с явной стратегией FFmpeg/metadata tools,
+- **11 — завершён:** schema v2, durable project, неразрушающие reorder/trim/groups и versioned presets;
+- **12 — завершён:** removable native OTIO adapter и прошедшие benchmark FFmpeg scene suggestions за default-off flags;
+- **13 — implemented_unverified:** optional local whisper.cpp adapter принят fixture tests; real model WER/CER остаётся внешним gate;
+- **14 — implemented_unverified:** capability/benchmark policy реализована, software fallback обязателен; real driver benchmark не выполнен и hardware не promoted;
+- **15 — implemented_unverified:** hardening, negative/full suite и tool audits выполнены; independent semantic review остаётся обязательным gate;
+- **16 — blocked:** Windows-пакетирование с явной стратегией FFmpeg/metadata tools,
   лицензиями и smoke-тестом на чистой машине.
 
 ## Экспериментально / optional — этап 17
 
-- **[17 — blocked](../prompts/stages/17-experimental-adapters.md):**
+- **17 — blocked:**
   дополнительные ML/scene/timeline-адаптеры и автоматизация качества;
 - каждое направление требует цели, feature flag, fallback, тестов, benchmark
   и ADR, если меняются архитектурные границы.
 
-Компактный индекс фаз и правила запуска находятся в `prompts/README.md`.
+Текущий selector и правила запуска находятся в `docs/STAGES.md`; исторический индекс сохранён в `docs/notes/legacy-prompt-launcher.md`.

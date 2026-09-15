@@ -1,3 +1,7 @@
+# Исторический каталог этапов
+
+Исходный `prompts/STAGES.md` сохранён ниже без изменения содержания. SHA-256 source worktree: `83805b90708960851a4a9c2cd9d55dcfb314f0896bc8a637b306233f0dd45a31`. Каталог содержит mojibake и не является live launcher.
+
 # Канонические этапы video-chronicle  Единый источник stage-prompts. Ниже сохранено полное содержание ранее существовавших этапов.
 
 - Stage ID: 15-security-hardening

@@ -23,26 +23,13 @@
 | Доменные agents | Универсальные роли не покрывают детали медиадат и FFmpeg полностью | Два узких профиля | `PROJECT_ONLY` | Хранить только `media_pipeline_specialist` и `metadata_forensics_specialist` в `.codex/agents/` |
 | Конфигурация Codex | Глобальная активная конфигурация | Общих локальных настроек не требуется | `INHERITED` | Не создавать второй config; `.codex/agents/` содержит только проектные профили |
 
-## Канонические источники
+## Канонические источники после brownfield migration 2026-09-15
 
-- правила работы — `AGENTS.md`;
-- фактическая архитектура и интерфейс — `docs/ARCHITECTURE.md` и
-  `docs/DESIGN.md`;
-- текущий снимок — `docs/AI_STATUS.md`;
-- текущий исполняемый срез — `docs/AI_PLAN.md`;
-- требования и их статус — `specs/README.md` и связанные SPEC; черновики не
-  считаются утверждёнными контрактами;
-- порядок реализации — `docs/ROADMAP.md`;
-- библиотека самостоятельных этапов — `prompts/README.md` и один выбранный
-  `prompts/stages/NN-*.md`; prompt не является источником требований;
-- решения и накопленное обучение — `docs/DECISIONS.md` и
-  `docs/LEARNING_LOG.md`;
-- проектные quality gates — `docs/TESTING.md` и `docs/SECURITY.md`.
+- правила работы — `AGENTS.md`; продуктовые требования — `specs/`; фактический code/tests — Git tree и accepted checks;
+- текущий selected stage, plan/status/evidence/NEXT — только `docs/STAGES.md`; roadmap — `docs/ROADMAP.md`;
+- architecture/design/security/testing — соответствующие `docs/*`; решения — `docs/DECISIONS.md`.
 
-Прежние staged prompts из delta-пакета были временными входными материалами и
-не переносились. Текущая библиотека `prompts/stages/` создана заново из
-канонических SPEC/ROADMAP как project-only routing layer. Параллельные журналы
-и `PROGRESS.md` не создаются.
+Старые AI plan/status и повреждённый prompt catalog сохранены через SHA/facts в `docs/notes/` и Git parent. Read-only reconcile: AI pair, prompt catalog/index, AGENTS/ROADMAP — MERGE; `docs/STAGES.md` — ADD. Product code/tests/locks и отдельный upstream `ffmpeg/` — FORBIDDEN_TO_OVERWRITE. Локальный `main` опережает GitHub на пять commits, которые сохраняются без reset/force.
 
 Новые hooks, MCP, Skills, generic agents и Codex config для маршрутизации не
 добавлены: общие процессы наследуются, локальная delta ограничена документами.

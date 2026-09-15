@@ -1,3 +1,7 @@
+# Исторический индекс prompts
+
+Исходный `prompts/README.md` сохранён ниже. SHA-256 source worktree: `8b2518969d00ef489f351fae9eeacdd43614bad3206d1aaec1cde13db52c13f6`. Ссылки на `prompts/stages/NN-*.md` отсутствовали уже до миграции.
+
 # Библиотека этапов Video Chronicle
 
 Stage prompts — самостоятельные входы для поэтапной работы Codex. Они не
