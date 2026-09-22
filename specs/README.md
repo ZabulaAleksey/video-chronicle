@@ -14,3 +14,4 @@
 | Feature | [Локальная транскрипция](features/local-transcription.spec.md) | TRANSCRIBE-001 утверждён для этапа 13 |
 | Feature | [Hardware и quality gate](features/hardware-quality.spec.md) | HW-001 утверждён для этапа 14 |
 | Feature | [Security hardening](features/security-hardening.spec.md) | SEC-HARDEN-001 утверждён для этапа 15 |
+| Feature | [Согласованная media timeline](features/media-timeline-sync.spec.md) | MEDIA-SYNC-001 утверждён прямым запросом пользователя |

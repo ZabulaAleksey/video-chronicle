@@ -294,3 +294,76 @@ git diff --check
 4. Подать forbidden schema, remote URL и oversized JSON и увидеть отказ без mutation.
 5. Сгенерировать synthetic corpus и сравнить JSON/Markdown benchmark report.
 6. Выключить оба flags и убедиться, что обычный import graph/export не изменился.
+
+## 2026-09-22 — накопительный A/V drift после concat AAC-сегментов
+
+### Problem
+
+После обработки июльского корпуса звук при непрерывном воспроизведении всё
+сильнее отставал от видео, хотя container durations и packet PTS/DTS выглядели
+согласованными.
+
+### Symptom
+
+В начале A/V были синхронны; drift накапливался со временем. Seek во встроенном
+Android-плеере `7.30.50.106` временно восстанавливал синхронизацию, после чего
+расхождение снова росло.
+
+### Root cause
+
+Финальный stream-copy concat сохранял независимо закодированные AAC access
+units каждого нормализованного сегмента. Packet duration последнего access unit
+сокращался до video boundary, но decoder выдавал полный блок 1024 samples.
+Поэтому audio PCM clock рос быстрее packet timeline на каждой границе. В
+реальном output 74 329 access units содержат на 205 729 samples
+(`4.286020833 s`, drift rate `0.00271027`) больше, чем сумма packet durations.
+Контрольные точки payload-vs-PTS выросли от `0.441 s` на `158.129 s` до
+`4.286 s` на `1581.378 s`; измеренные `0.271%` не совпадают с ошибкой
+`30/29.97 - 1 ≈ 0.100%`.
+
+### Failed attempts
+
+Проверены и отвергнуты гипотезы о постоянном audio offset, округлении
+`60000/1001` до 60 и потере video frames: output — exact CFR 60, а число
+94 883 frames точно соответствует детерминированному CFR-преобразованию 344
+video и 17 photo. Произвольный delay, resampling и изменение скорости не
+применялись.
+
+### Fix
+
+На финальной сборке H.264 video следует сохранить через stream copy, а audio
+всех сегментов декодировать и закодировать AAC ровно один раз как 48 kHz stereo
+на общей непрерывной timeline. Подробный механизм и границы исправления:
+[расследование A/V drift](notes/av-sync-drift-investigation.md).
+
+### Verification
+
+Детерминированный 361-segment repro: stream-copy AAC дал surplus
+`9.124125 s` на timeline `445.254542 s`; однократное финальное AAC
+перекодирование при video copy сократило остаток до `0.014792 s`, меньше одного
+AAC access unit (`0.021333... s`). Production-fix и полный regression suite на
+момент расследования ещё не были подтверждены. После исправления final concat
+focused argv contract дал 1 PASS, трёхминутный real-FFmpeg regression — 1 PASS,
+полный `tests/test_ffmpeg_smoke.py` — 3 PASS. Полный project suite завершился
+результатом `360 passed, 2 skipped, 3 failed`. Все три failure являются
+environment/baseline-sensitive и не связаны с этим diff:
+
+- GUI fallback наблюдает установленный absolute path full-build FFmpeg вместо
+  ожидаемого тестом литерала `ffmpeg`;
+- wheel test запускает base interpreter, в котором отсутствует
+  `setuptools.build_meta`;
+- scene golden закрепляет identity essentials-build, тогда как discovery в
+  текущей среде находит установленный full-build FFmpeg.
+
+### Prevention
+
+Утверждён [MEDIA-SYNC-001](../specs/features/media-timeline-sync.spec.md):
+регрессии должны измерять decoded audio samples против packet timeline и A/V
+timestamps в начале, середине и конце, а не ограничиваться stream duration или
+frame count. Допуск — не более одного AAC access unit на весь output без
+линейного роста между checkpoint'ами.
+
+### Links
+
+- [Расследование накопительного A/V drift](notes/av-sync-drift-investigation.md)
+- [MEDIA-SYNC-001 — Согласованная media timeline](../specs/features/media-timeline-sync.spec.md)

@@ -141,7 +141,9 @@
    identity. Подтверждённый hit копируется в active workspace; miss проходит
    обычную normalization и атомарно сохраняется. Повреждение даёт warning и
    clean fallback, но никогда не подменяет plan или output path.
-14. Подготовленные клипы объединяются без повторного кодирования.
+14. При финальном объединении H.264 video сохраняется через stream copy, а
+   audio всех подготовленных клипов декодируется и один раз кодируется в AAC
+   192 kbit/s, 48 kHz stereo на общей непрерывной timeline.
 15. Каждый subprocess принадлежит Windows Job Object или POSIX process group;
    cancel, timeout и output-limit завершают и подтверждают остановку всего дерева.
 16. Без разрешения overwrite временный результат публикуется атомарным

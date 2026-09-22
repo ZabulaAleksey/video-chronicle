@@ -54,6 +54,7 @@ preview/normalize, включая multiline typography при доступном
 | Windows Job/POSIX group, descendants, timeout/output-limit и real FFmpeg cancel | platform/integration/security | `tests/test_process_control.py` | `EXEC-AC-002`, `AC-006` |
 | Cache key/manifest, corruption fallback, bounds, purge и interprocess lock | unit/integration/security | `tests/test_cache.py`, `tests/test_execution.py` | `CACHE-AC-001–004`, `AC-007` |
 | Interrupted/repeated mixed-media export и byte-identical clean/resumed result | integration smoke | `tests/test_execution.py`, `tests/test_ffmpeg_smoke.py` | `CACHE-AC-002/003`, `AC-005/007/010` |
+| CFR 30, `30000/1001`, `60000/1001`, irregular VFR, input video TB `1/90000`, audio 44.1 kHz и трёхминутный multi-segment concat | real FFmpeg timeline regression | `test_final_concat_keeps_video_timeline_and_encodes_one_continuous_audio_stream` | `MEDIA-SYNC-AC-001–006` |
 | Reorder/trim/groups/presets, schema-v2 migration и revision rollback | unit/property/fault | `tests/test_nondestructive_editing.py` | `EDIT-AC-001–005` |
 | Exact trim preview/export, cache v1/v2 и immutable source | GUI/integration/real FFmpeg | `tests/test_nondestructive_editing.py` | `EDIT-AC-002/004/006/007` |
 | Async thumbnail batch, temporary cleanup, isolated item failure и domain-backed card reorder | GUI/component | `tests/test_gui_application.py` | `EDIT-AC-008/009` |
@@ -72,6 +73,16 @@ Synthetic smoke создаёт короткие BMP и MP4 во временно
 video/audio streams и сравнивает SHA-256, размер и `mtime_ns` источников до и
 после обработки. Инструменты ищутся сначала через
 `VIDEO_CHRONICLE_FFMPEG` / `VIDEO_CHRONICLE_FFPROBE`, затем в `PATH`.
+
+MEDIA-SYNC regression нормализует четыре 0.5-секундных source profile в общий
+CFR 60, повторяет их 90 раз и проверяет трёхминутный output. Oracle сверяет
+точный video frame count, `r_frame_rate=60/1`, video `time_base=1/60000`,
+монотонные frame/audio timestamps и decoded AAC payload против суммы packet
+durations после учёта codec skip/discard metadata. Stream и decoded A/V
+start/end, а также ближайшие audio frame timestamps в начале, середине и конце
+сравниваются напрямую. Допуск — не более одного AAC access unit: 1024 samples
+при 48 kHz (`21.333... ms`) на всём output и между checkpoint'ами. Близость
+container/stream durations без этой проверки не считается достаточной.
 
 Минимальная подтверждённая версия smoke-контракта: **FFmpeg и FFprobe 9.0.1**.
 Этап 01 не объявляет более старые версии поддерживаемыми без отдельного
