@@ -1,7 +1,7 @@
 # MEDIA-SYNC-001 — Согласованная media timeline
 
 - Статус: утверждён прямым запросом пользователя
-- Версия: 1.0
+- Версия: 1.1
 - Зависимости: SYS-AC-001, AC-010
 
 ## Требования
@@ -25,11 +25,16 @@
   содержать независимо закодированный AAC, но финальный output не должен
   stream-copy concatenated AAC access units. Финальная сборка сохраняет H.264
   video через stream copy, а audio всех сегментов декодирует и кодирует ровно
-  один раз как AAC 48 kHz stereo на общей непрерывной timeline.
+  один раз как AAC 48 kHz stereo на общей непрерывной timeline. Если concat
+  demuxer сохраняет между decoded audio frames положительный PTS gap, этот
+  интервал должен быть материализован как PCM silence до финального encode;
+  отсутствие samples не должно переноситься в output как разрыв audio clock.
 - **MEDIA-SYNC-006 — No masking.** Запрещены произвольный audio delay,
-  `-itsoffset`, изменение скорости audio, `aresample=async` и иная
-  посткомпенсация без отдельного документированного root cause и изменения
-  SPEC.
+  `-itsoffset`, изменение скорости audio и недокументированная посткомпенсация.
+  Bounded `aresample=48000:async=1000:min_hard_comp=0.001:first_pts=0`
+  разрешён только на финальной concat-границе для доказанного случая: заполнить
+  реальные положительные PTS gaps PCM silence и начать общую audio timeline с
+  нуля. Это не разрешает подбирать коэффициент скорости или offset.
 - **MEDIA-SYNC-007 — Mux continuity.** Output audio/video packet timestamps
   монотонны, корректно rescale'нуты в stream time bases и описывают ту же
   продолжительность с учётом codec priming, padding, skip/discard metadata и
@@ -57,4 +62,16 @@
   достаточным evidence.
 - **MEDIA-SYNC-AC-006.** Детерминированный multi-segment test доказывает, что
   final video остаётся stream-copy compatible, audio кодируется один раз, а
-  применение произвольного offset/async-resampling отсутствует.
+  произвольный offset и изменение FPS/скорости отсутствуют.
+- **MEDIA-SYNC-AC-007.** Real-like normalized segment с video duration около
+  `3.233333 s` и decoded audio duration `3.221333 s` повторяется не менее 60
+  раз. До correction output содержит 59 положительных decoded-frame PTS gaps
+  по 576 samples (`0.708 s` суммарно); после correction число/net gap и рост
+  decoded-content clock error proxy между checkpoint'ами не превышает один AAC
+  access unit. Signed oracle также не допускает накопления отрицательных
+  overlaps более одного AAC access unit.
+- **MEDIA-SYNC-AC-008.** Offline PCM/PTS evidence доказывает устранение
+  structural clock deficit, но не подменяет semantic playback verification.
+  До root-cause closure/release полный diagnostic candidate должен пройти
+  непрерывное воспроизведение без accumulated A/V drift во встроенном
+  Android-плеере `7.30.50.106`; seek проверяется отдельно как diagnostic step.

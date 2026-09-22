@@ -656,6 +656,8 @@ def concatenate(
             "0:a:0",
             "-c:v",
             "copy",
+            "-af",
+            "aresample=48000:async=1000:min_hard_comp=0.001:first_pts=0",
             "-c:a",
             "aac",
             "-b:a",

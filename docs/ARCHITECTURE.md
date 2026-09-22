@@ -142,8 +142,14 @@
    обычную normalization и атомарно сохраняется. Повреждение даёт warning и
    clean fallback, но никогда не подменяет plan или output path.
 14. При финальном объединении H.264 video сохраняется через stream copy, а
-   audio всех подготовленных клипов декодируется и один раз кодируется в AAC
-   192 kbit/s, 48 kHz stereo на общей непрерывной timeline.
+   audio всех подготовленных клипов декодируется, положительные PTS gaps между
+   frames материализуются как PCM silence через bounded
+   `aresample=48000:async=1000:min_hard_comp=0.001:first_pts=0`, после чего весь
+   поток один раз кодируется в AAC 192 kbit/s, 48 kHz stereo. Это сохраняет
+   structurally continuous decoded-audio clock без изменения video clock,
+   произвольного audio offset или глобального playback-speed коэффициента.
+   Semantic sync конкретного Android renderer остаётся отдельным acceptance
+   gate и не выводится только из offline PTS/PCM анализа.
 15. Каждый subprocess принадлежит Windows Job Object или POSIX process group;
    cancel, timeout и output-limit завершают и подтверждают остановку всего дерева.
 16. Без разрешения overwrite временный результат публикуется атомарным

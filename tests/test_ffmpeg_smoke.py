@@ -389,6 +389,215 @@ def test_final_concat_keeps_video_timeline_and_encodes_one_continuous_audio_stre
     assert max(av_checkpoint_separation) - min(av_checkpoint_separation) <= aac_unit
 
 
+def test_final_concat_materializes_real_segment_audio_gaps_as_pcm_silence(
+    tmp_path: Path,
+) -> None:
+    """MEDIA-SYNC-AC-007: preserved segment PTS gaps must become PCM silence."""
+
+    ffmpeg, ffprobe = _require_media_tools()
+    source = tmp_path / "real-like-source.mp4"
+    _run(
+        [
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=160x90:rate=60000/1001:duration=3.226111",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:sample_rate=48000:duration=3.199958",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-pix_fmt",
+            "yuv420p",
+            "-video_track_timescale",
+            "90000",
+            "-c:a",
+            "aac",
+            "-ar",
+            "48000",
+            "-ac",
+            "2",
+            "-y",
+            str(source),
+        ],
+        "real-like mismatched source generation",
+    )
+
+    normalized = tmp_path / "normalized-real-like.mp4"
+    join_media.normalize_item(
+        join_media.MediaItem(
+            path=source,
+            taken_at=datetime(2026, 7, 1),
+            is_photo=False,
+            has_audio=True,
+            date_source="fixture",
+        ),
+        normalized,
+        ffmpeg,
+        join_media.OverlayConfig(enabled=False),
+        crf=35,
+        preset="ultrafast",
+    )
+
+    normalized_streams = _probe_json(
+        ffprobe,
+        normalized,
+        "-show_entries",
+        "stream=codec_type,time_base,start_time,duration",
+    )["streams"]
+    normalized_video = next(
+        stream for stream in normalized_streams if stream["codec_type"] == "video"
+    )
+    normalized_audio = next(
+        stream for stream in normalized_streams if stream["codec_type"] == "audio"
+    )
+    assert abs(Fraction(normalized_video["duration"]) - Fraction(97, 30)) <= Fraction(
+        1, 1_000_000
+    )
+    assert Fraction(normalized_audio["duration"]) < Fraction(
+        normalized_video["duration"]
+    )
+    normalized_audio_frames = _probe_json(
+        ffprobe,
+        normalized,
+        "-select_streams",
+        "a:0",
+        "-show_frames",
+        "-show_entries",
+        "frame=nb_samples",
+    )["frames"]
+    normalized_decoded_samples = sum(
+        int(frame["nb_samples"])
+        for frame in normalized_audio_frames
+        if "nb_samples" in frame
+    )
+    normalized_video_samples = round(
+        Fraction(normalized_video["duration"]) * 48000
+    )
+    assert normalized_video_samples - normalized_decoded_samples == 576
+
+    repetitions = 60
+    output = tmp_path / "repeated-real-segment.mp4"
+    join_media.concatenate(
+        [normalized] * repetitions,
+        tmp_path / "real-segment-concat.txt",
+        output,
+        ffmpeg,
+    )
+
+    streams = _probe_json(
+        ffprobe,
+        output,
+        "-show_entries",
+        "stream=codec_type,time_base,start_time,duration,sample_rate,r_frame_rate,avg_frame_rate",
+    )["streams"]
+    video_stream = next(stream for stream in streams if stream["codec_type"] == "video")
+    audio_stream = next(stream for stream in streams if stream["codec_type"] == "audio")
+    assert video_stream["time_base"] == "1/60000"
+    assert video_stream["r_frame_rate"] == "60/1"
+    assert abs(Fraction(video_stream["avg_frame_rate"]) - 60) <= Fraction(
+        1, 100_000
+    )
+    assert audio_stream["time_base"] == "1/48000"
+    assert audio_stream["sample_rate"] == "48000"
+
+    video_frames = _probe_json(
+        ffprobe,
+        output,
+        "-select_streams",
+        "v:0",
+        "-show_frames",
+        "-show_entries",
+        "frame=best_effort_timestamp,duration",
+    )["frames"]
+    video_values = [
+        (int(frame["best_effort_timestamp"]), int(frame["duration"]))
+        for frame in video_frames
+        if "best_effort_timestamp" in frame and "duration" in frame
+    ]
+    assert video_values
+    assert all(
+        right_pts == left_pts + left_duration
+        for (left_pts, left_duration), (right_pts, _) in zip(
+            video_values, video_values[1:]
+        )
+    )
+
+    audio_frames = _probe_json(
+        ffprobe,
+        output,
+        "-select_streams",
+        "a:0",
+        "-show_frames",
+        "-show_entries",
+        "frame=best_effort_timestamp,nb_samples",
+    )["frames"]
+    audio_values = [
+        (int(frame["best_effort_timestamp"]), int(frame["nb_samples"]))
+        for frame in audio_frames
+        if "best_effort_timestamp" in frame and "nb_samples" in frame
+    ]
+    assert audio_values
+    signed_gaps = [
+        right_pts - (left_pts + left_samples)
+        for (left_pts, left_samples), (right_pts, _) in zip(
+            audio_values, audio_values[1:]
+        )
+    ]
+    positive_gaps = [gap for gap in signed_gaps if gap > 0]
+    negative_overlap_samples = -sum(gap for gap in signed_gaps if gap < 0)
+    net_gap_samples = sum(positive_gaps)
+    net_discontinuity_samples = sum(signed_gaps)
+    assert len(positive_gaps) <= 1, (
+        f"decoded audio has {len(positive_gaps)} positive PTS gaps totaling "
+        f"{net_gap_samples} samples"
+    )
+    assert net_gap_samples <= 1024
+    assert negative_overlap_samples <= 1024
+    assert abs(net_discontinuity_samples) <= 1024
+
+    video_time_base = Fraction(video_stream["time_base"])
+    audio_time_base = Fraction(audio_stream["time_base"])
+    video_start = video_values[0][0] * video_time_base
+    video_end = sum(video_values[-1]) * video_time_base
+    audio_start = audio_values[0][0] * audio_time_base
+    decoded_audio_samples = sum(samples for _, samples in audio_values)
+    audio_content_end = audio_start + Fraction(decoded_audio_samples, 48000)
+    aac_unit = Fraction(1024, 48000)
+
+    checkpoint_errors: list[Fraction] = []
+    for proportion in (Fraction(1, 10), Fraction(1, 2), Fraction(3, 4), Fraction(1)):
+        target = video_start + (video_end - video_start) * proportion
+        frame_count = max(
+            index
+            for index, (pts, _) in enumerate(audio_values, start=1)
+            if pts * audio_time_base <= target
+        )
+        decoded_to_checkpoint = sum(
+            samples for _, samples in audio_values[:frame_count]
+        )
+        timestamp_to_checkpoint = (
+            audio_values[frame_count - 1][0]
+            + audio_values[frame_count - 1][1]
+            - audio_values[0][0]
+        )
+        checkpoint_errors.append(
+            Fraction(timestamp_to_checkpoint - decoded_to_checkpoint, 48000)
+        )
+
+    assert abs(video_start - audio_start) <= aac_unit
+    assert abs(video_end - audio_content_end) <= aac_unit
+    assert max(abs(error) for error in checkpoint_errors) <= aac_unit
+    assert max(checkpoint_errors) - min(checkpoint_errors) <= aac_unit
+
+
 @pytest.mark.parametrize(
     "mode_args",
     [pytest.param([], id="implicit-chronicle"), pytest.param(["--mode", "join"], id="join")],

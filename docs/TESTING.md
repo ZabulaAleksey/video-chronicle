@@ -55,6 +55,7 @@ preview/normalize, включая multiline typography при доступном
 | Cache key/manifest, corruption fallback, bounds, purge и interprocess lock | unit/integration/security | `tests/test_cache.py`, `tests/test_execution.py` | `CACHE-AC-001–004`, `AC-007` |
 | Interrupted/repeated mixed-media export и byte-identical clean/resumed result | integration smoke | `tests/test_execution.py`, `tests/test_ffmpeg_smoke.py` | `CACHE-AC-002/003`, `AC-005/007/010` |
 | CFR 30, `30000/1001`, `60000/1001`, irregular VFR, input video TB `1/90000`, audio 44.1 kHz и трёхминутный multi-segment concat | real FFmpeg timeline regression | `test_final_concat_keeps_video_timeline_and_encodes_one_continuous_audio_stream` | `MEDIA-SYNC-AC-001–006` |
+| Реальный механизм v2: normalized segment `3.233333 s` video / `3.221333 s` decoded audio, 60 повторов, signed decoded-frame PTS gaps/overlaps и clock checkpoints | real FFmpeg accumulated-gap regression | `test_final_concat_materializes_real_segment_audio_gaps_as_pcm_silence` | `MEDIA-SYNC-AC-007` |
 | Reorder/trim/groups/presets, schema-v2 migration и revision rollback | unit/property/fault | `tests/test_nondestructive_editing.py` | `EDIT-AC-001–005` |
 | Exact trim preview/export, cache v1/v2 и immutable source | GUI/integration/real FFmpeg | `tests/test_nondestructive_editing.py` | `EDIT-AC-002/004/006/007` |
 | Async thumbnail batch, temporary cleanup, isolated item failure и domain-backed card reorder | GUI/component | `tests/test_gui_application.py` | `EDIT-AC-008/009` |

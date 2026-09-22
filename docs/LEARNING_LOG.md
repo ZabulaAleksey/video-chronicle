@@ -311,57 +311,85 @@ Android-плеере `7.30.50.106` временно восстанавливал
 
 ### Root cause
 
-Финальный stream-copy concat сохранял независимо закодированные AAC access
-units каждого нормализованного сегмента. Packet duration последнего access unit
-сокращался до video boundary, но decoder выдавал полный блок 1024 samples.
-Поэтому audio PCM clock рос быстрее packet timeline на каждой границе. В
-реальном output 74 329 access units содержат на 205 729 samples
-(`4.286020833 s`, drift rate `0.00271027`) больше, чем сумма packet durations.
-Контрольные точки payload-vs-PTS выросли от `0.441 s` на `158.129 s` до
-`4.286 s` на `1581.378 s`; измеренные `0.271%` не совпадают с ошибкой
-`30/29.97 - 1 ≈ 0.100%`.
+Первое расследование нашло реальную проблему stream-copy независимо
+закодированных AAC units, но ошибочно сочло её полным объяснением. После
+`fed1309` final audio кодировался один раз, однако concat сохранял положительные
+PTS gaps между decoded audio frames: video span нормализованного clip длиннее
+его PCM payload. AAC encoder сохранял эти timestamps, но не материализовал
+отсутствующий интервал samples. В post-fix `D:\output.mp4` найдено 343 gaps
+суммарно 167 263 samples (`3.484645833 s`); decoded PCM длится
+`1577.914667 s` при presentation timeline `1581.3993125 s`. В последовательной
+sample-count модели это даёт decoded-content clock-deficit proxy `3.468667 s`
+и slope `2193.44 ppm`. Это не прямое измерение semantic event offset:
+timestamp-aware player может выдержать gaps как silence.
+Counts 343 gaps и 343 boundaries после video items коррелируют, но не доказывают
+one-to-one: conservative absolute-PTS reconstruction дала 119 exact matches,
+0 matches после 17 photo boundaries; остальные связи скрыты cumulative
+rounding и overlaps.
 
 ### Failed attempts
 
-Проверены и отвергнуты гипотезы о постоянном audio offset, округлении
-`60000/1001` до 60 и потере video frames: output — exact CFR 60, а число
-94 883 frames точно соответствует детерминированному CFR-преобразованию 344
-video и 17 photo. Произвольный delay, resampling и изменение скорости не
-применялись.
+Commit `fed1309` устранил access-unit surplus, но regression использовал clips
+с совпадающими audio/video spans и потому не создавал реальных положительных
+PTS gaps. Проверены и отвергнуты constant offset, округление `60000/1001` до
+60 и потеря video frames: video PTS непрерывны, а proxy slope `0.219344%`
+не совпадает с NTSC mismatch около `0.100%`.
 
 ### Fix
 
-На финальной сборке H.264 video следует сохранить через stream copy, а audio
-всех сегментов декодировать и закодировать AAC ровно один раз как 48 kHz stereo
-на общей непрерывной timeline. Подробный механизм и границы исправления:
-[расследование A/V drift](notes/av-sync-drift-investigation.md).
+На финальной сборке H.264 video сохраняется через stream copy. Между concat
+decode и единственным AAC encode применяется bounded
+`aresample=48000:async=1000:min_hard_comp=0.001:first_pts=0`: filter следует
+PTS и превращает положительные gaps в PCM silence. Offset, `atempo` и FPS
+correction не применяются. Подробности: [расследование A/V drift
+v2](notes/av-sync-drift-investigation.md).
 
 ### Verification
 
-Детерминированный 361-segment repro: stream-copy AAC дал surplus
-`9.124125 s` на timeline `445.254542 s`; однократное финальное AAC
-перекодирование при video copy сократило остаток до `0.014792 s`, меньше одного
-AAC access unit (`0.021333... s`). Production-fix и полный regression suite на
-момент расследования ещё не были подтверждены. После исправления final concat
-focused argv contract дал 1 PASS, трёхминутный real-FFmpeg regression — 1 PASS,
-полный `tests/test_ffmpeg_smoke.py` — 3 PASS. Полный project suite завершился
-результатом `360 passed, 2 skipped, 3 failed`. Все три failure являются
-environment/baseline-sensitive и не связаны с этим diff:
-
-- GUI fallback наблюдает установленный absolute path full-build FFmpeg вместо
-  ожидаемого тестом литерала `ffmpeg`;
-- wheel test запускает base interpreter, в котором отсутствует
-  `setuptools.build_meta`;
-- scene golden закрепляет identity essentials-build, тогда как discovery в
-  текущей среде находит установленный full-build FFmpeg.
+Новый real-FFmpeg RED воспроизводит настоящий механизм: normalized segment
+имеет `3.233333 s` video и 154 624 decoded samples (`3.221333 s`), deficit 576
+samples; у первого real clip deficit равен 578 samples. 60 synthetic повторов
+на `fed1309` дают 59 gaps по 576 samples — 33 984 samples
+или `0.708 s`. После gap materialization exact argv characterization проходит,
+post-fix artifact имеет 0 positive gaps и video-minus-decoded duration
+difference `0.012004167 s`,
+а новый и прежний multi-minute FFmpeg regressions дают `2 passed in 45.28s`.
+Полный real candidate `D:\output-avsync-v2-diagnostic.mp4` содержит
+75 907 168 decoded samples (`1581.399333 s`), 0 positive gaps, 0 negative
+overlaps, 0 net gap и
+video-minus-decoded difference `0.005333 s`; checkpoint error остаётся около
+`-0.021333 s` без роста. В корректном user-profile temp окружении
+characterization + все FFmpeg smoke tests дали `41 passed in 41.53s`, включая
+cache scenario. Полный suite: `342 passed, 21 skipped, 3 failed in 101.12s`.
+Оставшиеся failures environment/baseline-sensitive: GUI ожидает literal
+`ffmpeg`, но discovery находит installed full-build path; base Python не имеет
+`setuptools.build_meta`; scene golden закрепляет essentials-build identity
+вместо обнаруженного full-build FFmpeg.
+Проблемный MP4 имеет variable audio `stts` размером 23 064 bytes с durations
+`768/1023/1024` и до `2027`; diagnostic candidate имеет `stts` 32 bytes и
+continuous decoded PCM. Точный renderer mechanism Android `7.30.50.106` не
+наблюдаем локально: гипотеза состоит в mishandling variable AAC schedule, а
+seek сбрасывает prior render state и reanchor'ит clocks по текущим PTS.
+Обязательный human gate перед root-cause closure/release — непрерывно
+воспроизвести `D:\output-avsync-v2-diagnostic.mp4` на этом Android player и
+подтвердить отсутствие накапливающегося слышимого A/V drift.
+Differential matrix отделила timestamp gaps от codec/container/video encode:
+re-encode A+V, PCM/MKV и Opus сохранили около `0.708 s`; `asetpts` закрыл gaps,
+но неверно сократил semantic timeline; default soft `async=1` оставил
+`0.072 s`; оба варианта с `min_hard_comp=0.001` закрыли gaps. На проблемном
+artifact также были 1097 отрицательных overlaps по 1 sample; candidate удалил
+и gaps, и overlaps. Manual non-zero-start fixture (video `0.500000 s`, audio
+`0.478667 s`, 20 повторов) дал 0 gaps/net 0. Edit-list offsets ограничены
+началом track, а interleaving не имеет длинных runs, поэтому они не объясняют
+накопление.
 
 ### Prevention
 
 Утверждён [MEDIA-SYNC-001](../specs/features/media-timeline-sync.spec.md):
-регрессии должны измерять decoded audio samples против packet timeline и A/V
-timestamps в начале, середине и конце, а не ограничиваться stream duration или
-frame count. Допуск — не более одного AAC access unit на весь output без
-линейного роста между checkpoint'ами.
+регрессии должны создавать mismatched normalized segment, считать decoded-frame
+PTS gaps и сравнивать decoded PCM с video timeline в нескольких checkpoints, а
+не ограничиваться stream duration или packet continuity. Допуск — не более
+одного AAC access unit на весь output без роста между checkpoint'ами.
 
 ### Links
 
