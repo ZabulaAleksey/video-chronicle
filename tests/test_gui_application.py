@@ -1422,6 +1422,7 @@ def test_gui_winget_failure_restores_manual_fallback(
     qapp, monkeypatch
 ) -> None:
     monkeypatch.setattr(gui_module, "resolve_encoding_tools", lambda: (None, None))
+    monkeypatch.setattr(gui_module, "default_tool_value", lambda name: name)
     monkeypatch.setattr(gui_module, "resolve_winget", lambda: "C:/Windows/winget.exe")
     monkeypatch.setattr(gui_module.sys, "platform", "win32")
     monkeypatch.setattr(QProcess, "start", lambda self: None)
