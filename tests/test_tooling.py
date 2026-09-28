@@ -39,6 +39,34 @@ def test_resolve_encoding_tool_returns_absolute_path_from_path(
     )
 
 
+def test_portable_dev_pair_precedes_host_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bin_root = tmp_path / "tools" / "ffmpeg" / "bin"
+    bin_root.mkdir(parents=True)
+    for name in ("ffmpeg", "ffprobe"):
+        (bin_root / f"{name}.exe").write_bytes(b"fixture")
+    host = tmp_path / "host-ffmpeg.exe"
+    host.write_bytes(b"host")
+    monkeypatch.setattr(tooling.shutil, "which", lambda *args, **kwargs: str(host))
+
+    assert tooling.resolve_encoding_tools({"DEV_TOOLS": str(tmp_path / "tools"), "PATH": "host"}) == (
+        str((bin_root / "ffmpeg.exe").resolve()),
+        str((bin_root / "ffprobe.exe").resolve()),
+    )
+
+
+def test_incomplete_portable_pair_does_not_mix_with_host(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bin_root = tmp_path / "tools" / "ffmpeg" / "bin"
+    bin_root.mkdir(parents=True)
+    (bin_root / "ffmpeg.exe").write_bytes(b"fixture")
+    monkeypatch.setattr(tooling.shutil, "which", lambda *args, **kwargs: None)
+
+    assert tooling.resolve_encoding_tools({"DEV_TOOLS": str(tmp_path / "tools"), "PATH": ""}) == (None, None)
+
+
 def test_winget_ffmpeg_install_is_pinned_user_scope_list_argv() -> None:
     arguments = tooling.winget_ffmpeg_install_arguments()
 

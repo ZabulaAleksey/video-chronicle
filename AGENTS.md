@@ -2,7 +2,7 @@
 
 - Перед существенной задачей прочитай общие правила AI Dev Team из `~/.codex/AGENTS.md`, затем применяй этот файл как более локальное уточнение.
 - Работай с Git из корня `${PROJECTS_ROOT}/video-chronicle`; родительский каталог не должен отслеживать этот project repository.
-- Если `ffmpeg/` существует, считай его отдельным upstream Git-репозиторием: не изменяй, не обновляй и не публикуй без отдельного явного запроса. Его отсутствие в clean clone допустимо; для работы приложения используй FFmpeg/FFprobe из project environment или `PATH` согласно `README.md`.
+- Для DEV-managed media readiness используй global portable FFmpeg/FFprobe из `${DEV_ROOT}/tools/ffmpeg`; проверяй `doctor.ps1 -Scope Bootstrap -Check -Project video-chronicle`. Старые project-local `ffmpeg/` и `ffmpeg1/` не являются canonical tool locations; если они встретятся, сохраняй их как отдельные исторические assets до проверки происхождения.
 - Для portable DEV используй `${DEV_ROOT}`, `${PROJECTS_ROOT}` и `${PROJECT_ROOT}`; Windows bootstrap-примеры могут указывать `E:\DEV`. `~` обозначает только действительно host-local пути.
 - Перед изменениями проверяй `git status`; после изменений выполняй относящиеся к задаче проверки Python/FFmpeg и `git diff --check`.
 - Проектные архитектурные документы и журнал решений находятся в `docs/`; обновляй только действительно затронутые документы.
@@ -30,7 +30,7 @@
 ### Unit / integration / component
 - Unit + integration: `uv run --locked --extra dev --extra otio python -m pytest`
 - Component/contract smoke: `uv run --locked --extra dev --extra otio python -m pytest tests/test_cli_characterization.py tests/test_gui_contract.py tests/test_gui_application.py`
-- Канонический менеджер Python-зависимостей — uv, source of truth — `pyproject.toml` + `uv.lock`. Restore выполняй через `uv sync --locked --extra dev --extra otio`; общий uv cache разрешён, `.venv` disposable. Если `ffmpeg/` или `ffmpeg1/` существуют, они являются отдельными runtime/upstream assets и не относятся к dependency cleanup; clean clone не обязан их содержать. Внешние FFmpeg/FFprobe восстанавливаются по `README.md`.
+- Канонический менеджер Python-зависимостей — uv, source of truth — `pyproject.toml` + `uv.lock`. Restore выполняй через `uv sync --locked --extra dev --extra otio`; общий uv cache разрешён, `.venv` disposable. Global FFmpeg payload находится вне project Git и не относится к dependency cleanup.
 
 ### E2E (критические)
 1. Пайплайн `join_media` для набора тестовых файлов.

@@ -1,5 +1,20 @@
 # Технические решения
 
+## 2026-09-28 — global portable FFmpeg владеет DEV media tool
+
+- Решение: approved global `CONFLICT-004` в `${DEV_SOURCE_ROOT}/docs/DECISIONS.md`
+  задаёт `${DEV_ROOT}/tools/ffmpeg` как единственный canonical DEV-managed
+  FFmpeg/FFprobe root. Global `bootstrap/versions.yaml` владеет версией 9.0.1,
+  package provenance и SHA-256; project doctor проверяет пару и H.264/AAC/MP4.
+- Причина: project-local ignored `ffmpeg/` и `ffmpeg1/` отсутствуют в clean clone
+  и не дают воспроизводимого new-host restore. Версия 9.0.1 сохраняет принятый
+  scene adapter baseline и golden tests.
+- Совместимость: GUI предпочитает explicit paths, затем глобальную portable
+  пару, затем host PATH. Standalone Windows GUI сохраняет ранее принятое
+  user-scope WinGet поведение, но оно не удовлетворяет DEV-managed doctor.
+- Граница: portable local-use payload не является частью дистрибутива Video
+  Chronicle. Stage 16 отдельно решает LICENSE и FFmpeg redistribution.
+
 ## 2026-09-13 — whisper.cpp только как explicit local adapter
 
 - Решение: реализовать транскрипцию отдельным opt-in CLI к пользовательским
@@ -13,6 +28,9 @@
 
 ## 2026-08-24 — uv lock является каноническим dependency contract
 
+Историческое следствие о project-local FFmpeg assets заменено решением от
+2026-09-28; Python lock/restore contract остаётся действующим.
+
 - Решение: использовать `pyproject.toml` + `uv.lock` и `uv sync --locked`; общий uv cache разрешён, `.venv` считается disposable projection.
 - Причина: `requirements.txt` и `requirements-dev.txt` дублировали диапазоны из `pyproject.toml` и не фиксировали полный transitive graph.
 - Последствие: после подтверждённого clean restore requirements-файлы удаляются; `ffmpeg/` и `ffmpeg1/` остаются нетронутыми runtime/upstream assets.
@@ -25,12 +43,18 @@
 
 ## 2026-08-11 — локальные FFmpeg-каталоги не публикуются
 
+Статус: SUPERSEDED для active tool ownership решением от 2026-09-28. Ниже
+сохранена историческая причина не публиковать сторонние binaries в project Git.
+
 - Решение: сохранить `ffmpeg/` и `ffmpeg1/` внутри локального каталога проекта, но оставить их в `.gitignore`.
 - Причина: `ffmpeg/` содержит вложенный upstream-репозиторий и крупную Git-историю, а `ffmpeg1/` — сторонние бинарные файлы почти у лимита GitHub.
 - Альтернатива: Git LFS или включение исходников в основной репозиторий.
 - Последствие: после обычного клонирования FFmpeg требуется установить или восстановить отдельно.
 
 ## 2026-09-13 — GUI автоматически подготавливает FFmpeg на Windows
+
+Уточнение 2026-09-28: canonical portable пара разрешается перед host PATH;
+WinGet остаётся fallback самостоятельного Windows GUI, а не DEV readiness source.
 
 - Решение: при старте разрешать project environment/PATH в абсолютные пути, а
   при отсутствии FFmpeg или FFprobe асинхронно запускать WinGet для точного
