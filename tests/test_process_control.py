@@ -307,3 +307,89 @@ def test_windows_job_close_failure_is_explicit_and_retryable() -> None:
     with pytest.raises(ProcessTreeTerminationError, match="CloseHandle"):
         job.close(require_success=True)
     assert job._handle == 123  # type: ignore[attr-defined]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows suspended Job assignment")
+def test_windows_root_cannot_spawn_before_job_assignment(tmp_path: Path, monkeypatch) -> None:
+    from video_chronicle.process_control import ManagedProcess, _WindowsJob
+
+    marker = tmp_path / "child-started.txt"
+    child = (
+        "import pathlib,sys,time;"
+        "pathlib.Path(sys.argv[1]).write_text('started');"
+        "time.sleep(60)"
+    )
+    root = (
+        "import subprocess,sys,time;"
+        "subprocess.Popen([sys.executable,'-c',sys.argv[2],sys.argv[1]],"
+        "stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);"
+        "time.sleep(60)"
+    )
+    original_assign = _WindowsJob.assign
+
+    def delayed_assign(job, process):
+        time.sleep(0.4)
+        assert not marker.exists(), "root executed before Job assignment"
+        original_assign(job, process)
+
+    monkeypatch.setattr(_WindowsJob, "assign", delayed_assign)
+    managed = ManagedProcess([sys.executable, "-c", root, str(marker), child])
+    try:
+        deadline = time.monotonic() + 5
+        while not marker.exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert marker.exists(), "root did not resume after Job assignment"
+        managed.terminate_tree()
+    finally:
+        managed.close()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows suspended Job assignment")
+def test_windows_assignment_failure_never_runs_root(tmp_path: Path, monkeypatch) -> None:
+    from video_chronicle.process_control import (
+        ManagedProcess,
+        ProcessTreeUnavailable,
+        _WindowsJob,
+    )
+
+    marker = tmp_path / "root-started.txt"
+
+    def reject_assignment(job, process):
+        time.sleep(0.4)
+        raise ProcessTreeUnavailable("injected assignment failure")
+
+    monkeypatch.setattr(_WindowsJob, "assign", reject_assignment)
+    with pytest.raises(ProcessTreeUnavailable, match="injected assignment failure"):
+        ManagedProcess(
+            [
+                sys.executable, "-c",
+                "import pathlib,sys; pathlib.Path(sys.argv[1]).write_text('started')",
+                str(marker),
+            ]
+        )
+    assert not marker.exists(), "root executed after failed assignment"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows suspended Job assignment")
+def test_windows_resume_failure_terminates_owned_root(tmp_path: Path, monkeypatch) -> None:
+    from video_chronicle.process_control import (
+        ManagedProcess,
+        ProcessTreeUnavailable,
+        _WindowsJob,
+    )
+
+    marker = tmp_path / "root-started.txt"
+
+    def reject_resume(job, process):
+        raise ProcessTreeUnavailable("injected resume failure")
+
+    monkeypatch.setattr(_WindowsJob, "resume_primary_thread", reject_resume)
+    with pytest.raises(ProcessTreeUnavailable, match="injected resume failure"):
+        ManagedProcess(
+            [
+                sys.executable, "-c",
+                "import pathlib,sys; pathlib.Path(sys.argv[1]).write_text('started')",
+                str(marker),
+            ]
+        )
+    assert not marker.exists(), "root executed after failed resume"

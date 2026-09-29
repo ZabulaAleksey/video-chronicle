@@ -17,6 +17,7 @@ from typing import Protocol
 COOPERATIVE_GRACE_SECONDS = 2.0
 FORCE_KILL_SECONDS = 3.0
 POLL_SECONDS = 0.05
+WINDOWS_CREATE_SUSPENDED = 0x00000004
 
 
 class CancellationSignal(Protocol):
@@ -165,6 +166,85 @@ class _WindowsJob:
                 f"({self._ctypes.get_last_error()})"
             )
 
+    def resume_primary_thread(self, process: subprocess.Popen[bytes]) -> None:
+        """Resume the sole thread of a suspended root after Job assignment.
+
+        ``subprocess.Popen`` closes the CreateProcess thread handle before it
+        returns, so enumerate the still-suspended process's sole thread.
+        Ambiguous ownership fails closed while the root remains in our Job.
+        """
+        from ctypes import wintypes
+
+        class THREADENTRY32(self._ctypes.Structure):
+            _fields_ = [
+                ("dwSize", wintypes.DWORD),
+                ("cntUsage", wintypes.DWORD),
+                ("th32ThreadID", wintypes.DWORD),
+                ("th32OwnerProcessID", wintypes.DWORD),
+                ("tpBasePri", wintypes.LONG),
+                ("tpDeltaPri", wintypes.LONG),
+                ("dwFlags", wintypes.DWORD),
+            ]
+
+        kernel32 = self._kernel32
+        kernel32.CreateToolhelp32Snapshot.argtypes = (wintypes.DWORD, wintypes.DWORD)
+        kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+        kernel32.Thread32First.argtypes = (
+            wintypes.HANDLE, self._ctypes.POINTER(THREADENTRY32)
+        )
+        kernel32.Thread32First.restype = wintypes.BOOL
+        kernel32.Thread32Next.argtypes = (
+            wintypes.HANDLE, self._ctypes.POINTER(THREADENTRY32)
+        )
+        kernel32.Thread32Next.restype = wintypes.BOOL
+        kernel32.OpenThread.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        kernel32.OpenThread.restype = wintypes.HANDLE
+        kernel32.ResumeThread.argtypes = (wintypes.HANDLE,)
+        kernel32.ResumeThread.restype = wintypes.DWORD
+
+        snapshot = kernel32.CreateToolhelp32Snapshot(0x00000004, 0)
+        if snapshot == self._ctypes.c_void_p(-1).value:
+            raise ProcessTreeUnavailable(
+                f"CreateToolhelp32Snapshot failed ({self._ctypes.get_last_error()})"
+            )
+        try:
+            entry = THREADENTRY32()
+            entry.dwSize = self._ctypes.sizeof(entry)
+            if not kernel32.Thread32First(snapshot, self._ctypes.byref(entry)):
+                raise ProcessTreeUnavailable(
+                    f"Thread32First failed ({self._ctypes.get_last_error()})"
+                )
+            thread_ids = []
+            while True:
+                if entry.th32OwnerProcessID == process.pid:
+                    thread_ids.append(entry.th32ThreadID)
+                entry.dwSize = self._ctypes.sizeof(entry)
+                if not kernel32.Thread32Next(snapshot, self._ctypes.byref(entry)):
+                    if self._ctypes.get_last_error() != 18:  # ERROR_NO_MORE_FILES
+                        raise ProcessTreeUnavailable(
+                            f"Thread32Next failed ({self._ctypes.get_last_error()})"
+                        )
+                    break
+        finally:
+            kernel32.CloseHandle(snapshot)
+        if len(thread_ids) != 1:
+            raise ProcessTreeUnavailable(
+                f"suspended root has {len(thread_ids)} threads, expected one"
+            )
+        thread = kernel32.OpenThread(0x0002, False, thread_ids[0])
+        if not thread:
+            raise ProcessTreeUnavailable(
+                f"OpenThread failed ({self._ctypes.get_last_error()})"
+            )
+        try:
+            previous_count = kernel32.ResumeThread(thread)
+            if previous_count != 1:
+                raise ProcessTreeUnavailable(
+                    f"ResumeThread returned unexpected suspend count {previous_count}"
+                )
+        finally:
+            kernel32.CloseHandle(thread)
+
     def terminate(self) -> None:
         if self._handle and not self._kernel32.TerminateJobObject(self._handle, 1):
             raise ProcessTreeTerminationError(
@@ -215,7 +295,10 @@ class ManagedProcess:
                 "safe process-tree cancellation is unsupported on this platform"
             )
         self._job: _WindowsJob | None = _WindowsJob() if os.name == "nt" else None
-        creation_flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+        creation_flags = (
+            subprocess.CREATE_NO_WINDOW | WINDOWS_CREATE_SUSPENDED
+            if os.name == "nt" else 0
+        )
         try:
             self.process = subprocess.Popen(
                 command,
@@ -231,15 +314,27 @@ class ManagedProcess:
                 self._job.close()
             raise
         if self._job is not None:
+            assigned = False
             try:
                 self._job.assign(self.process)
-            except Exception:
-                # Assignment is the ownership commit point.  Before it succeeds,
-                # cancellation cannot be advertised.  Stop/reap the trusted root
-                # immediately; do not continue with parent-only cancellation.
-                self.process.kill()
-                self.process.wait()
-                self._job.close()
+                assigned = True
+                self._job.resume_primary_thread(self.process)
+            except BaseException:
+                # The root was created suspended. Before assignment, only that
+                # root exists; afterward the Job owns any resumed descendants.
+                try:
+                    if assigned:
+                        self._job.terminate()
+                    else:
+                        self.process.kill()
+                    self.process.wait(timeout=FORCE_KILL_SECONDS)
+                finally:
+                    for stream in (
+                        self.process.stdin, self.process.stdout, self.process.stderr
+                    ):
+                        if stream is not None:
+                            stream.close()
+                    self._job.close()
                 raise
 
     def _wait_until(self, deadline: float) -> bool:
