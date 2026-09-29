@@ -85,6 +85,15 @@ start/end, а также ближайшие audio frame timestamps в начал
 при 48 kHz (`21.333... ms`) на всём output и между checkpoint'ами. Близость
 container/stream durations без этой проверки не считается достаточной.
 
+На `fix/av-sync-timeline-drift` отдельный 60-boundary test
+`test_final_concat_materializes_real_segment_audio_gaps_as_pcm_silence`
+проверяет signed PCM/PTS gaps и accumulated error на 10%, 50%, 75% и 100%.
+Повторный локальный прогон 2026-09-30 с `${DEV_ROOT}/tools/ffmpeg` 9.0.1:
+`tests/test_ffmpeg_smoke.py` — 4 PASS; полный locked project suite — 366 PASS.
+Один `PytestCacheWarning` вызван запретом записи `.pytest_cache` и не меняет
+вердикт тестов. Android semantic playback без seek остаётся manual gate
+`MEDIA-SYNC-AC-008`; его не заменяет этот structural PASS.
+
 Минимальная подтверждённая версия smoke-контракта: **FFmpeg и FFprobe 9.0.1**.
 Этап 01 не объявляет более старые версии поддерживаемыми без отдельного
 воспроизводимого прогона. Проверенная Windows release essentials сборка:
@@ -155,8 +164,8 @@ uv run --locked --extra dev --extra otio python -m pytest -q
 
 ```powershell
 uv run --locked --extra dev --extra otio python -m pytest -q tests/test_cli_characterization.py
-$env:VIDEO_CHRONICLE_FFMPEG = "C:/tools/ffmpeg/bin/ffmpeg.exe"
-$env:VIDEO_CHRONICLE_FFPROBE = "C:/tools/ffmpeg/bin/ffprobe.exe"
+$env:VIDEO_CHRONICLE_FFMPEG = "$env:DEV_ROOT/tools/ffmpeg/bin/ffmpeg.exe"
+$env:VIDEO_CHRONICLE_FFPROBE = "$env:DEV_ROOT/tools/ffmpeg/bin/ffprobe.exe"
 uv run --locked --extra dev --extra otio python -m pytest -q -rs tests/test_ffmpeg_smoke.py
 ```
 

@@ -211,6 +211,13 @@ timeline diff: GUI test ожидает literal `ffmpeg`, но discovery нахо
 `setuptools.build_meta`; scene golden закрепляет essentials-build identity, а
 окружение обнаруживает установленный full-build FFmpeg.
 
+Поздний локальный checkpoint 2026-09-30 на `fix/av-sync-timeline-drift`:
+canonical `${DEV_ROOT}/tools/ffmpeg` 9.0.1, locked `uv` environment,
+`tests/test_ffmpeg_smoke.py` — 4 PASS, полный project suite — 366 PASS.
+Предыдущие три failures выше остаются историческим evidence до этого прогона.
+Один `PytestCacheWarning` касался только записи `.pytest_cache`. Результат
+Android semantic playback не получен.
+
 Desktop playback coverage ограничено: `ffplay` установлен, но объективное
 семантическое A/V наблюдение локально не автоматизировано; VLC и mpv
 недоступны. Механизм renderer Android `7.30.50.106` локально не инспектируется.
