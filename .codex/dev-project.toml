@@ -1,0 +1,13 @@
+schema_version = 1
+
+[dev]
+managed = true
+requires_global_dev = true
+minimum_version = "2026.09.15"
+required_capabilities = [
+  "path-resolver-v1",
+  "portable-path-resolver-v1",
+  "project-bootstrap-v1",
+  "stage-router-v1",
+]
+required_contract_schema = 1

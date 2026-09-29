@@ -33,3 +33,20 @@
 
 Новые hooks, MCP, Skills, generic agents и Codex config для маршрутизации не
 добавлены: общие процессы наследуются, локальная delta ограничена документами.
+
+## Structured DEV bridge adoption — 2026-09-29
+
+Read-only `reconcile_project_framework.py` подтвердил `BROWNFIELD`, канонический
+`uv.lock`, отсутствие dependency drift и `FORBIDDEN_TO_OVERWRITE` для product
+code/tests/locks. До adoption `validate_project_overlay.py` сообщал только
+`missing-dev-bridge` и `missing-dev-project-marker`; stage route уже был canonical.
+Пользователь выбрал explicit structured opt-in в GDA-NEW-HOST-001.
+
+| Capability | Владелец | Классификация | Минимальное решение |
+|---|---|---|---|
+| DEV membership и portable paths | Global DEV contract; project AGENTS | `CONFLICT → INHERITED` | `.codex/dev-project.toml` и exact AGENTS declaration; `${DEV_ROOT}` разрешает global tooling |
+| FFmpeg для DEV readiness | Global `${DEV_ROOT}/tools/ffmpeg` | `INHERITED` | Version/hash/binary остаются у Global DEV; redistribution Stage 16 принадлежит проекту |
+| Media code, uv lock и принятые tests | Video Chronicle Git | `FORBIDDEN_TO_OVERWRITE` | Без product, dependency и upstream asset mutation |
+| Selected Stage 15 и security gate | `docs/STAGES.md` | `PROJECT_ONLY` | Сохранить `implemented_unverified` и release blockers |
+
+Это governance bridge без второго plan/status source или tool installer.

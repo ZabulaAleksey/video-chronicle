@@ -1,5 +1,7 @@
 # Правила проекта Video Chronicle
 
+Global DEV bridge: enabled
+
 - Перед существенной задачей прочитай общие правила AI Dev Team из `~/.codex/AGENTS.md`, затем применяй этот файл как более локальное уточнение.
 - Работай с Git из корня `${PROJECTS_ROOT}/video-chronicle`; родительский каталог не должен отслеживать этот project repository.
 - Для DEV-managed media readiness используй global portable FFmpeg/FFprobe из `${DEV_ROOT}/tools/ffmpeg`; проверяй `doctor.ps1 -Scope Bootstrap -Check -Project video-chronicle`. Старые project-local `ffmpeg/` и `ffmpeg1/` не являются canonical tool locations; если они встретятся, сохраняй их как отдельные исторические assets до проверки происхождения.
