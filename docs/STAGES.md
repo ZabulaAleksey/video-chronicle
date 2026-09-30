@@ -19,4 +19,5 @@
 ## Поздние этапы
 
 - Stage 16 — blocked до Stage 15 security review и packaging/FFmpeg/license решений.
+- Stage 16 preparation only: isolated installed-wheel CLI exported two synthetic dated MP4s via portable FFmpeg; sources unchanged, H.264/AAC output probed. Regression: `tests/test_wheel_cli_export.py`; receipt: `docs/notes/stage16-wheel-cli-evidence.md`. Full locked suite: 370 PASS with portable FFmpeg. This does not satisfy independent review, clean dependency restore, GUI or distribution gates.
 - Stage 17 — blocked до утверждённых гипотезы, набора данных, метрик и бюджета.
