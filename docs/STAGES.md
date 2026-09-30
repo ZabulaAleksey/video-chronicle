@@ -24,4 +24,3 @@
 
 - Stage 16 — blocked до Stage 15 security review и packaging/FFmpeg/license решений.
 - Stage 17 — blocked до утверждённых гипотезы, набора данных, метрик и бюджета.
-
