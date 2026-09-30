@@ -70,3 +70,5 @@ Final full suite with canonical E:\DEV\tools\ffmpeg\bin: 395 collected, 393 PASS
 Important scope: finite 50ms disk polling can overshoot cap; local path stat preflight does not prevent hostile same-user TOCTOU races. Configured executable remains trusted code. Missing native GPU/model/corrupt-media corpus and packaging/license decisions retain their original gates.
 
 Reviewer acceptance 2026-10-01: root controller independently reviewed child repair after implementation; known polling overshoot/filesystem TOCTOU limits acknowledged. No release, packaging, merge or deploy assertion.
+
+Final third-sweep uv lock --check --offline PASS (12 packages); uv pip check --python root/.venv/Scripts/python.exe PASS (12 installed); uv audit --locked reports zero known vulnerabilities/adverse statuses in 11 dependencies. Actual full tests used supported CPython 3.11.4; lock command auto-resolved3.12.14 and reported stale ignored worktree .venv, preserved. No license inventory/clean packaging refresh is inferred.
