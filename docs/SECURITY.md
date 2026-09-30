@@ -1,5 +1,7 @@
 # Безопасность и сохранность данных
 
+Night local bounds/path profile and exact limitations: specs/features/security-hardening.spec.md; independent verdict and regression evidence: docs/notes/stage-15-security-review.md. Preflight rejects existing reparse ancestors and Windows aliases; same-user filesystem replacement races are not prevented by this lexical/stat check.
+
 ## Граница доверия
 
 Медиа, метаданные, имена файлов, каталоги проекта, состояние возобновления и

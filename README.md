@@ -200,3 +200,7 @@ Media обрабатывается локально; JSON содержит prove
 что автоматическую расшифровку необходимо проверять.
 
 Если FFmpeg уже добавлен в `PATH`, параметры `--ffmpeg` и `--ffprobe` можно не указывать.
+
+### Локальные защитные лимиты
+
+Admission ограничен 4096 файлами, 64 GiB на файл, 256 GiB суммарно и семью днями известной длительности одного source. Normalize/concat tools имеют default deadline 1800 секунд; derived-file cap 64 GiB проверяется при polling и перед публикацией. Output/error-log требуют локальный путь без UNC, existing reparse ancestors, Windows device names и ADS. Превышение отклоняется с ошибкой; эти проверки не заменяют OS quota и не предотвращают hostile same-user filesystem races. Evidence и точный release status — docs/STAGES.md.

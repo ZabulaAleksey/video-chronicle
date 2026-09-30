@@ -12,6 +12,7 @@ import subprocess
 import threading
 import time
 from typing import Protocol
+from pathlib import Path
 
 
 COOPERATIVE_GRACE_SECONDS = 2.0
@@ -439,11 +440,17 @@ def run_managed_command(
     cancellation: CancellationSignal | None,
     timeout: float | None,
     max_output_bytes: int,
+    output_file: Path | None = None,
+    max_output_file_bytes: int | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run one command with bounded capture and whole-tree termination."""
 
     if max_output_bytes < 0:
         raise ValueError("max_output_bytes must be non-negative")
+    if (output_file is None) != (max_output_file_bytes is None):
+        raise ValueError("output file and disk budget must be provided together")
+    if max_output_file_bytes is not None and max_output_file_bytes <= 0:
+        raise ValueError("output file budget must be positive")
     if cancellation is not None and cancellation.cancel_requested:
         raise ProcessCancelled("operation cancelled before tool start")
 
@@ -485,9 +492,19 @@ def run_managed_command(
                 if thread.ident is not None:
                     started_threads.append(thread)
 
+        def check_output_file() -> None:
+            if output_file is not None and max_output_file_bytes is not None:
+                try:
+                    size = output_file.stat().st_size
+                except FileNotFoundError:
+                    return
+                if size > max_output_file_bytes:
+                    raise ProcessOutputLimitExceeded("tool output file exceeded its disk budget")
+
         started = time.monotonic()
         terminal_error: ProcessControlError | None = None
         while process.poll() is None:
+            check_output_file()
             if cancellation is not None and cancellation.cancel_requested:
                 terminal_error = ProcessCancelled("operation cancelled")
                 break
@@ -513,6 +530,7 @@ def run_managed_command(
             thread.join(timeout=FORCE_KILL_SECONDS)
         if any(thread.is_alive() for thread in started_threads):
             raise ProcessTreeTerminationError("tool output pipes did not close after reap")
+        check_output_file()
         if terminal_error is not None:
             raise terminal_error
         if limit_exceeded.is_set():

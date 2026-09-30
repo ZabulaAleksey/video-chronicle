@@ -28,6 +28,10 @@
 
 ## Acceptance
 
+### Local bounded profile (2026-10-01)
+
+Production source admission: 4096 items, 64 GiB per source, 256 GiB aggregate; known source duration <=7 days. Managed normalize/concatenate tool default deadline is finite 1800 seconds. Individual derived files have a 64 GiB cap checked during 50ms process polling and before publication; finite polling overshoot is possible, this is not an OS disk quota. Windows output/log lexical guard rejects reserved devices, ADS, trailing-space/dot aliases and drive-relative paths before I/O; local fixed/removable drive and existing-ancestor reparse checks follow. Same-user filesystem replacement races are outside this preflight proof; no race-free adversarial filesystem guarantee. Injected pure test ports can carry symbolic source plans; production validation still requires existing regular sources.
+
 - Negative tests покрывают malformed/oversized input, output collision,
   symlink/reparse/UNC boundaries, cache tampering, cancellation/output limits и
   отсутствие shell.

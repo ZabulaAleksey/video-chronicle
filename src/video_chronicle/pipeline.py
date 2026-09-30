@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import shutil
 import stat
@@ -15,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from .domain import MediaError, MediaItem
+from .safety import DEFAULT_TOOL_TIMEOUT_SECONDS, MAX_DERIVED_BYTES, MAX_SOURCE_ITEMS, validate_local_write_path
 from .overlay import (
     OverlayConfig,
     format_overlay_text as format_datetime_overlay_text,
@@ -84,6 +86,9 @@ def validate_error_log_path(
 ) -> None:
     """Reject log targets that could truncate media or an unrelated file."""
 
+    validate_local_write_path(output)
+    validate_local_write_path(error_log)
+
     if _is_symlink_or_reparse(error_log):
         raise RuntimeError(
             f"error log must not be a symlink or reparse point: {error_log}"
@@ -125,7 +130,9 @@ def parse_args(argv: list[str] | None = None):
 
 
 def configure_logging(log_path: Path) -> logging.Logger:
+    validate_local_write_path(log_path)
     log_path.parent.mkdir(parents=True, exist_ok=True)
+    validate_local_write_path(log_path)
     if _is_symlink_or_reparse(log_path):
         raise RuntimeError(f"error log must not be a symlink or reparse point: {log_path}")
     logger = logging.getLogger("join_media")
@@ -174,6 +181,8 @@ def run_command(
     *,
     timeout: float | None = None,
     max_output_bytes: int = 8 * 1024 * 1024,
+    output_file: Path | None = None,
+    max_output_file_bytes: int | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run list argv inside a platform-owned, cancellable process tree."""
 
@@ -185,12 +194,17 @@ def run_command(
         run_managed_command,
     )
 
+    timeout = DEFAULT_TOOL_TIMEOUT_SECONDS if timeout is None else timeout
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise ValueError("tool timeout must be finite and positive")
     try:
         result = run_managed_command(
             command,
             cancellation=current_execution_context(),
             timeout=timeout,
             max_output_bytes=max_output_bytes,
+            output_file=output_file,
+            max_output_file_bytes=max_output_file_bytes,
         )
     except ProcessCancelled as exc:
         raise translate_process_cancel(exc) from exc
@@ -205,6 +219,9 @@ def run_command(
         raise MediaError(f"{context} (exit code {result.returncode}):\n{details}")
     return result
 
+
+# Preserve the public injectable runner seam; only the real adapter owns disk limits.
+_PRODUCTION_RUN_COMMAND = run_command
 
 def probe_media(
     path: Path,
@@ -576,7 +593,10 @@ def normalize_item(
         "-dn",
         str(destination),
     ]
-    runner(command, f"FFmpeg failed for {item.path}")
+    if runner is _PRODUCTION_RUN_COMMAND:
+        _PRODUCTION_RUN_COMMAND(command, f"FFmpeg failed for {item.path}", output_file=destination, max_output_file_bytes=MAX_DERIVED_BYTES)
+    else:
+        runner(command, f"FFmpeg failed for {item.path}")
 
 
 def render_overlay_preview(
@@ -637,8 +657,7 @@ def concatenate(
         "".join(f"file '{concat_escape(clip)}'\n" for clip in clips),
         encoding="utf-8",
     )
-    runner(
-        [
+    command = [
             ffmpeg,
             "-hide_banner",
             "-loglevel",
@@ -655,13 +674,20 @@ def concatenate(
             "-movflags",
             "+faststart",
             str(temporary_output),
-        ],
-        "failed to concatenate normalized clips",
-    )
+        ]
+    if runner is _PRODUCTION_RUN_COMMAND:
+        _PRODUCTION_RUN_COMMAND(command, "failed to concatenate normalized clips", output_file=temporary_output, max_output_file_bytes=MAX_DERIVED_BYTES)
+    else:
+        runner(command, "failed to concatenate normalized clips")
 
 
 def publish_output(temporary_output: Path, output: Path, overwrite: bool) -> None:
     """Publish a finished movie without an unauthorized replacement race."""
+
+    validate_local_write_path(output)
+    validate_local_write_path(temporary_output)
+    if temporary_output.stat().st_size > MAX_DERIVED_BYTES:
+        raise RuntimeError("derived output exceeds the 64 GiB file budget")
 
     if overwrite:
         os.replace(temporary_output, output)
@@ -699,17 +725,15 @@ def publish_output(temporary_output: Path, output: Path, overwrite: bool) -> Non
 
 def collect_source_paths(input_dir: Path, output: Path, error_log: Path) -> list[Path]:
     excluded = {output.resolve(), error_log.resolve()}
-    return sorted(
-        (
-            path
-            for path in input_dir.iterdir()
-            if path.is_file()
-            and not _is_symlink_or_reparse(path)
-            and path.suffix.casefold() in MEDIA_EXTENSIONS
-            and path.resolve() not in excluded
-        ),
-        key=lambda path: path.name.casefold(),
-    )
+    sources = []
+    for path in input_dir.iterdir():
+        if (path.is_file() and not _is_symlink_or_reparse(path)
+                and path.suffix.casefold() in MEDIA_EXTENSIONS
+                and path.resolve() not in excluded):
+            sources.append(path)
+            if len(sources) > MAX_SOURCE_ITEMS:
+                raise RuntimeError("source count exceeds the 4096-item budget")
+    return sorted(sources, key=lambda path: path.name.casefold())
 
 
 def validate_source_path(input_dir: Path, source: Path) -> None:

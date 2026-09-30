@@ -60,3 +60,13 @@ has no high-free review verdict and Stage 16 remains blocked.
 
 Hardening delta ограничен explicit validation branches и optional adapters.
 Его можно откатить одним checkpoint commit без migration project/cache schema.
+
+## Night remediation — 2026-10-01
+
+Independent child semantic review identified missing finite normalize/concat deadlines, output/log ancestor checks before mkdir/resolve and ordinary planner resource budgets under SEC-H-002/003/005. Root authorized bounded repair. Added safety helper, source preflight/hash budgets, finite managed deadlines, derived-file monitoring and pre-publication guard; CLI/GUI reject raw output/log paths before side effects. Root reviewer identified Windows reserved device/ADS gap; lexical helper and cross-platform cases added.
+
+Final full suite with canonical E:\DEV\tools\ffmpeg\bin: 395 collected, 393 PASS/2 skipped, 58.55s. New security tests26 PASS; mode contract12 PASS; Ruff newfiles PASS. Existing accepted tests were not edited. Raw outputs docs/evidence/night-2026-10-01. Root final independent review accepted reserved-device/ADS/trailing-name rejection, meaningful regressions, lifecycle exception paths and finite bounds; no additional blocker in inspected changes. This is bounded review acceptance; Stage15 remains implemented_unverified for broader release-profile evidence. Historical scanner/supply-chain evidence is not relabeled fresh.
+
+Important scope: finite 50ms disk polling can overshoot cap; local path stat preflight does not prevent hostile same-user TOCTOU races. Configured executable remains trusted code. Missing native GPU/model/corrupt-media corpus and packaging/license decisions retain their original gates.
+
+Reviewer acceptance 2026-10-01: root controller independently reviewed child repair after implementation; known polling overshoot/filesystem TOCTOU limits acknowledged. No release, packaging, merge or deploy assertion.

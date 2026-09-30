@@ -40,6 +40,7 @@ def build_application_request(request: GuiRunRequest) -> ExportRequest:
 
     from . import pipeline
 
+    pipeline.validate_local_write_path(request.output)
     input_dir = request.input_dir.expanduser().resolve()
     output = request.output.expanduser().resolve()
     error_log = output.parent / "errors.log"

@@ -1,0 +1,10 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.4, pytest-9.1.1, pluggy-1.6.0
+rootdir: E:\DEV\projects\video-chronicle\worktrees\portable-ffmpeg
+configfile: pyproject.toml
+collected 38 items
+
+tests\test_security_release_bounds.py ..........................         [ 68%]
+tests\test_modes.py ............                                         [100%]
+
+============================= 38 passed in 2.65s ==============================

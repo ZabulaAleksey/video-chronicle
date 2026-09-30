@@ -97,6 +97,17 @@ def _plan_export_impl(
             request.input_dir, request.output, request.error_log
         )
     )
+    from .safety import MAX_SOURCE_ITEMS, MAX_TOTAL_SOURCE_BYTES, validate_source_size, validate_source_duration
+
+    if len(source_paths) > MAX_SOURCE_ITEMS:
+        raise RuntimeError("source count exceeds the 4096-item budget")
+    total_source_bytes = 0
+    for source_path in source_paths:
+        if cancellation is not None:
+            cancellation.checkpoint()
+        total_source_bytes += validate_source_size(source_path)
+        if total_source_bytes > MAX_TOTAL_SOURCE_BYTES:
+            raise RuntimeError("sources exceed the 256 GiB aggregate budget")
     if cancellation is not None:
         cancellation.checkpoint()
     if not source_paths:
@@ -144,6 +155,7 @@ def _plan_export_impl(
                     adapters.probe_media,
                     adapters.command_runner,
                 )
+                validate_source_duration(inspected.source_duration_us)
                 fingerprint_after = SourceFingerprint.capture(path)
                 if fingerprint_after != fingerprint_before:
                     raise SourceChangedError(
@@ -695,8 +707,20 @@ def _preflight_plan(plan: ExportPlan, ports: PipelinePorts) -> None:
         request.input_dir, request.output, request.error_log
     )
     require_resolved_overlay_font(request.overlay)
+    from .safety import MAX_SOURCE_ITEMS, MAX_TOTAL_SOURCE_BYTES, validate_source_size, validate_source_duration
+
+    if len(plan.items) > MAX_SOURCE_ITEMS:
+        raise RuntimeError("source count exceeds the 4096-item budget")
+    total_source_bytes = 0
     for item in plan.items:
+        # Injected symbolic plans remain a supported seam; production source validation
+        # rejects missing/nonregular files before any normalize boundary.
+        if item.path.is_file():
+            total_source_bytes += validate_source_size(item.path)
+        validate_source_duration(item.source_duration_us)
         _require_source_fingerprint(item)
+    if total_source_bytes > MAX_TOTAL_SOURCE_BYTES:
+        raise RuntimeError("sources exceed the 256 GiB aggregate budget")
     for label, value in (("FFmpeg", request.ffmpeg), ("FFprobe", request.ffprobe)):
         candidate = Path(value)
         if (candidate.is_absolute() or candidate.parent != Path(".")) and not candidate.is_file():

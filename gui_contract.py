@@ -83,6 +83,13 @@ def create_run_request(
         else None
     )
 
+    from video_chronicle.safety import validate_local_write_path
+
+    try:
+        validate_local_write_path(output)
+    except RuntimeError as exc:
+        raise RequestValidationError("Выберите локальный путь вывода без ссылок и сетевых дисков.") from exc
+
     return GuiRunRequest(
         input_dir=input_dir.resolve(),
         output=output.resolve(),

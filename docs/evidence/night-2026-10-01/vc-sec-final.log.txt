@@ -1,0 +1,33 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.4, pytest-9.1.1, pluggy-1.6.0
+rootdir: E:\DEV\projects\video-chronicle\worktrees\portable-ffmpeg
+configfile: pyproject.toml
+testpaths: tests
+collected 395 items
+
+tests\test_cache.py ...................................                  [  8%]
+tests\test_cli_characterization.py ..................................... [ 18%]
+                                                                         [ 18%]
+tests\test_core_extraction.py ........s...                               [ 21%]
+tests\test_execution.py ...........................                      [ 28%]
+tests\test_ffmpeg_smoke.py ..                                            [ 28%]
+tests\test_gui.py .........                                              [ 30%]
+tests\test_gui_application.py .............................              [ 38%]
+tests\test_gui_contract.py ..........                                    [ 40%]
+tests\test_hardware_quality.py ......                                    [ 42%]
+tests\test_metadata_date_engine.py ...............                       [ 46%]
+tests\test_modes.py ............                                         [ 49%]
+tests\test_nondestructive_editing.py .........................           [ 55%]
+tests\test_overlay.py ...............................s.................. [ 68%]
+....                                                                     [ 69%]
+tests\test_package_foundation.py .....                                   [ 70%]
+tests\test_process_control.py .........                                  [ 72%]
+tests\test_project_queue_model.py ...................................... [ 82%]
+                                                                         [ 82%]
+tests\test_scene_suggestions.py ...........                              [ 85%]
+tests\test_security_release_bounds.py ..........................         [ 91%]
+tests\test_timeline_interchange.py .......................               [ 97%]
+tests\test_tooling.py .....                                              [ 98%]
+tests\test_transcription.py .....                                        [100%]
+
+======================= 393 passed, 2 skipped in 58.55s =======================

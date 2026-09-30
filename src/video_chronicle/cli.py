@@ -83,6 +83,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def _build_request(args: argparse.Namespace) -> ExportRequest:
+    pipeline.validate_local_write_path(args.output if args.output is not None else args.input_dir / "output.mp4")
+    if args.error_log is not None:
+        pipeline.validate_local_write_path(args.error_log)
     input_dir = args.input_dir.expanduser().resolve()
     output = (
         args.output.expanduser().resolve()
