@@ -370,12 +370,13 @@ application/pipeline path и не меняет CLI argv или атомарну�
   поздно», и terminal outcome определяется фактической publication.
 - **EXEC-004 — Process-tree ownership.** Каждый tool process запускается без
   shell внутри platform-owned tree. Windows использует unnamed Job Object с
-  `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, немедленный
-  `AssignProcessToJobObject` и `TerminateJobObject` после cooperative grace.
+  `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`: process создаётся с `CREATE_SUSPENDED`,
+  назначается в Job Object до первого исполнения primary thread и только затем
+  возобновляется. Ошибка assignment/resume завершает root и закрывает Job Object
+  без запуска непринадлежащего дерева. После cooperative grace используется
+  `TerminateJobObject`.
   POSIX использует новую session/process group, `SIGTERM`, затем `SIGKILL`.
-  Все процессы reaped; parent-only kill запрещён. Допустимое окно между Windows
-  `Popen` и assignment ограничено доверенными tool binaries; assignment failure
-  немедленно завершает root и делает safe cancel недоступным для операции.
+  Все процессы reaped; parent-only kill запрещён после начала исполнения.
 - **EXEC-005 — Bounded cancellation.** Сначала tool получает cooperative
   остановку через закрываемый stdin (`q` для FFmpeg), grace — 2 секунды. Затем
   platform tree принудительно завершается; kill/reap budget — ещё 3 секунды,

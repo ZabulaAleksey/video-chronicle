@@ -66,7 +66,7 @@ release gate для будущего пакетирования, но ещё н�
   к тому же bounded fallback. Custom date format ограничен 64 символами,
   разрешёнными tokens и безопасными literal separators до FFmpeg boundary.
 - Каждый tool process запускается в принадлежащем операции дереве: unnamed
-  Windows Job Object с `KILL_ON_JOB_CLOSE` и проверкой `ActiveProcesses == 0`
+  Windows Job Object с `KILL_ON_JOB_CLOSE`, `CREATE_SUSPENDED` до assignment, resume только после ownership и проверкой `ActiveProcesses == 0`
   либо новая POSIX session/process group. Cancel сначала отправляет FFmpeg `q`,
   через 2 секунды завершает дерево принудительно и подтверждает reap в пределах
   следующих 3 секунд. Timeout и output-limit используют тот же boundary.

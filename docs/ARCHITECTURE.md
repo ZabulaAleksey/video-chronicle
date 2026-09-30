@@ -150,7 +150,8 @@
    произвольного audio offset или глобального playback-speed коэффициента.
    Semantic sync конкретного Android renderer остаётся отдельным acceptance
    gate и не выводится только из offline PTS/PCM анализа.
-15. Каждый subprocess принадлежит Windows Job Object или POSIX process group;
+15. Windows tool process создаётся suspended и назначается в Job Object до
+   запуска primary thread; POSIX subprocess принадлежит новой process group;
    cancel, timeout и output-limit завершают и подтверждают остановку всего дерева.
 16. Без разрешения overwrite временный результат публикуется атомарным
    no-replace rename на Windows или create-if-absent hard link на POSIX;

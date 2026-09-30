@@ -307,3 +307,70 @@ def test_windows_job_close_failure_is_explicit_and_retryable() -> None:
     with pytest.raises(ProcessTreeTerminationError, match="CloseHandle"):
         job.close(require_success=True)
     assert job._handle == 123  # type: ignore[attr-defined]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows suspended process contract")
+def test_windows_process_cannot_execute_before_job_assignment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from video_chronicle.process_control import _WindowsJob
+
+    marker = tmp_path / "started.txt"
+    real_assign = _WindowsJob.assign
+
+    def observe_before_assignment(self: _WindowsJob, process) -> None:
+        time.sleep(0.2)
+        assert not marker.exists(), "tool executed before Job Object ownership"
+        real_assign(self, process)
+
+    monkeypatch.setattr(_WindowsJob, "assign", observe_before_assignment)
+    result = run_managed_command(
+        [
+            sys.executable,
+            "-c",
+            "from pathlib import Path; import sys; Path(sys.argv[1]).write_text('started')",
+            str(marker),
+        ],
+        cancellation=None,
+        timeout=5,
+        max_output_bytes=1024,
+    )
+    assert result.returncode == 0
+    assert marker.read_text(encoding="utf-8") == "started"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows suspended process contract")
+@pytest.mark.parametrize("failure", ["assign", "resume"])
+def test_windows_start_failure_never_executes_unowned_tool(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    from video_chronicle.process_control import (
+        ProcessTreeUnavailable,
+        _WindowsJob,
+    )
+
+    marker = tmp_path / "must-not-exist.txt"
+    observed_pids: list[int] = []
+
+    def fail(self: _WindowsJob, process) -> None:
+        observed_pids.append(process.pid)
+        time.sleep(0.2)
+        assert not marker.exists(), "tool executed before successful resume"
+        raise ProcessTreeUnavailable(f"synthetic {failure} failure")
+
+    monkeypatch.setattr(_WindowsJob, failure if failure == "assign" else "resume_primary", fail)
+    with pytest.raises(ProcessTreeUnavailable, match=f"synthetic {failure} failure"):
+        run_managed_command(
+            [
+                sys.executable,
+                "-c",
+                "from pathlib import Path; import sys; Path(sys.argv[1]).write_text('bad')",
+                str(marker),
+            ],
+            cancellation=None,
+            timeout=5,
+            max_output_bytes=1024,
+        )
+    assert len(observed_pids) == 1
+    assert not marker.exists()
+    assert not _pid_alive(observed_pids[0])

@@ -358,3 +358,13 @@
 ## 2026-09-15 — Единственный owner execution state
 
 Решение: текущий selector, plan/status/evidence/NEXT принадлежат только `docs/STAGES.md`; исторический prompt catalog и AI pair сохранены в `docs/notes/` и Git parent. Это заменяет решение 2026-08-14 о двух active files. Пять локально слитых, но неопубликованных commits проходят отдельный GitHub publication/merge gate; release stage 15 не закрыт без независимого security review.
+
+## 2026-09-30 — AUTONOMOUS_DECISION: Windows tool process starts suspended
+
+Context: ordinary Popen let trusted tool code run before Job Object assignment, allowing a descendant to escape the owned tree during that window.
+
+Options: accept the race for trusted binaries; write a complete CreateProcess wrapper; create suspended with Popen and resume the sole primary thread after assignment.
+
+Selected: the third option. Thread identity is checked from a Toolhelp snapshot; unexpected thread count, assignment or resume failure stops/reaps the root and closes the kill-on-close Job. No shell or tool argv contract changes.
+
+Reversibility: remove the suspended creation and resume helper to return to the prior implementation, but this restores the escape race. Evidence: Windows negative startup tests, real descendant cancellation and full local 367 PASS/2 skip suite. Formal independent Stage 15 review is still open.
