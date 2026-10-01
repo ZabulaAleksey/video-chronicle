@@ -58,8 +58,11 @@ SPEC сохраняет статус черновика. Срез начинае
 GUI-001 для desktop-запуска на Windows.
 
 - **GUI-TOOLS-001 — Автоматическое разрешение.** При запуске GUI разрешает
-  `VIDEO_CHRONICLE_FFMPEG`/`VIDEO_CHRONICLE_FFPROBE`, затем команды из `PATH`,
-  и заполняет поля абсолютными путями без ручного выбора пользователя.
+  `VIDEO_CHRONICLE_FFMPEG`/`VIDEO_CHRONICLE_FFPROBE`, затем полную пару из
+  `${DEV_TOOLS}/ffmpeg/bin` при выбранном Portable DEV, затем команды из
+  `PATH`, и заполняет поля абсолютными путями. Неполная portable пара не
+  смешивается с host PATH; global project doctor проверяет provenance,
+  hashes, architecture, version и media capabilities этого payload.
 - **GUI-TOOLS-002 — Идемпотентная установка.** Если хотя бы один инструмент
   отсутствует на Windows, GUI асинхронно запускает WinGet list-argv без shell и
   устанавливает user-scope пакет `Gyan.FFmpeg` закреплённой версии `9.0.1`.

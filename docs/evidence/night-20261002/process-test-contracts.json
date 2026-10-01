@@ -1,0 +1,23 @@
+{
+  "HEAD": {
+    "_pid_alive": true,
+    "test_cancel_reaps_root_child_and_grandchild_inside_bound": true,
+    "test_unexpected_base_exception_still_reaps_uninherited_process_tree": true,
+    "test_timeout_and_output_limit_use_bounded_tree_termination": true,
+    "test_real_ffmpeg_cancel_is_bounded_when_binary_is_available": true,
+    "test_windows_job_close_failure_is_explicit_and_retryable": true,
+    "test_windows_process_cannot_execute_before_job_assignment": true,
+    "test_windows_start_failure_never_executes_unowned_tool": true
+  },
+  "docs/vc15-security-review-20260930": {
+    "_pid_alive": true,
+    "test_cancel_reaps_root_child_and_grandchild_inside_bound": true,
+    "test_unexpected_base_exception_still_reaps_uninherited_process_tree": true,
+    "test_timeout_and_output_limit_use_bounded_tree_termination": true,
+    "test_real_ffmpeg_cancel_is_bounded_when_binary_is_available": true,
+    "test_windows_job_close_failure_is_explicit_and_retryable": true,
+    "test_windows_root_cannot_spawn_before_job_assignment": true,
+    "test_windows_assignment_failure_never_runs_root": true,
+    "test_windows_resume_failure_terminates_owned_root": true
+  }
+}

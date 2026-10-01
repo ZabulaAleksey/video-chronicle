@@ -172,3 +172,16 @@ uv run --locked --extra dev --extra otio python -m pytest -q -rs tests/test_ffmp
 Если переменные не заданы и инструменты отсутствуют в `PATH`, smoke-test
 намеренно завершается как `SKIPPED`, а не создаёт ложный зелёный integration
 результат.
+
+## Night Factory — merged candidate 2026-10-02
+
+`uv run --locked --offline --extra dev --extra otio python -m pytest -q -rs -p no:cacheprovider --basetemp <task-private-dir>`:
+418 PASS, 0 skips, 125.65s; QT_QPA_PLATFORM=offscreen и canonical portable
+FFmpeg/FFprobe 9.0.1 через VIDEO_CHRONICLE_FFMPEG/FFPROBE. Focused project/security
+80 PASS; объединённые process/security tests 38 PASS. Старые accepted test
+functions сохранены (обе Windows variants подтверждены AST comparison).
+Новые review tests проверяют отказ до destructive log open, Windows project
+aliases, strict snapshot tags, project/revision binding и legitimate save.
+Evidence находится в docs/evidence/night-20261002. Wheel smoke в этом прогоне
+зависел от global build interpreter; clean restore и WinGet lifecycle остаются
+открытыми в selected STAGES. Это не release/Android semantic acceptance.

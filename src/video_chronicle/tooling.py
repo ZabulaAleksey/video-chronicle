@@ -17,6 +17,24 @@ _TOOL_ENVIRONMENT = {
 }
 
 
+def _portable_encoding_bundle(values: Mapping[str, str]) -> dict[str, str]:
+    """Resolve the global DEV pair only when both canonical files exist."""
+
+    tools_root = values.get("DEV_TOOLS")
+    if not tools_root and values.get("DEV_ROOT"):
+        tools_root = str(Path(values["DEV_ROOT"]) / "tools")
+    if not tools_root:
+        return {}
+    bin_root = Path(tools_root) / "ffmpeg" / "bin"
+    pair = {name: bin_root / f"{name}.exe" for name in _TOOL_ENVIRONMENT}
+    try:
+        if all(path.is_file() for path in pair.values()):
+            return {name: str(path.resolve()) for name, path in pair.items()}
+    except OSError:
+        pass
+    return {}
+
+
 def resolve_encoding_tool(
     tool_name: str,
     environ: Mapping[str, str] | None = None,
@@ -28,6 +46,9 @@ def resolve_encoding_tool(
     values = os.environ if environ is None else environ
     configured = values.get(_TOOL_ENVIRONMENT[tool_name])
     candidates = [configured] if configured else []
+    portable = _portable_encoding_bundle(values)
+    if portable:
+        candidates.append(portable[tool_name])
     discovered = shutil.which(tool_name, path=values.get("PATH"))
     if discovered:
         candidates.append(discovered)

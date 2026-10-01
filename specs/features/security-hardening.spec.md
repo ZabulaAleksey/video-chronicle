@@ -28,9 +28,25 @@
 
 ## Acceptance
 
+### Local bounded profile (2026-10-01)
+
+Production source admission: 4096 items, 64 GiB per source, 256 GiB aggregate; known source duration <=7 days. Managed normalize/concatenate tool default deadline is finite 1800 seconds. Individual derived files have a 64 GiB cap checked during 50ms process polling and before publication; finite polling overshoot is possible, this is not an OS disk quota. Windows output/log lexical guard rejects reserved devices, ADS, trailing-space/dot aliases and drive-relative paths before I/O; local fixed/removable drive and existing-ancestor reparse checks follow. Same-user filesystem replacement races are outside this preflight proof; no race-free adversarial filesystem guarantee. Injected pure test ports can carry symbolic source plans; production validation still requires existing regular sources.
+
 - Negative tests покрывают malformed/oversized input, output collision,
   symlink/reparse/UNC boundaries, cache tampering, cancellation/output limits и
   отсутствие shell.
 - Locked dependency compatibility проходит воспроизводимо.
 - Независимый security review обязателен. До его evidence этап не получает
   `completed`, а этап 16 остаётся blocked независимо от локальных PASS.
+
+### Review regression contract (2026-10-02)
+
+- SEC-H-003: CLI проверяет raw output и error-log вместе с существующими
+  ancestors до resolve, mkdir и открытия logger. Отклонённый путь не меняет
+  существующий target и не создаёт output directories.
+- SEC-H-005: durable project ID отклоняет Windows device aliases и trailing
+  dot/space на всех ОС. Snapshot tags требуют integer, boolean/float запрещены.
+- SEC-H-005: editing snapshot принадлежит тому же project_id и не ссылается
+  на будущую project_revision. Более ранняя revision допустима: save/restore
+  повышает durable revision, сохраняя immutable export snapshot; это не proof
+  свежести для нового export.

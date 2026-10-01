@@ -12,11 +12,13 @@ import subprocess
 import threading
 import time
 from typing import Protocol
+from pathlib import Path
 
 
 COOPERATIVE_GRACE_SECONDS = 2.0
 FORCE_KILL_SECONDS = 3.0
 POLL_SECONDS = 0.05
+WINDOWS_CREATE_SUSPENDED = 0x00000004
 
 
 class CancellationSignal(Protocol):
@@ -187,7 +189,7 @@ class _WindowsJob:
                 f"({self._ctypes.get_last_error()})"
             )
 
-    def resume_primary(self, process: subprocess.Popen[bytes]) -> None:
+    def resume_primary_thread(self, process: subprocess.Popen[bytes]) -> None:
         """Resume the sole thread of a newly suspended, already assigned process."""
 
         snapshot = self._kernel32.CreateToolhelp32Snapshot(0x00000004, 0)
@@ -230,6 +232,10 @@ class _WindowsJob:
         finally:
             if not self._kernel32.CloseHandle(snapshot):
                 raise ProcessTreeUnavailable("CloseHandle(thread snapshot) failed")
+
+    def resume_primary(self, process: subprocess.Popen[bytes]) -> None:
+        """Keep both accepted process-test contracts on the same implementation."""
+        self.resume_primary_thread(process)
 
     def terminate(self) -> None:
         if self._handle and not self._kernel32.TerminateJobObject(self._handle, 1):
@@ -416,11 +422,17 @@ def run_managed_command(
     cancellation: CancellationSignal | None,
     timeout: float | None,
     max_output_bytes: int,
+    output_file: Path | None = None,
+    max_output_file_bytes: int | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run one command with bounded capture and whole-tree termination."""
 
     if max_output_bytes < 0:
         raise ValueError("max_output_bytes must be non-negative")
+    if (output_file is None) != (max_output_file_bytes is None):
+        raise ValueError("output file and disk budget must be provided together")
+    if max_output_file_bytes is not None and max_output_file_bytes <= 0:
+        raise ValueError("output file budget must be positive")
     if cancellation is not None and cancellation.cancel_requested:
         raise ProcessCancelled("operation cancelled before tool start")
 
@@ -462,9 +474,19 @@ def run_managed_command(
                 if thread.ident is not None:
                     started_threads.append(thread)
 
+        def check_output_file() -> None:
+            if output_file is not None and max_output_file_bytes is not None:
+                try:
+                    size = output_file.stat().st_size
+                except FileNotFoundError:
+                    return
+                if size > max_output_file_bytes:
+                    raise ProcessOutputLimitExceeded("tool output file exceeded its disk budget")
+
         started = time.monotonic()
         terminal_error: ProcessControlError | None = None
         while process.poll() is None:
+            check_output_file()
             if cancellation is not None and cancellation.cancel_requested:
                 terminal_error = ProcessCancelled("operation cancelled")
                 break
@@ -490,6 +512,7 @@ def run_managed_command(
             thread.join(timeout=FORCE_KILL_SECONDS)
         if any(thread.is_alive() for thread in started_threads):
             raise ProcessTreeTerminationError("tool output pipes did not close after reap")
+        check_output_file()
         if terminal_error is not None:
             raise terminal_error
         if limit_exceeded.is_set():

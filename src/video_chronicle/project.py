@@ -636,6 +636,11 @@ class ProjectState:
             return
         if not isinstance(self.current_plan, (ExportPlanSnapshot, EditingExportSnapshot)):
             raise TypeError("current_plan must be an export snapshot or None")
+        if isinstance(self.current_plan, EditingExportSnapshot):
+            if self.current_plan.project_id != self.project_id:
+                raise ValueError("editing snapshot belongs to another project")
+            if self.current_plan.project_revision > self.revision:
+                raise ValueError("editing snapshot references a future project revision")
         known_item_ids = set(self.timeline.item_ids)
         plan_item_ids = (
             self.current_plan.item_ids

@@ -460,7 +460,7 @@ def _job_from_mapping(raw: Any) -> ExportJob:
 def _v2_plan_from_mapping(raw: Any) -> ExportPlanSnapshot | EditingExportSnapshot | None:
     if raw is None: return None
     tagged = _object(raw, {"snapshot_version", "snapshot"}, "current_plan")
-    version = tagged["snapshot_version"]
+    version = _strict_int(tagged["snapshot_version"], "snapshot_version", minimum=1)
     snapshot = tagged["snapshot"]
     if version == 1:
         value = _object(snapshot, {"plan_id", "item_ids", "output_path", "crf", "preset", "overwrite"}, "snapshot-v1")
@@ -469,7 +469,7 @@ def _v2_plan_from_mapping(raw: Any) -> ExportPlanSnapshot | EditingExportSnapsho
         return ExportPlanSnapshot(_string(value["plan_id"], "plan_id") or "", tuple(value["item_ids"]), _path(value["output_path"], "output_path") or Path(), _strict_int(value["crf"], "crf"), _string(value["preset"], "preset") or "", value["overwrite"])
     if version != 2: _fail("unknown snapshot version")
     value = _object(snapshot, {"plan_id", "snapshot_version", "project_id", "project_revision", "clips", "groups", "preset_ref", "settings", "output_path", "overwrite"}, "snapshot-v2")
-    if value["snapshot_version"] != 2: _fail("nested snapshot version mismatch")
+    if _strict_int(value["snapshot_version"], "nested snapshot_version", minimum=1) != 2: _fail("nested snapshot version mismatch")
     if not isinstance(value["groups"], list) or not isinstance(value["clips"], list): _fail("snapshot groups/clips must be arrays")
     groups_list = []
     for raw_group in value["groups"]:

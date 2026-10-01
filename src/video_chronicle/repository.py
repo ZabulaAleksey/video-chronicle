@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Iterator, Protocol, runtime_checkable
 
 from .project import ProjectState
+from .safety import validate_windows_write_name
 from .serialization import project_from_mapping, project_to_mapping
 
 
@@ -190,6 +191,10 @@ class JsonProjectRepository:
             raise ValueError("invalid project_id")
         if any(character in project_id for character in "/\\:\x00") or project_id in {".", ".."}:
             raise ValueError("project_id must not contain path syntax")
+        try:
+            validate_windows_write_name(project_id)
+        except RuntimeError as exc:
+            raise ValueError("project_id contains a reserved Windows name or alias") from exc
         return self.root / f"{project_id}.json"
 
     def _read_bytes(self, path: Path) -> bytes:

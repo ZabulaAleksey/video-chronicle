@@ -83,6 +83,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def _build_request(args: argparse.Namespace) -> ExportRequest:
+    pipeline.validate_local_write_path(args.output if args.output is not None else args.input_dir / "output.mp4")
+    if args.error_log is not None:
+        pipeline.validate_local_write_path(args.error_log)
     input_dir = args.input_dir.expanduser().resolve()
     output = (
         args.output.expanduser().resolve()
@@ -173,18 +176,14 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(f"Cache purged: {removed} entries.")
         return 0
-    input_dir = args.input_dir.expanduser().resolve()
-    output = (
-        args.output.expanduser().resolve()
-        if args.output is not None
-        else input_dir / "output.mp4"
-    )
-    error_log = (
-        args.error_log.expanduser().resolve()
-        if args.error_log is not None
-        else output.parent / "errors.log"
-    )
+    raw_output = args.output if args.output is not None else args.input_dir / "output.mp4"
+    error_log = args.error_log if args.error_log is not None else raw_output.parent / "errors.log"
     try:
+        pipeline.validate_local_write_path(raw_output)
+        pipeline.validate_local_write_path(error_log)
+        input_dir = args.input_dir.expanduser().resolve()
+        output = raw_output.expanduser().resolve()
+        error_log = error_log.expanduser().resolve()
         output.parent.mkdir(parents=True, exist_ok=True)
         pipeline.validate_error_log_path(input_dir, output, error_log)
         logger = pipeline.configure_logging(error_log)

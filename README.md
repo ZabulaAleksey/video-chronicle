@@ -16,35 +16,24 @@ cd "$env:PROJECTS_ROOT\video-chronicle"
 uv sync --locked --extra dev
 ```
 
-### Автоматическая установка FFmpeg на Windows
+### FFmpeg в Portable DEV
 
-При запуске GUI приложение само разрешает FFmpeg/FFprobe из project environment
-или `PATH` и сразу заполняет абсолютные пути. Если хотя бы один инструмент не
-найден на Windows, GUI без блокировки окна устанавливает user-scope пакет
-`Gyan.FFmpeg` версии `9.0.1` через WinGet. Уже доступные инструменты не
-переустанавливаются и не обновляются.
-
-Для ручного восстановления без запуска GUI доступен тот же идемпотентный
-PowerShell-фрагмент:
+Каноническая пара FFmpeg/FFprobe находится в `${DEV_ROOT}/tools/ffmpeg/bin`
+(`E:\DEV\tools\ffmpeg\bin` на Windows). Provenance, дата получения, SHA-256 и
+лицензия записаны рядом с payload в `metadata.json`; approved version и hashes
+принадлежат global `bootstrap/versions.yaml`. Проверка перед media work:
 
 ```powershell
-if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or
-    -not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
-    winget install --exact --id Gyan.FFmpeg --version 9.0.1 --source winget --scope user --accept-package-agreements --accept-source-agreements --disable-interactivity
-    $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
-}
+pwsh -NoProfile -File E:\DEV\bootstrap\doctor.ps1 -Scope Bootstrap -Check -Project video-chronicle
 ```
 
-Проверить доступность и версию после установки:
-
-```powershell
-ffmpeg -version
-ffprobe -version
-```
-
-Минимальная версия, подтверждённая smoke-тестами проекта, — `9.0.1`. Если уже
-установлена более ранняя версия, условие выше намеренно не обновляет её
-автоматически.
+GUI сначала разрешает явно заданные пути, затем пару из `${DEV_TOOLS}/ffmpeg/bin`,
+потом инструменты из `PATH`. Для самостоятельной установки проекта вне Portable
+DEV сохраняется совместимый fallback: если пара неполна, GUI
+асинхронно устанавливает `Gyan.FFmpeg==9.0.1` через WinGet. Этот host package не
+заменяет проверку canonical portable payload в DEV-managed doctor. Scene adapter
+использует именно FFmpeg `9.0.1`; другие версии требуют отдельного compatibility
+review. Бинарники не входят в Git проекта и не являются частью Windows release.
 
 Optional native OTIO interchange устанавливается отдельно и не нужен обычному
 CLI/GUI экспорту:
@@ -121,12 +110,9 @@ Custom date format принимает только tokens `YYYY`, `YY`, `MMMM`, 
 - Логи ошибок сохраняются рядом с выходным файлом в `errors.log`.
 - Для тестовой обработки одного файла можно создать отдельную подпапку в `~/Input`, например `~/Input/preview_one`.
 
-Локально рядом со скриптом могут находиться два вспомогательных каталога:
-
-- `ffmpeg/` — исходный репозиторий FFmpeg со своей историей Git;
-- `ffmpeg1/` — готовая Windows-сборка с `bin/ffmpeg.exe` и `bin/ffprobe.exe`.
-
-Оба каталога перемещены вместе с проектом, но исключены из основного Git-репозитория. Это предотвращает конфликт вложенных историй Git и публикацию крупных сторонних бинарных файлов. После нового клонирования репозитория установите FFmpeg в `PATH` либо отдельно восстановите локальную сборку в `ffmpeg1/`.
+Исторические project-local `ffmpeg/` и `ffmpeg1/` не являются действующим
+источником инструментов. Их отсутствие в clean clone ожидаемо; восстанавливать
+неизвестные локальные assets для обычного запуска не требуется.
 
 ## Что значит «использовать кэш»
 
@@ -143,7 +129,7 @@ Custom date format принимает только tokens `YYYY`, `YY`, `MMMM`, 
 ## Пример запуска
 
 ```powershell
-python "$env:PROJECTS_ROOT\video-chronicle\join_media.py" --input-dir ~/Input --output ~/Input/preview.mp4 --ffmpeg "$env:PROJECTS_ROOT\video-chronicle\ffmpeg1\bin\ffmpeg.exe" --ffprobe "$env:PROJECTS_ROOT\video-chronicle\ffmpeg1\bin\ffprobe.exe" --overwrite
+python "$env:PROJECTS_ROOT\video-chronicle\join_media.py" --input-dir ~/Input --output ~/Input/preview.mp4 --ffmpeg "$env:DEV_TOOLS\ffmpeg\bin\ffmpeg.exe" --ffprobe "$env:DEV_TOOLS\ffmpeg\bin\ffprobe.exe" --overwrite
 ```
 
 ## Запуск GUI
@@ -205,7 +191,7 @@ video-chronicle-transcribe "C:\media\clip.mp4" `
   --whisper-cli "C:\tools\whisper-cli.exe" `
   --model "C:\models\ggml-base.bin" `
   --model-manifest "C:\models\ggml-base.manifest.json" `
-  --ffmpeg "C:\tools\ffmpeg.exe" --output "C:\media\clip.transcript.json"
+  --ffmpeg "$env:DEV_TOOLS\ffmpeg\bin\ffmpeg.exe" --output "C:\media\clip.transcript.json"
 ```
 
 Manifest — strict JSON с полями `model_id`, `version`, `sha256`, `size_bytes`,
@@ -214,3 +200,7 @@ Media обрабатывается локально; JSON содержит prove
 что автоматическую расшифровку необходимо проверять.
 
 Если FFmpeg уже добавлен в `PATH`, параметры `--ffmpeg` и `--ffprobe` можно не указывать.
+
+### Локальные защитные лимиты
+
+Admission ограничен 4096 файлами, 64 GiB на файл, 256 GiB суммарно и семью днями известной длительности одного source. Normalize/concat tools имеют default deadline 1800 секунд; derived-file cap 64 GiB проверяется при polling и перед публикацией. Output/error-log требуют локальный путь без UNC, existing reparse ancestors, Windows device names и ADS. Превышение отклоняется с ошибкой; эти проверки не заменяют OS quota и не предотвращают hostile same-user filesystem races. Evidence и точный release status — docs/STAGES.md.

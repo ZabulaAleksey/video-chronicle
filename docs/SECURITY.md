@@ -1,5 +1,7 @@
 # Безопасность и сохранность данных
 
+Night local bounds/path profile and exact limitations: specs/features/security-hardening.spec.md; independent verdict and regression evidence: docs/notes/stage-15-security-review.md. Preflight rejects existing reparse ancestors and Windows aliases; same-user filesystem replacement races are not prevented by this lexical/stat check.
+
 ## Граница доверия
 
 Медиа, метаданные, имена файлов, каталоги проекта, состояние возобновления и
@@ -70,6 +72,8 @@ release gate для будущего пакетирования, но ещё н�
   либо новая POSIX session/process group. Cancel сначала отправляет FFmpeg `q`,
   через 2 секунды завершает дерево принудительно и подтверждает reap в пределах
   следующих 3 секунд. Timeout и output-limit используют тот же boundary.
+  На Windows root создаётся suspended и начинает выполнение только после
+  успешного назначения в Job Object; сбой назначения или resume завершает root.
 - Вывод stdout/stderr дренируется параллельно и ограничен 8 MiB; превышение
   лимита прекращает всё дерево. FFprobe дополнительно имеет timeout 30 секунд.
 - Source fingerprint фиксируется до и после inspection и повторно проверяется
@@ -182,3 +186,19 @@ Output path, порядок, overwrite и workspace не дают права н�
 [`docs/notes/stage-15-security-review.md`](notes/stage-15-security-review.md).
 Автоматические Bandit/pip-audit проверки не заменяют обязательный независимый
 semantic review перед этапом 16.
+
+## Review checkpoint 2026-10-02
+
+CLI validates raw output and explicit/default error log before path resolution,
+directory creation and logger open. Durable IDs reject Windows device aliases
+on every platform; snapshot version tags require integers, and editing snapshots
+cannot belong to another project or future revision. Earlier snapshot revision
+is retained across durable save/restore and is not a fresh-export proof.
+Independent re-review accepted these four repairs with no HIGH in inspected delta.
+
+Known exception to the general owned-tool-tree description above: GUI WinGet
+provisioning and explicit legacy CLI QProcess still use the Qt process boundary.
+WinGet has no finite timeout/output cap/Job ownership; it cannot yet be claimed
+to satisfy SEC-H-002. Stage15 remains implemented_unverified; the managed setup
+adapter is an automatic tail in STAGES. Wheel smoke uses a global build Python;
+the installed artifact PASS is not clean locked bootstrap evidence.

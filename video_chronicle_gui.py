@@ -969,6 +969,10 @@ class ChronicleWindow(QMainWindow):
             self._apply_encoding_tool_paths(ffmpeg, ffprobe)
             self.status_label.setText("FFmpeg и FFprobe найдены автоматически")
             return
+        # The fields were initialized before this fresh pair check. Do not keep
+        # a stale portable path after a missing or incomplete bundle result.
+        self.ffmpeg_edit.setText(ffmpeg or "ffmpeg")
+        self.ffprobe_edit.setText(ffprobe or "ffprobe")
         if sys.platform != "win32":
             self.status_label.setText(
                 "FFmpeg/FFprobe не найдены. Установите их через системный package manager "

@@ -95,10 +95,19 @@ class SourceFingerprint:
 
     @classmethod
     def capture(cls, path: Path) -> "SourceFingerprint":
+        from .safety import validate_source_size
+
+        from .safety import MAX_SOURCE_BYTES
+
+        validate_source_size(path)
         before = path.stat()
         digest = hashlib.sha256()
+        bytes_read = 0
         with path.open("rb") as stream:
             for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                bytes_read += len(chunk)
+                if bytes_read > MAX_SOURCE_BYTES:
+                    raise ValueError("source grew beyond the 64 GiB file budget")
                 digest.update(chunk)
         stat_result = path.stat()
         fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
