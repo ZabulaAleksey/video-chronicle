@@ -4,6 +4,9 @@
   "slice_id": "VC15-WINGET-IDENTITY-20261002",
   "status": "LOCALLY_VALIDATED_BOUNDED_REVIEW_ACCEPTED",
   "base_commit": "38237635b0ea714525d43241a163f14a1a912095",
+  "source_commit": "69a6d8c12c531c8315189fecb7d7eb2db8f8e8a2",
+  "source_tree": "c41cb110395bc003fad208a4297f48017a33dce9",
+  "source_tree_binding": "Pre-receipt code/test source snapshot; this receipt is added in a follow-up docs-only commit to avoid self-reference.",
   "branch": "fix/av-sync-timeline-drift",
   "platform": "Windows",
   "python": "CPython 3.12.5",
@@ -23,7 +26,8 @@
     "focused_process_tooling_setup": {
       "command": "python -m pytest -p no:cacheprovider tests/test_winget_admission.py tests/test_tooling.py tests/test_process_control.py tests/test_managed_tool_setup.py -q",
       "tests_passed": 50,
-      "tests_skipped": 0
+      "tests_skipped": 0,
+      "duration_seconds": 16.67
     },
     "full_locked_candidate_snapshot": {
       "command": "python -m pytest -q -rs -p no:cacheprovider --basetemp <task-private-dir>",
@@ -37,7 +41,21 @@
     "diff_check": "PASS",
     "independent_security_review": "ACCEPTED_BOUNDED; reviewer confirmed process-handle family/image binding, callback-before-resume ordering, alias-swap rejection and suspended-process cleanup"
   },
-  "candidate_sha256": {
+  "source_git_blob_content_sha256": {
+    "specs/features/security-hardening.spec.md": "881ABD741C22E1F88BDB325CC8A61EE318B8AEC89A6F63A89A4089C275616EB2",
+    "src/video_chronicle/process_control.py": "FE6CD2CBAA2DA44A2D2B20FDD8C2FCD243A62F9BBFC320E70C94905E16AB7D7C",
+    "src/video_chronicle/tool_setup.py": "F1B3AEE0139211B429F9882C268D2B928570137A908DDDF8AC8623BD2E0AE127",
+    "src/video_chronicle/tooling.py": "14FDCE8542C55A9417D389DB5606464846216063FC0954CB12B772CF6FA86BDE",
+    "tests/test_winget_admission.py": "92DE4BD2AE103F9C70211746EC4E076CBEC8640373B3C8D01FBCFA5D0117ED12"
+  },
+  "source_git_blob_sha1": {
+    "specs/features/security-hardening.spec.md": "a1ed7debc944802c0abf0222cdf46b4e2262f4ef",
+    "src/video_chronicle/process_control.py": "3c7b51d17bc3a75bf287da6301b14a149deef32a",
+    "src/video_chronicle/tool_setup.py": "57a15127acff91fefd7dbe8cbb0bd94400c781d4",
+    "src/video_chronicle/tooling.py": "9f3f4b440a886780793dd5d29c4d0f764d4f56b4",
+    "tests/test_winget_admission.py": "58f230217c8084466c26859316854e8a8b9bf5a1"
+  },
+  "reviewed_worktree_capture_sha256": {
     "specs/features/security-hardening.spec.md": "E119E3A8FDA5FCB435A835F8C6A7FE8065BD29D4E4622C671B93558F875F8B74",
     "src/video_chronicle/process_control.py": "73445A692E902FDE6A05C34C1E14413EDDD4B867FE843C5A20645A98D3DFAEE0",
     "src/video_chronicle/tool_setup.py": "B8F88BEDBB9446BDBA20738B95D4E5D150A65C76216605AFF85113F874F031AF",
