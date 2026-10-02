@@ -196,11 +196,10 @@ cannot belong to another project or future revision. Earlier snapshot revision
 is retained across durable save/restore and is not a fresh-export proof.
 Independent re-review accepted these four repairs with no HIGH in inspected delta.
 
-Known exception to the general owned-tool-tree description above: GUI WinGet
-provisioning and explicit legacy CLI QProcess still use the Qt process boundary.
-WinGet has no finite timeout/output cap/Job ownership; it cannot yet be claimed
-to satisfy SEC-H-002. Stage15 remains implemented_unverified; the managed setup
-adapter is an automatic tail in STAGES. Wheel smoke uses a global build Python;
-the installed artifact PASS is not clean locked bootstrap evidence.
+The production composition path injects managed WinGet setup; raw constructor
+and explicit legacy CLI QProcess remain compatibility seams. SEC-H-002 whole
+scope remains under terminal review. The canonical wheel build uses locked
+project setuptools/wheel and a fresh no-pip installed consumer. Historical
+accepted global-pip wheel tests retain compatibility scope only.
 
 Production GUI setup now uses the managed tree boundary with1800s deadline/1MiB captured output; process errors return to manual paths without a raw QProcess retry. Qt worker lifecycle follows queued finished/deleteLater after runner tree reap. Explicit constructor/legacy compatibility paths and executable PATH provenance remain residual scopes; this bounded change is not a whole Stage15 security verdict.

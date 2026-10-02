@@ -204,3 +204,7 @@ Media обрабатывается локально; JSON содержит prove
 ### Локальные защитные лимиты
 
 Admission ограничен 4096 файлами, 64 GiB на файл, 256 GiB суммарно и семью днями известной длительности одного source. Normalize/concat tools имеют default deadline 1800 секунд; derived-file cap 64 GiB проверяется при polling и перед публикацией. Output/error-log требуют локальный путь без UNC, existing reparse ancestors, Windows device names и ADS. Превышение отклоняется с ошибкой; эти проверки не заменяют OS quota и не предотвращают hostile same-user filesystem races. Evidence и точный release status — docs/STAGES.md.
+
+### Воспроизводимая локальная сборка wheel
+
+После `uv sync --locked --extra dev --extra otio` выполните `uv run --locked --offline --extra dev python scripts/build_wheel.py --offline --out-dir <новый-каталог>`. Команда проверяет версии build tools по `uv.lock` и не использует global pip/setuptools. Existing wheel не перезаписывается. Gate `tests/test_clean_wheel_build.py` устанавливает wheel и locked runtime в отдельный venv без pip/system-site-packages, проверяет реальные offscreen GUI/CLI/FFmpeg paths. Первый restore может требовать public registry download; последующий gate использует offline cache. Это source workflow, не утверждённый distribution package или release.

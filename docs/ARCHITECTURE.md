@@ -199,3 +199,7 @@ authority и удаляются без migration. Любой imported proposal �
 - Locked gates: `uv run --locked --extra dev --extra otio python -m pytest` и smoke для `video-chronicle --help`/`python -m video_chronicle --help`.
 
 GUI composition `build_main_window` injects `ManagedToolSetupProcess` for pinned WinGet setup: Qt worker delegates to the same bounded owned subprocess-tree runner. Factory/start failures restore manual paths and never choose raw fallback. Constructor factory=None retains only the accepted compatibility/test seam; setup close waits for finite deadline, not interactive cancellation.
+
+Build workflow сохраняет existing setuptools/wheel backend: exact versions входят в dev extra/uv.lock; `scripts/build_wheel.py` проверяет graph и metadata, затем использует project interpreter и managed uv subprocess boundary. Отдельный clean consumer test исключает global pip/build packages и source imports. Runtime dependency graph не менялся.
+
+Canonical wheel build promotes one zip-validated artifact from private same-filesystem staging with atomic no-replace hardlink; interrupted/invalid builders leave no partial published wheel and existing/racing artifacts retain bytes. Explicit PATH uv/active-venv provenance remains a bounded trusted-tool assumption, not a signed toolchain attestation.

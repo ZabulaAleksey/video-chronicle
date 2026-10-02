@@ -1,0 +1,68 @@
+{
+  "timestamp_utc": "2026-10-02T00:55:31.438079+00:00",
+  "baseline_sha": "4c8794302133725ec465c8acb1434458ba857756",
+  "scope": "locked source build workflow and fresh no-pip installed consumers; no distribution release",
+  "command": "uv run --locked --offline --extra dev --extra otio python -m pytest -q -p no:cacheprovider --basetemp <unique-task-work>",
+  "exit_status": 0,
+  "full": {
+    "passed": 444,
+    "skipped": 0
+  },
+  "targeted": {
+    "passed": 9,
+    "cases": [
+      "fresh-no-pip/offline-installed-real-GUI-CLI-FFmpeg",
+      "existing-wheel-byte-preservation",
+      "installed-build-version-drift-rejected",
+      "timeout/output-limit/nonzero/invalid-zip-private-stage-cleanup-and-retry",
+      "atomic-no-replace-racing-writer-preservation",
+      "actual-private-manifest-vs-lock-rejection-before-output"
+    ]
+  },
+  "lock": {
+    "packages": 14,
+    "added": {
+      "setuptools": "84.0.0",
+      "wheel": "0.48.0"
+    },
+    "existing_package_versions_unchanged": true
+  },
+  "audit": {
+    "packages": 13,
+    "known_vulnerabilities": 0,
+    "adverse_project_statuses": 0
+  },
+  "runtime": {
+    "python": "3.12.5",
+    "ffmpeg": "9.0.1",
+    "clean_environment": "without pip/setuptools/wheel/system-site-packages; cleaned PYTHONPATH/PYTHONHOME; isolated origin probe"
+  },
+  "source_sha256": {
+    "pyproject.toml": "806481ce61e285e0b3ee316a45e93efafa8c2cab8b05c9c8857bf1f1dbd5fc6d",
+    "uv.lock": "c7d881bdecf83c9ec13e4351d28ea4a0dba9ac00862b4662e771d5d15bf1adbd",
+    "scripts/build_wheel.py": "82b05634ae70100ce3f311fd03cb835a596ef2da142bfd3386652d844eb1e931",
+    "tests/test_clean_wheel_build.py": "049178de26b010f0031a028f7628235e51901f58cb8b2367532225c63461bb50"
+  },
+  "not_proven": [
+    "clean VM/cross-OS release",
+    "Android semantic A/V",
+    "approved product/FFmpeg redistribution license",
+    "whole Stage15 terminal security verdict"
+  ],
+  "documentation_checked_unchanged": [
+    "docs/ROADMAP.md",
+    "docs/DECISIONS.md",
+    "specs/system.spec.md",
+    "AGENTS.md"
+  ],
+  "capture_original_sha256": "7a2ee672fd819b3f0ea027398c5b47ccafdd77c88c9b0b46aa55e4657c4d4536",
+  "versioned_artifact_sha256": {
+    "full-suite.log.txt": "058f3d48496b95c276d5c8bf547972204c9975e9b24fd6ba6f4bf6f0f62b284b"
+  },
+  "independent_review": {
+    "initial": "CHANGES_REQUIRED",
+    "repairs": "private staged atomic wheel promotion, actual manifest-drift regression, SECURITY facts, exact published log hashes",
+    "final": "BOUNDED_ACCEPTED exact repaired index; no new blocker in wheel delta; wholeStage15 remains implemented_unverified"
+  },
+  "hash_subject": "versioned_artifact_sha256 binds exact LF Git blobs; capture_original_sha256 labels original CRLF tool capture; source_sha256 binds tested source bytes."
+}

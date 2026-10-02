@@ -9,7 +9,6 @@
   "focused_passed": 46,
   "new_cases": 17,
   "actual_ffmpeg": "9.0.1 portable",
-  "raw_log_sha256": "c5f1e2f74bff1b895a781acb6857fc1da1eb1ef2ad5f231a60730c8abda54622",
   "source_sha256": {
     "src/video_chronicle/tool_setup.py": "3a864c0a7b9769dc355894452c0203674659049ca1f13b062a43c7c669ad759e",
     "video_chronicle_gui.py": "606b983b6ca0b9498b3ff873af2ac9a79a8347fcfd9d48656bf91970c312c4c9",
@@ -40,5 +39,9 @@
   "primary_qt_sources": [
     "https://doc.qt.io/qt-6/qthread.html#finished",
     "https://doc.qt.io/qtforpython-6/PySide6/QtCore/QObject.html#PySide6.QtCore.QObject.deleteLater"
-  ]
+  ],
+  "capture_original_sha256": "c5f1e2f74bff1b895a781acb6857fc1da1eb1ef2ad5f231a60730c8abda54622",
+  "versioned_artifact_sha256": {
+    "full-suite.log.txt": "03f92e4eebd5f3fa3ca066af929255360660e975a6d496f9e7bd715538b6b1ed"
+  }
 }
