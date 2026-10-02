@@ -7,11 +7,13 @@ always list argv and never pass through a shell.
 from __future__ import annotations
 
 import os
+import codecs
 import signal
 import subprocess
 import threading
 import time
 from typing import Protocol
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 
@@ -151,9 +153,15 @@ class _WindowsJob:
         kernel32.CloseHandle.restype = wintypes.BOOL
         kernel32.CreateToolhelp32Snapshot.argtypes = (wintypes.DWORD, wintypes.DWORD)
         kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
-        kernel32.Thread32First.argtypes = (wintypes.HANDLE, ctypes.POINTER(THREADENTRY32))
+        kernel32.Thread32First.argtypes = (
+            wintypes.HANDLE,
+            ctypes.POINTER(THREADENTRY32),
+        )
         kernel32.Thread32First.restype = wintypes.BOOL
-        kernel32.Thread32Next.argtypes = (wintypes.HANDLE, ctypes.POINTER(THREADENTRY32))
+        kernel32.Thread32Next.argtypes = (
+            wintypes.HANDLE,
+            ctypes.POINTER(THREADENTRY32),
+        )
         kernel32.Thread32Next.restype = wintypes.BOOL
         kernel32.OpenThread.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
         kernel32.OpenThread.restype = wintypes.HANDLE
@@ -172,9 +180,7 @@ class _WindowsJob:
         ):
             error = ctypes.get_last_error()
             kernel32.CloseHandle(handle)
-            raise ProcessTreeUnavailable(
-                f"SetInformationJobObject failed ({error})"
-            )
+            raise ProcessTreeUnavailable(f"SetInformationJobObject failed ({error})")
         self._ctypes = ctypes
         self._kernel32 = kernel32
         self._handle = handle
@@ -185,8 +191,7 @@ class _WindowsJob:
         process_handle = self._ctypes.c_void_p(int(process._handle))  # type: ignore[attr-defined]
         if not self._kernel32.AssignProcessToJobObject(self._handle, process_handle):
             raise ProcessTreeUnavailable(
-                "AssignProcessToJobObject failed "
-                f"({self._ctypes.get_last_error()})"
+                f"AssignProcessToJobObject failed ({self._ctypes.get_last_error()})"
             )
 
     def resume_primary_thread(self, process: subprocess.Popen[bytes]) -> None:
@@ -253,8 +258,7 @@ class _WindowsJob:
             None,
         ):
             raise ProcessTreeTerminationError(
-                "QueryInformationJobObject failed "
-                f"({self._ctypes.get_last_error()})"
+                f"QueryInformationJobObject failed ({self._ctypes.get_last_error()})"
             )
         return int(info.ActiveProcesses)
 
@@ -279,7 +283,16 @@ class _WindowsJob:
 class ManagedProcess:
     """A root process whose descendants are owned by a platform tree."""
 
-    def __init__(self, command: list[str]) -> None:
+    def __init__(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        env: Mapping[str, str] | None = None,
+        cooperative_stdin: bool = True,
+    ) -> None:
+        if type(cooperative_stdin) is not bool:
+            raise TypeError("cooperative_stdin must be boolean")
         if not command or not all(isinstance(part, str) for part in command):
             raise TypeError("command must be a non-empty list of strings")
         if not safe_cancel_supported():
@@ -289,16 +302,24 @@ class ManagedProcess:
         self._job: _WindowsJob | None = _WindowsJob() if os.name == "nt" else None
         # subprocess closes the CreateProcess thread handle. Keep its primary
         # thread suspended until a Job Object owns the process; resume it by ID.
-        creation_flags = (subprocess.CREATE_NO_WINDOW | 0x00000004) if os.name == "nt" else 0
+        creation_flags = (
+            (subprocess.CREATE_NO_WINDOW | 0x00000004) if os.name == "nt" else 0
+        )
+        spawn_options = {}
+        if cwd is not None:
+            spawn_options["cwd"] = cwd
+        if env is not None:
+            spawn_options["env"] = dict(env)
         try:
             self.process = subprocess.Popen(
                 command,
-                stdin=subprocess.PIPE,
+                stdin=subprocess.PIPE if cooperative_stdin else subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 creationflags=creation_flags,
                 start_new_session=os.name == "posix",
                 shell=False,
+                **spawn_options,
             )
         except Exception:
             if self._job is not None:
@@ -424,9 +445,15 @@ def run_managed_command(
     max_output_bytes: int,
     output_file: Path | None = None,
     max_output_file_bytes: int | None = None,
+    cwd: Path | None = None,
+    env: Mapping[str, str] | None = None,
+    output_received: Callable[[str], None] | None = None,
+    cooperative_stdin: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     """Run one command with bounded capture and whole-tree termination."""
 
+    if type(cooperative_stdin) is not bool:
+        raise TypeError("cooperative_stdin must be boolean")
     if max_output_bytes < 0:
         raise ValueError("max_output_bytes must be non-negative")
     if (output_file is None) != (max_output_file_bytes is None):
@@ -439,25 +466,50 @@ def run_managed_command(
     threads: list[threading.Thread] = []
     started_threads: list[threading.Thread] = []
     tree_confirmed = False
-    managed = ManagedProcess(command)
+    spawn_options = {}
+    if cwd is not None:
+        spawn_options["cwd"] = cwd
+    if env is not None:
+        spawn_options["env"] = env
+    if not cooperative_stdin:
+        spawn_options["cooperative_stdin"] = False
+    managed = ManagedProcess(command, **spawn_options)
     try:
         process = managed.process
         buffers = {"stdout": bytearray(), "stderr": bytearray()}
         lock = threading.Lock()
         limit_exceeded = threading.Event()
 
+        callback_failed = threading.Event()
+
         def drain(name: str, stream) -> None:
-            while True:
-                chunk = stream.read(64 * 1024)
-                if not chunk:
-                    return
-                with lock:
-                    used = len(buffers["stdout"]) + len(buffers["stderr"])
-                    remaining = max(0, max_output_bytes - used)
-                    buffers[name].extend(chunk[:remaining])
-                    if len(chunk) > remaining:
-                        limit_exceeded.set()
+            decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+            read = getattr(stream, "read1", stream.read)
+            try:
+                while True:
+                    chunk = read(64 * 1024)
+                    if not chunk:
+                        if output_received is not None:
+                            text = decoder.decode(b"", final=True)
+                            if text:
+                                output_received(text)
                         return
+                    with lock:
+                        used = len(buffers["stdout"]) + len(buffers["stderr"])
+                        remaining = max(0, max_output_bytes - used)
+                        accepted = chunk[:remaining]
+                        buffers[name].extend(accepted)
+                        overflow = len(chunk) > remaining
+                        if overflow:
+                            limit_exceeded.set()
+                    if output_received is not None:
+                        text = decoder.decode(accepted)
+                        if text:
+                            output_received(text)
+                    if overflow:
+                        return
+            except BaseException:
+                callback_failed.set()
 
         threads = [
             threading.Thread(
@@ -481,12 +533,17 @@ def run_managed_command(
                 except FileNotFoundError:
                     return
                 if size > max_output_file_bytes:
-                    raise ProcessOutputLimitExceeded("tool output file exceeded its disk budget")
+                    raise ProcessOutputLimitExceeded(
+                        "tool output file exceeded its disk budget"
+                    )
 
         started = time.monotonic()
         terminal_error: ProcessControlError | None = None
         while process.poll() is None:
             check_output_file()
+            if callback_failed.is_set():
+                terminal_error = ProcessControlError("tool output reader failed")
+                break
             if cancellation is not None and cancellation.cancel_requested:
                 terminal_error = ProcessCancelled("operation cancelled")
                 break
@@ -511,8 +568,12 @@ def run_managed_command(
         for thread in started_threads:
             thread.join(timeout=FORCE_KILL_SECONDS)
         if any(thread.is_alive() for thread in started_threads):
-            raise ProcessTreeTerminationError("tool output pipes did not close after reap")
+            raise ProcessTreeTerminationError(
+                "tool output pipes did not close after reap"
+            )
         check_output_file()
+        if callback_failed.is_set():
+            raise ProcessControlError("tool output reader failed")
         if terminal_error is not None:
             raise terminal_error
         if limit_exceeded.is_set():

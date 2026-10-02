@@ -17,7 +17,7 @@ SPEC сохраняет статус черновика. Срез начинае
 - **GUI-001 — Настройка запуска.** Локальное приложение на PySide6 позволяет
   выбрать входную папку и выходной MP4, указать FFmpeg/FFprobe, CRF и preset.
 - **GUI-002 — Переходный execution adapter.** GUI запускает legacy CLI
-  `join_media.py` через асинхронный `QProcess`; программа и каждый аргумент
+  `join_media.py` через асинхронный owned-process worker; программа и каждый аргумент
   передаются отдельно, без shell и ручного quoting.
 - **GUI-003 — Наблюдаемость.** Во время работы GUI остаётся отзывчивым,
   показывает объединённый текстовый вывод CLI и различает запуск, успех и
@@ -33,7 +33,7 @@ SPEC сохраняет статус черновика. Срез начинае
 
 - **GUI-AC-001 (GUI-001, GUI-002, NFR-003, SEC-002).** Пути с пробелами и
   Unicode сохраняются отдельными argv-элементами; GUI не копирует медиалогику.
-- **GUI-AC-002 (GUI-003, NFR-004).** `QProcess` не блокирует event loop,
+- **GUI-AC-002 (GUI-003, NFR-004).** Worker не блокирует event loop,
   вывод CLI появляется в журнале, а повторный запуск во время работы запрещён.
 - **GUI-AC-003 (GUI-003).** Ненулевой код, аварийный выход, ошибка запуска и
   отсутствие результата после кода 0 отображаются как ошибка.
@@ -394,7 +394,7 @@ application/pipeline path и не меняет CLI argv или атомарну�
 - **EXEC-007 — GUI и fallback.** Default GUI получает typed events через Qt
   signals, показывает determinate progress после появления total и разрешает
   cancel только активного export. `VIDEO_CHRONICLE_CANCEL_UI=0` отключает
-  кнопку. Legacy `QProcess` fallback и неподдерживаемый backend сохраняют
+  кнопку. Legacy CLI fallback и неподдерживаемый backend сохраняют
   безопасное поведение «дождаться завершения»; окно остаётся заблокированным до
   terminal state.
 - **EXEC-008 — Compatibility.** `execute_plan` сохраняет legacy success `int`,

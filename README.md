@@ -208,3 +208,5 @@ Admission ограничен 4096 файлами, 64 GiB на файл, 256 GiB 
 ### Воспроизводимая локальная сборка wheel
 
 После `uv sync --locked --extra dev --extra otio` выполните `uv run --locked --offline --extra dev python scripts/build_wheel.py --offline --out-dir <новый-каталог>`. Команда проверяет версии build tools по `uv.lock` и не использует global pip/setuptools. Existing wheel не перезаписывается. Gate `tests/test_clean_wheel_build.py` устанавливает wheel и locked runtime в отдельный venv без pip/system-site-packages, проверяет реальные offscreen GUI/CLI/FFmpeg paths. Первый restore может требовать public registry download; последующий gate использует offline cache. Это source workflow, не утверждённый distribution package или release.
+
+Явный diagnostic mode `VIDEO_CHRONICLE_GUI_ADAPTER=legacy-cli` остаётся асинхронным: timeout1800s, суммарный stdout/stderr limit1MiB и остановка owned process tree. Default GUI использует application services. Legacy completion требует нового output и успешного завершения; release/Android acceptance этим не подтверждается.

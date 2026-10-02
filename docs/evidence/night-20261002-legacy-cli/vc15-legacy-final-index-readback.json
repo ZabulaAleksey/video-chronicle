@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-02",
+  "repository": "E:\\DEV\\projects\\video-chronicle",
+  "baseline": "c1a869368ca0633486e276d4b99d0b8da478884c",
+  "index_tree": "b52f5a14e2585d5ece2c69eef6843dd3aa04e132",
+  "index_matches_tree": true,
+  "files": 18,
+  "bytes": 339348,
+  "blob_sha256_mismatches": [],
+  "raw_full_index_z": {
+    "bytes": 1226,
+    "sha256": "1bb01e7f173e7676d0a14ec308046d204ad02a11889877afddf4943bf98e8043"
+  },
+  "ls_files_stage_z": {
+    "bytes": 9215,
+    "sha256": "90164866ba0db9e9f27023be6c9bb849a4a8197422df1f3fd957723abd0158ec"
+  },
+  "full_gate": {
+    "ffmpeg_ffprobe": "9.0.1",
+    "passed": 458,
+    "skipped": 0,
+    "seconds": 239.61
+  },
+  "public_content_scan": {
+    "user_home_paths": 0,
+    "personal_emails": 0,
+    "credential_or_private_key_patterns": 0,
+    "real_media_or_auth_payloads": 0,
+    "dependency_or_runtime_config_changes": 0
+  },
+  "verdict": "ACCEPTED_EXACT_INDEX",
+  "current_actionable_findings": [],
+  "whole_stage_15": "PARTIAL"
+}

@@ -76,3 +76,24 @@ Production source admission: 4096 items, 64 GiB per source, 256 GiB aggregate; k
   managed runner confirms tree/Job reap; GUI does not synchronously join.
   Adapter cancellation is proven as a port; current GUI close waits for setup
   completion/deadline and does not expose interactive setup cancellation.
+
+### Managed legacy GUI CLI boundary (2026-10-02)
+
+- VC15-LEGACY-LIFECYCLE: explicit legacy-cli mode uses the existing owned
+  run_managed_command port outside the GUI thread, list argv, CLI parent cwd,
+  UTF-8 environment, finite1800s deadline and aggregate1MiB output budget.
+  Outer noninteractive Python CLI stdin is DEVNULL/EOF; existing FFmpeg
+  cooperative stdin-q policy stays enabled for other consumers.
+  No raw QProcess launch or automatic unsafe fallback is permitted here.
+- Bounded stdout/stderr chunks reach the GUI while the child runs; decoder
+  preserves split UTF-8. Started denotes worker admission. Completion is emitted
+  exactly once after runner tree/pipe cleanup, including failed spawn, timeout,
+  overflow and cancellation. The adapter is reusable after terminal delivery.
+- Legacy argv, nonzero/crash messages and new-output identity verification
+  remain unchanged. No new interactive cancellation UI or artifact rollback is
+  claimed: legacy CLI still owns atomic publication; a CLI-published output on
+  later process failure is not treated as successful by the adapter.
+- Acceptance: unchanged GUI contracts plus actual hanging descendant, output
+  overflow, live split-UTF8, cancellation and repeat-run regressions; full locked
+  suite and independent review. Stage15 remains implemented_unverified pending
+  its complete terminal gate, and POSIX orphan/reaper limitations stay explicit.

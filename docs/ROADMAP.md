@@ -12,7 +12,7 @@
 - этап 00: объединение проектного контекста с общей AI Dev Team без
   дублирования канонических документов и automation.
 - внеочередной ограниченный срез GUI-001: PySide6-форма запускает совместимый
-  legacy CLI через `QProcess`, показывает журнал и сохраняет явную семантику
+  legacy CLI через owned-process worker, показывает журнал и сохраняет явную семантику
   перезаписи. Срез не заменяет этапы 01–05.
 
 ## Выполненный этап — 01. Discovery и baseline
@@ -62,7 +62,7 @@ in-memory reference adapter.
 
 Этап завершён: default GUI строит и показывает immutable `ExportPlan`, а анализ
 и экспорт вызывают канонические application services через `QThread` worker.
-Whole-CLI `QProcess` сохранён только как явный диагностический fallback.
+Whole-CLI owned-process worker сохранён только как явный диагностический fallback.
 
 ## Выполненный этап — 07. Overlay editor
 

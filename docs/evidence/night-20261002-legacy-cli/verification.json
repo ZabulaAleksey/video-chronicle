@@ -1,0 +1,74 @@
+{
+  "timestamp_utc": "2026-10-02T03:45:23.723528+00:00",
+  "baseline": "c1a869368ca0633486e276d4b99d0b8da478884c",
+  "scope": "VC15-LEGACY-LIFECYCLE bounded current Windows local consumer",
+  "full": {
+    "passed": 458,
+    "skipped": 0,
+    "seconds": 239.61
+  },
+  "new_tests": 14,
+  "accepted_existing_tests": "byte unchanged",
+  "command": "uv run --locked --offline --extra dev --extra otio python -m pytest -q -p no:cacheprovider --basetemp <unique-task-root>",
+  "environment": {
+    "QT_QPA_PLATFORM": "offscreen",
+    "VIDEO_CHRONICLE_FFMPEG": "${DEV_ROOT}/tools/ffmpeg/bin/ffmpeg.exe",
+    "VIDEO_CHRONICLE_FFPROBE": "${DEV_ROOT}/tools/ffmpeg/bin/ffprobe.exe",
+    "version": "9.0.1"
+  },
+  "functional_sha256": {
+    "src/video_chronicle/legacy_cli.py": "b192e3d09fb8b5deb30af94cb020e3ecef2db32a8472ca62533ba84378cf096c",
+    "src/video_chronicle/process_control.py": "73f12f587a1553856968872df5d5f6aa4082b7b8a5e1b3bd6b60c03c68955ec4",
+    "video_chronicle_gui.py": "7796cb46f6714d12fd6fb57e52713edd312dfbae4a6c8020438a63106fc18c6d",
+    "tests/test_managed_legacy_cli.py": "c4c9441e992e98d5b91cba5d153750ea993cb044b8329d8440b7d6a2e3439723"
+  },
+  "raw_full_capture_sha256": "df2ee3d7f2f7302ec610e3c8473ecf6bd72c2417943aa9371326ab40e127ee0d",
+  "original_review_capture_sha256": {
+    "vc15-legacy-lifecycle-security-review.md": "872c03d489268ab2ccd7984e2c0250f2767d8cedf1d9065b2591bb91afeb7192",
+    "vc15-legacy-lifecycle-security-review.json": "76002c29be8b35c472d3d320489185e1b7e07ce2efc84390de27a5f63f5b3b5f",
+    "vc15-legacy-final-index-readback.md": "31376d90a8ff46f6ee058cb30fc57acf9847221dc8f7cfcc21ea71cda670243c",
+    "vc15-legacy-final-index-readback.json": "c2d1429b313dcf2be74c97d97e35ee39bb6eb3854c56453995d5b3cd7ba45d30"
+  },
+  "versioned_artifact_sha256": {
+    "full-suite.log.txt": "6db65fdd00401ceeac6b0164b1fb9c775a83ffe6ce8a2f2ad46e9229d4f29fe6",
+    "vc15-legacy-final-index-readback.json": "c2d1429b313dcf2be74c97d97e35ee39bb6eb3854c56453995d5b3cd7ba45d30",
+    "vc15-legacy-final-index-readback.md": "31376d90a8ff46f6ee058cb30fc57acf9847221dc8f7cfcc21ea71cda670243c",
+    "vc15-legacy-lifecycle-security-review.json": "76002c29be8b35c472d3d320489185e1b7e07ce2efc84390de27a5f63f5b3b5f",
+    "vc15-legacy-lifecycle-security-review.md": "872c03d489268ab2ccd7984e2c0250f2767d8cedf1d9065b2591bb91afeb7192"
+  },
+  "independent_review": "BOUNDED_ACCEPTED exact18-path index readback, functional and actual full458PASS0skip; final additions below are evidence-only",
+  "negative_evidence": [
+    "initial452PASS2skip missing FFmpeg env",
+    "intermediate457PASS0skip before finalEOF collection",
+    "new Qt argv snapshot fixture aborted next test; parent/DeferredDelete repair and exact independent pairPASS",
+    "initial descendant marker assertion observed permitted graceful interval; heartbeat post-completion invariant now proven"
+  ],
+  "limits": [
+    "no whole Stage15 terminal verdict",
+    "no release/license/Android acceptance",
+    "existing raw setup constructor seam",
+    "POSIX orphan/reaper limitations retained",
+    "no hostile-program sandbox"
+  ],
+  "documentation_checked_unchanged": [
+    "docs/DECISIONS.md",
+    "docs/DESIGN.md",
+    "AGENTS.md",
+    "pyproject.toml",
+    "uv.lock"
+  ],
+  "state_documents_updated": [
+    "README.md",
+    "docs/STAGES.md",
+    "docs/ROADMAP.md",
+    "docs/ARCHITECTURE.md",
+    "docs/SECURITY.md",
+    "docs/TESTING.md",
+    "docs/project-context.md",
+    "specs/system.spec.md",
+    "specs/features/timeline-builder.spec.md",
+    "specs/features/security-hardening.spec.md"
+  ],
+  "accepted_index_tree": "b52f5a14e2585d5ece2c69eef6843dd3aa04e132",
+  "final_delta": "verification binding and two unchanged public readback archives only; no code/test/spec/canonical status changes after accepted index"
+}

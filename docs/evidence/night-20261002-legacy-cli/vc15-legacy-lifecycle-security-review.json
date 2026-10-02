@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "review": "VC15-LEGACY-LIFECYCLE independent security review",
+  "date": "2026-10-02",
+  "repository": "E:\\DEV\\projects\\video-chronicle",
+  "baseline": "c1a869368ca0633486e276d4b99d0b8da478884c",
+  "verdict": "BOUNDED_ACCEPTED_PENDING_OWNER_FULL_GATE_AND_STABLE_INDEX",
+  "current_actionable_findings": [],
+  "resolved_findings": [
+    "terminal-versus-cancel arbitration moved before queued Qt delivery",
+    "noninteractive legacy stdin uses DEVNULL while FFmpeg cooperative stdin remains explicit",
+    "argv snapshot test now owns and drains its Qt object lifecycle"
+  ],
+  "file_sha256": {
+    "src/video_chronicle/legacy_cli.py": "B192E3D09FB8B5DEB30AF94CB020E3ECEF2DB32A8472CA62533BA84378CF096C",
+    "src/video_chronicle/process_control.py": "73F12F587A1553856968872DF5D5F6AA4082B7B8A5E1B3BD6B60C03C68955EC4",
+    "video_chronicle_gui.py": "7796CB46F6714D12FD6FB57E52713EDD312DFBAE4A6C8020438A63106FC18C6D",
+    "tests/test_managed_legacy_cli.py": "C4C9441E992E98D5B91CBA5D153750EA993CB044B8329D8440B7D6A2E3439723"
+  },
+  "independent_checks": [
+    {"check": "git diff --check", "result": "PASS_WITH_LINE_ENDING_WARNINGS"},
+    {"check": "stdin EOF test alone", "result": "1_PASS"},
+    {"check": "previously aborting argv snapshot plus stdin EOF pair", "result": "2_PASS"}
+  ],
+  "scope_limits": [
+    "trusted local CLI lifecycle containment, not hostile-program sandboxing",
+    "whole Stage 15 remains partial",
+    "owner full actual-FFmpeg suite and final stable-index binding pending"
+  ]
+}

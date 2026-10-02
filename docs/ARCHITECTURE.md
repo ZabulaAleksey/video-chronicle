@@ -63,7 +63,7 @@
 - `join_media.py` — тонкий legacy compatibility shim и direct-source entry point.
 - `gui_contract.py` — чистая конфигурация одного GUI-запуска и построение argv.
 - `video_chronicle_gui.py` — PySide6 Widgets UI, preview presenter и временный
-  диагностический `QProcess` fallback `VIDEO_CHRONICLE_GUI_ADAPTER=legacy-cli`.
+  диагностический owned-worker fallback `VIDEO_CHRONICLE_GUI_ADAPTER=legacy-cli`.
 - FFprobe — чтение потоков, метаданных и дат создания.
 - FFmpeg — преобразование каждого источника и объединение подготовленных клипов.
 - `~/Input` — входной каталог по умолчанию; исходные файлы только читаются.
@@ -177,7 +177,7 @@ service. Root-level CLI только экспортирует каноничес
 дублирует сортировку, анализ дат, FFmpeg-команды или финализацию.
 Join и Chronicle являются policy-данными одного `ExportRequest`: inspection,
 normalization, concat и publication adapters у них общие.
-Legacy whole-CLI `QProcess` остаётся только явным adapter fallback и может быть
+Legacy whole-CLI owned worker остаётся только явным adapter fallback и может быть
 удалён без изменения core. Safe stop анализа/export доступен только default
 application backend либо явно объявленному совместимому backend; feature flag
 может скрыть actions без изменения pipeline. Каталоги `ffmpeg/` и `ffmpeg1/` являются локальными

@@ -29,7 +29,7 @@ release gate для будущего пакетирования, но ещё н�
   метаданных; путь допускается показывать только когда он нужен пользователю.
 - Default GUI вызывает application services в worker thread; диагностический
   legacy fallback запускает `sys.executable` и `join_media.py` через list-argv
-  `QProcess`. Пути не склеиваются в shell-команду. Overwrite разрешается только
+  owned runner. Пути не склеиваются в shell-команду. Overwrite разрешается только
   после отдельного подтверждения и повторной проверки коллизии.
 - Analysis и export используют отдельные cooperative cancellation contexts.
   Analysis проверяет token на item boundaries и передаёт его managed FFprobe;
@@ -197,9 +197,9 @@ is retained across durable save/restore and is not a fresh-export proof.
 Independent re-review accepted these four repairs with no HIGH in inspected delta.
 
 The production composition path injects managed WinGet setup; raw constructor
-and explicit legacy CLI QProcess remain compatibility seams. SEC-H-002 whole
+remains a compatibility seam; explicit legacy CLI uses the managed runner. SEC-H-002 whole
 scope remains under terminal review. The canonical wheel build uses locked
 project setuptools/wheel and a fresh no-pip installed consumer. Historical
 accepted global-pip wheel tests retain compatibility scope only.
 
-Production GUI setup now uses the managed tree boundary with1800s deadline/1MiB captured output; process errors return to manual paths without a raw QProcess retry. Qt worker lifecycle follows queued finished/deleteLater after runner tree reap. Explicit constructor/legacy compatibility paths and executable PATH provenance remain residual scopes; this bounded change is not a whole Stage15 security verdict.
+Production GUI setup now uses the managed tree boundary with1800s deadline/1MiB captured output; process errors return to manual paths without a raw QProcess retry. Qt worker lifecycle follows queued finished/deleteLater after runner tree reap. Raw setup constructor compatibility and executable PATH provenance remain residual scopes; this bounded change is not a whole Stage15 security verdict.

@@ -18,7 +18,7 @@
 дат, все поддерживаемые filename patterns, приоритет метаданных, сортировка,
 фильтрация исходников, FFmpeg normalize/concat argv, пустой и повреждённый
 входы, частичный успех, коллизии результата, неизменность источников,
-построение GUI argv, реальный legacy `QProcess`, application-service worker,
+построение GUI argv, реальный managed legacy CLI, application-service worker,
 preview states, invalidation, overwrite timing, automatic encoding-tool
 bootstrap и responsive scrolling.
 Overlay покрыт validation/golden tests всех date/time/visibility/layout
@@ -189,3 +189,5 @@ Evidence находится в docs/evidence/night-20261002. Wheel smoke в эт
 Managed setup Night20261002: `tests/test_managed_tool_setup.py` adds17 cases for production composition, finite profiles, actual synthetic success/timeout/output/spawn/cancel children, pinned argv and manual fallback, exactly-one Qt completion and deadlock regression. Accepted GUI/process suites unchanged; focused46 PASS, full locked435 PASS/0 skips with portable FFmpeg9.0.1. Post-test formatting of two NEW files has reconstructed AST equality PASS. Evidence docs/evidence/night-20261002-managed-setup. Real WinGet package installation/interactive setup cancellation/release remain unproven.
 
 Locked build Night20261002: NEW `tests/test_clean_wheel_build.py` —9 PASS (fresh no-pip/offline/actual installed GUI+CLI export; existing wheel bytes preserved; installed build-version drift and actual manifest-lock drift rejected before output; interrupted/invalid builds clean private stage and retry; racing final artifact preserved). Accepted legacy wheel tests unchanged. Full locked suite444 PASS/0 skips with FFmpeg9.0.1; uv lock/pip check PASS, audit13 packages zero known findings. Evidence docs/evidence/night-20261002-locked-build. Без release/license/clean-VM claims.
+
+Managed legacy CLI Night20261002:14 additive regressions cover live split-UTF8/cwd, timeout descendant heartbeat stopped after confirmed completion, overflow, failed/normal/repeated runs, cancellation-vs-terminal locking, immutable argv and stdin EOF. Existing accepted tests unchanged. Final locked/offline suite with actual portable FFmpeg/FFprobe9.0.1:458 PASS/0 skips in239.61s. Independent exact pair formerly aborting Qt now PASS after only NEW fixture lifetime repair. Earlier452/2skip run omitted exact FFmpeg env;457/0skip intermediate preceded EOF case; both are historical partial captures. Aborted Qt fixture log preserved locally; neither substitutes final gate. Evidence docs/evidence/night-20261002-legacy-cli.

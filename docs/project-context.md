@@ -51,15 +51,15 @@ Video Chronicle — Python-проект для обработки и сборк�
 - Worker/scheduler commands: Qt workers выполняют analysis/export через managed media processes; independent scheduler отсутствует.
 - External sandbox/stub/fallback modes: real trusted FFmpeg default; optional OTIO/whisper/GPU explicit flags/evidence/fallback. Authenticated remote provider отсутствует.
 - Clean-room smoke command or documented manual scenario: wheel build → fresh private venv → offline wheel install → CLI help/export authored media → ffprobe output → source hashes unchanged. PASS на текущем Windows host без global pip/setuptools/wheel, из hash-locked runtime export; actual installed offscreen GUI и CLI/FFmpeg paths проверены. Clean VM/cross-OS distribution этим не доказаны.
-- Project-specific quality gates: dependency consistency, unchanged accepted tests, managed setup46 и clean build9 focused PASS, full actual FFmpeg444 PASS/0 skips, independent bounded security review; Stage15 terminal verdict остаётся open.
-- Known limitations: Production WinGet setup managed, raw constructor/explicit legacy paths остаются compatibility seams; PATH executable provenance и interactive setup cancellation не доказаны. Linux/clean-VM/Android semantic acceptance не refreshed; terminal Stage15 review remains automatic engineering tail.
+- Project-specific quality gates: dependency consistency, unchanged accepted tests, managed setup46 и clean build9 focused PASS, managed legacy14 focused PASS, full actual FFmpeg458 PASS/0 skips, independent bounded security review; Stage15 terminal verdict остаётся open.
+- Known limitations: Production WinGet setup managed, raw setup constructor остаётся compatibility seam; explicit legacy CLI managed; PATH executable provenance и interactive setup cancellation не доказаны. Linux/clean-VM/Android semantic acceptance не refreshed; terminal Stage15 review remains automatic engineering tail.
 - Explicit deviations from global Backend DX Policy: canonical build больше не требует global Python packages; production setup managed. Legacy global-pip accepted tests и raw constructor seam сохранены как compatibility evidence; whole terminal security scope ещё open в selected STAGES.
 
 | BDX ID | Evidence | Status / limitation |
 |---|---|---|
 | BDX-BOOT-001 / BDX-TOOL-001 | locked graph + no-pip clean consumer | PASS current Windows host; no clean VM/release claim |
-| BDX-TEST-001 / BDX-CI-001 | 444 tests, actual FFmpeg, private basetemp | PASS this Windows host; cross-OS CI not refreshed |
-| BDX-SVC-001 / BDX-JOB-001 | managed media + production setup lifecycle tests | PASS inspected boundaries; explicit legacy coverage remains scoped |
+| BDX-TEST-001 / BDX-CI-001 | 458 tests, actual FFmpeg, private basetemp | PASS this Windows host; cross-OS CI not refreshed |
+| BDX-SVC-001 / BDX-JOB-001 | managed media + production setup lifecycle tests | PASS inspected boundaries; legacy CLI lifecycle verified in bounded Windows scope; POSIX reaper limitations explicit |
 | BDX-DB-001 | no DB | N/A; JSON repository separately tested |
 | BDX-API-001 | no network API | N/A; CLI help/exit contract tested |
 | BDX-DOC-001 | current command map and STAGES tails | PASS documented; no all-gates completion assertion |

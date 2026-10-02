@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import codecs
 import hashlib
 import os
 import sys
@@ -15,7 +14,6 @@ from PySide6.QtCore import (
     QFileSystemWatcher,
     QObject,
     QProcess,
-    QProcessEnvironment,
     QSize,
     Qt,
     QTimer,
@@ -60,6 +58,7 @@ from gui_contract import (
     create_run_request,
 )
 from video_chronicle.tool_setup import ManagedToolSetupProcess
+from video_chronicle.legacy_cli import ManagedLegacyCli
 from video_chronicle.domain import ExportMode, ExportPlan
 from video_chronicle.execution import ProgressEvent
 from video_chronicle.gui_services import ApplicationServiceAdapter, ThumbnailBatch
@@ -175,6 +174,8 @@ class CliProcessAdapter(QObject):
         *,
         cli_script: Path = CLI_SCRIPT,
         python_executable: str = sys.executable,
+        timeout: float = 1800.0,
+        max_output_bytes: int = 1024 * 1024,
     ) -> None:
         super().__init__(parent)
         self._cli_script = cli_script
@@ -182,19 +183,11 @@ class CliProcessAdapter(QObject):
         self._expected_output: Path | None = None
         self._output_before: tuple[int, int, int, int] | None = None
         self._active = False
-        self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
-
-        self._process = QProcess(self)
-        self._process.setWorkingDirectory(str(self._cli_script.parent))
-        self._process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
-        environment = QProcessEnvironment.systemEnvironment()
-        environment.insert("PYTHONIOENCODING", "utf-8")
-        environment.insert("PYTHONUTF8", "1")
-        self._process.setProcessEnvironment(environment)
-        self._process.started.connect(self.started)
-        self._process.readyReadStandardOutput.connect(self._forward_output)
-        self._process.errorOccurred.connect(self._on_process_error)
-        self._process.finished.connect(self._on_finished)
+        self._process = ManagedLegacyCli(
+            self, timeout=timeout, max_output_bytes=max_output_bytes
+        )
+        self._process.output_received.connect(self.output_received)
+        self._process.finished.connect(self._on_managed_finished)
 
     @property
     def is_running(self) -> bool:
@@ -209,31 +202,38 @@ class CliProcessAdapter(QObject):
         self._expected_output = request.output
         self._output_before = file_identity(request.output)
         self._active = True
-        self._decoder.reset()
         arguments = build_cli_arguments(request, self._cli_script)
-        self._process.start(self._python_executable, arguments)
-
-    @Slot()
-    def _forward_output(self) -> None:
-        self._read_output()
-
-    def _read_output(self, *, final: bool = False) -> None:
-        data = bytes(self._process.readAllStandardOutput())
-        text = self._decoder.decode(data, final=final)
-        if text:
-            self.output_received.emit(text)
-
-    @Slot(QProcess.ProcessError)
-    def _on_process_error(self, error: QProcess.ProcessError) -> None:
-        message = f"Не удалось выполнить процесс: {self._process.errorString()}"
-        self.output_received.emit(f"\n{message}\n")
-        if error == QProcess.ProcessError.FailedToStart and self._active:
+        try:
+            self._process.start([self._python_executable, *arguments], self._cli_script.parent)
+        except BaseException:
             self._active = False
+            raise
+        self.started.emit()
+
+    def request_cancel(self) -> bool:
+        return self._process.request_cancel()
+
+    @Slot(object, object)
+    def _on_managed_finished(self, result, error) -> None:
+        if not self._active:
+            return
+        if error is not None or result is None:
+            self._active = False
+            message = "Не удалось выполнить процесс: " + (
+                type(error).__name__ if error is not None else "MissingResult"
+            )
+            self.output_received.emit("\n" + message + "\n")
             self.completed.emit(False, message)
+            return
+        status = (QProcess.ExitStatus.NormalExit if result.returncode >= 0
+                  else QProcess.ExitStatus.CrashExit)
+        # Windows returns an unsigned NTSTATUS for fatal process termination.
+        if os.name == "nt" and result.returncode >= 0x80000000:
+            status = QProcess.ExitStatus.CrashExit
+        self._on_finished(result.returncode, status)
 
     @Slot(int, QProcess.ExitStatus)
     def _on_finished(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:
-        self._read_output(final=True)
         if not self._active:
             return
 
