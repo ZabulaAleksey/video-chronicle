@@ -85,3 +85,5 @@ outer project/future-revision binding. Focused80 PASS; actual full suite418 PASS
 MEDIUM provisioning/build gaps: raw WinGet QProcess and machine-global wheel
 build. BDX-L2 delta has now been added with those limits. Overall Stage15 remains
 implemented_unverified; further automatic work is recorded in selected STAGES.
+
+Independent read-only managed setup review20261002: BOUNDED_ACCEPTED after fixing Medium permanent wait-failure UI deadlock. Queued Qt finished/deleteLater delivers exactly one terminal callback after managed process-tree reap. 46 focused/435 full PASS, no remaining actionable lifecycle findings in this inspected delta. Explicit raw constructor/legacy paths, PATH executable provenance and no interactive setup cancellation remain documented; Stage15 remains partial. Evidence docs/evidence/night-20261002-managed-setup.

@@ -197,3 +197,5 @@ authority и удаляются без migration. Любой imported proposal �
 - Общий machine-level uv cache разрешён; `.venv`, pytest temp и tool caches можно безопасно пересоздать после locked restore.
 - `ffmpeg/` и `ffmpeg1/` — отдельные runtime/upstream assets, а не disposable dependency cache; media, project JSON и пользовательские outputs также не удаляются.
 - Locked gates: `uv run --locked --extra dev --extra otio python -m pytest` и smoke для `video-chronicle --help`/`python -m video_chronicle --help`.
+
+GUI composition `build_main_window` injects `ManagedToolSetupProcess` for pinned WinGet setup: Qt worker delegates to the same bounded owned subprocess-tree runner. Factory/start failures restore manual paths and never choose raw fallback. Constructor factory=None retains only the accepted compatibility/test seam; setup close waits for finite deadline, not interactive cancellation.

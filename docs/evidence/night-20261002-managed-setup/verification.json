@@ -1,0 +1,44 @@
+{
+  "baseline_sha": "1e9dea41e551a58dd5e9efe51c0069212d427ce8",
+  "timestamp_utc": "2026-10-02T00:07:42.405399+00:00",
+  "scope": "production managed tool setup boundary; no real WinGet installation",
+  "command": "uv run --locked --offline --extra dev --extra otio python -m pytest -q -p no:cacheprovider --basetemp <unique-task-work>",
+  "exit_status": 0,
+  "passed": 435,
+  "skipped": 0,
+  "focused_passed": 46,
+  "new_cases": 17,
+  "actual_ffmpeg": "9.0.1 portable",
+  "raw_log_sha256": "c5f1e2f74bff1b895a781acb6857fc1da1eb1ef2ad5f231a60730c8abda54622",
+  "source_sha256": {
+    "src/video_chronicle/tool_setup.py": "3a864c0a7b9769dc355894452c0203674659049ca1f13b062a43c7c669ad759e",
+    "video_chronicle_gui.py": "606b983b6ca0b9498b3ff873af2ac9a79a8347fcfd9d48656bf91970c312c4c9",
+    "tests/test_managed_tool_setup.py": "e0a562f346bac4b690160df2c5ad158e035b84e246e029d454ae395f26aaf9d6"
+  },
+  "post_test_style_change": "Two new files only; reconstructed pre-format AST equality PASS",
+  "accepted_tests": "unchanged Git diff",
+  "limitations": [
+    "No real WinGet install",
+    "No interactive GUI setup cancellation action; finite deadline remains",
+    "Explicit raw constructor/legacy CLI compatibility seams remain",
+    "No Stage15/release terminal verdict"
+  ],
+  "documentation_checked_unchanged": [
+    "docs/ROADMAP.md",
+    "docs/DECISIONS.md",
+    "specs/system.spec.md",
+    "pyproject.toml",
+    "uv.lock"
+  ],
+  "independent_review": {
+    "reviewer": "video_security / gpt-5.6-sol high / read-only",
+    "verdict": "BOUNDED_ACCEPTED",
+    "finding": "Medium permanent wait-failure UI deadlock fixed; regression PASS",
+    "remaining_actionable_lifecycle_findings": 0,
+    "scope": "Normal composition path only; whole Stage15 remains open"
+  },
+  "primary_qt_sources": [
+    "https://doc.qt.io/qt-6/qthread.html#finished",
+    "https://doc.qt.io/qtforpython-6/PySide6/QtCore/QObject.html#PySide6.QtCore.QObject.deleteLater"
+  ]
+}

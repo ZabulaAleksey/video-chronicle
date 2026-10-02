@@ -202,3 +202,5 @@ WinGet has no finite timeout/output cap/Job ownership; it cannot yet be claimed
 to satisfy SEC-H-002. Stage15 remains implemented_unverified; the managed setup
 adapter is an automatic tail in STAGES. Wheel smoke uses a global build Python;
 the installed artifact PASS is not clean locked bootstrap evidence.
+
+Production GUI setup now uses the managed tree boundary with1800s deadline/1MiB captured output; process errors return to manual paths without a raw QProcess retry. Qt worker lifecycle follows queued finished/deleteLater after runner tree reap. Explicit constructor/legacy compatibility paths and executable PATH provenance remain residual scopes; this bounded change is not a whole Stage15 security verdict.

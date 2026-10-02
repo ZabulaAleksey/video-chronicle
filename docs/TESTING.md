@@ -185,3 +185,5 @@ aliases, strict snapshot tags, project/revision binding и legitimate save.
 Evidence находится в docs/evidence/night-20261002. Wheel smoke в этом прогоне
 зависел от global build interpreter; clean restore и WinGet lifecycle остаются
 открытыми в selected STAGES. Это не release/Android semantic acceptance.
+
+Managed setup Night20261002: `tests/test_managed_tool_setup.py` adds17 cases for production composition, finite profiles, actual synthetic success/timeout/output/spawn/cancel children, pinned argv and manual fallback, exactly-one Qt completion and deadlock regression. Accepted GUI/process suites unchanged; focused46 PASS, full locked435 PASS/0 skips with portable FFmpeg9.0.1. Post-test formatting of two NEW files has reconstructed AST equality PASS. Evidence docs/evidence/night-20261002-managed-setup. Real WinGet package installation/interactive setup cancellation/release remain unproven.

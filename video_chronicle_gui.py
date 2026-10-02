@@ -7,6 +7,7 @@ import codecs
 import hashlib
 import os
 import sys
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 
@@ -58,6 +59,7 @@ from gui_contract import (
     build_cli_arguments,
     create_run_request,
 )
+from video_chronicle.tool_setup import ManagedToolSetupProcess
 from video_chronicle.domain import ExportMode, ExportPlan
 from video_chronicle.execution import ProgressEvent
 from video_chronicle.gui_services import ApplicationServiceAdapter, ThumbnailBatch
@@ -261,6 +263,8 @@ class ChronicleWindow(QMainWindow):
 
     Passing ``adapter`` explicitly selects the temporary whole-CLI fallback.
     Production uses :class:`ApplicationServiceAdapter` by default.
+    No tool_setup_factory retains the raw QProcess compatibility/test seam;
+    normal entry points use build_main_window and always inject managed setup.
     """
 
     def __init__(
@@ -268,6 +272,7 @@ class ChronicleWindow(QMainWindow):
         adapter: CliProcessAdapter | None = None,
         *,
         application_adapter: ApplicationServiceAdapter | None = None,
+        tool_setup_factory: Callable[[QObject], ManagedToolSetupProcess] | None = None,
     ) -> None:
         super().__init__()
         self.setWindowTitle("Video Chronicle")
@@ -310,7 +315,8 @@ class ChronicleWindow(QMainWindow):
         self._source_watcher.directoryChanged.connect(self._on_source_files_changed)
         self._source_watcher.fileChanged.connect(self._on_source_files_changed)
         self._syncing_timeline_selection = False
-        self._tool_setup_process: QProcess | None = None
+        self._tool_setup_factory = tool_setup_factory
+        self._tool_setup_process: QProcess | ManagedToolSetupProcess | None = None
         self._tool_setup_started = False
         self._cancel_ui_enabled = (
             not self._legacy_mode
@@ -992,14 +998,22 @@ class ChronicleWindow(QMainWindow):
         )
         self.analyze_button.setEnabled(False)
         self.run_button.setEnabled(False)
-        process = QProcess(self)
-        process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
-        process.setProgram(winget)
-        process.setArguments(winget_ffmpeg_install_arguments())
-        process.errorOccurred.connect(self._on_encoding_tool_setup_error)
-        process.finished.connect(self._on_encoding_tool_setup_finished)
-        self._tool_setup_process = process
-        process.start()
+        try:
+            # None preserves the accepted constructor compatibility seam.
+            # Normal entry points always inject the managed factory below.
+            process = (
+                QProcess(self) if self._tool_setup_factory is None
+                else self._tool_setup_factory(self)
+            )
+            process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+            process.setProgram(winget)
+            process.setArguments(winget_ffmpeg_install_arguments())
+            process.errorOccurred.connect(self._on_encoding_tool_setup_error)
+            process.finished.connect(self._on_encoding_tool_setup_finished)
+            self._tool_setup_process = process
+            process.start()
+        except Exception:
+            self._on_encoding_tool_setup_error(QProcess.ProcessError.FailedToStart)
 
     def _apply_encoding_tool_paths(self, ffmpeg: str, ffprobe: str) -> None:
         self.ffmpeg_edit.setText(ffmpeg)
@@ -2460,15 +2474,20 @@ QPlainTextEdit { font-family: Consolas, "Cascadia Mono", monospace; font-size: 1
 """
 
 
+def build_main_window() -> ChronicleWindow:
+    """Production composition root; setup failures never select raw fallback."""
+    mode = os.environ.get("VIDEO_CHRONICLE_GUI_ADAPTER", "application").casefold()
+    legacy_adapter = CliProcessAdapter() if mode == "legacy-cli" else None
+    return ChronicleWindow(adapter=legacy_adapter, tool_setup_factory=ManagedToolSetupProcess)
+
+
 def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("Video Chronicle")
     app.setOrganizationName("Video Chronicle")
     app.setStyle("Fusion")
     app.setStyleSheet(STYLE_SHEET)
-    mode = os.environ.get("VIDEO_CHRONICLE_GUI_ADAPTER", "application").casefold()
-    legacy_adapter = CliProcessAdapter() if mode == "legacy-cli" else None
-    window = ChronicleWindow(adapter=legacy_adapter)
+    window = build_main_window()
     window.show()
     QTimer.singleShot(0, window.ensure_encoding_tools)
     return app.exec()

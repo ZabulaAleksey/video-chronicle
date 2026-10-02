@@ -50,3 +50,29 @@ Production source admission: 4096 items, 64 GiB per source, 256 GiB aggregate; k
   на будущую project_revision. Более ранняя revision допустима: save/restore
   повышает durable revision, сохраняя immutable export snapshot; это не proof
   свежести для нового export.
+
+### Managed GUI tool setup boundary (2026-10-02)
+
+- VC15-BOOTSTRAP-LIFECYCLE: normal GUI entry points compose a managed setup
+  adapter over existing run_managed_command. Pinned user-scope WinGet argv
+  remains unchanged; no shell, finite 1800s deadline, aggregate 1MiB captured
+  stdout/stderr, suspended Windows spawn/Job ownership/confirmed tree reap.
+- Setup stays off the GUI thread. Timeout, output-limit, spawn/cancellation
+  and process-tree errors produce one failure completion after worker reap,
+  restoring manual paths/actions. Factory/start errors fail to manual setup;
+  no automatic raw QProcess fallback.
+- ChronicleWindow constructor with no setup factory retains its accepted
+  raw-QProcess compatibility/test seam. Production main always injects the
+  managed factory through build_main_window. This bounded repair does not
+  establish SEC-H-002 coverage for every explicit legacy consumer.
+- Configured/discovered executable is still trusted-code input; PATH selection
+  provenance is not proven by lifecycle limits. No real WinGet package install
+  or distribution/license approval is inferred from synthetic child tests.
+- Acceptance: unchanged accepted GUI tests, composition and failure-state tests,
+  real managed timeout/output/success/cancel children and worker cleanup, full
+  locked suite, independent review. Stage15 stays partial until terminal review.
+
+- Qt queued finished -> deleteLater is the worker lifecycle authority after
+  managed runner confirms tree/Job reap; GUI does not synchronously join.
+  Adapter cancellation is proven as a port; current GUI close waits for setup
+  completion/deadline and does not expose interactive setup cancellation.
