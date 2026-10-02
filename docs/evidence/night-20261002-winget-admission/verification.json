@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "stage_id": "15-security-hardening",
+  "slice_id": "VC15-WINGET-IDENTITY-20261002",
+  "status": "LOCALLY_VALIDATED_BOUNDED_REVIEW_ACCEPTED",
+  "base_commit": "38237635b0ea714525d43241a163f14a1a912095",
+  "branch": "fix/av-sync-timeline-drift",
+  "platform": "Windows",
+  "python": "CPython 3.12.5",
+  "external_tool_facts": {
+    "ffmpeg_version": "9.0.1",
+    "ffprobe_version": "9.0.1",
+    "winget_process_invoked": false,
+    "winget_install_attempted": false,
+    "host_alias_lookup": "read-only known-folder and reparse-tag check succeeded; path omitted"
+  },
+  "acceptance": {
+    "new_regression_file": {
+      "path": "tests/test_winget_admission.py",
+      "tests_passed": 16,
+      "tests_skipped": 0
+    },
+    "focused_process_tooling_setup": {
+      "command": "python -m pytest -p no:cacheprovider tests/test_winget_admission.py tests/test_tooling.py tests/test_process_control.py tests/test_managed_tool_setup.py -q",
+      "tests_passed": 50,
+      "tests_skipped": 0
+    },
+    "full_locked_candidate_snapshot": {
+      "command": "python -m pytest -q -rs -p no:cacheprovider --basetemp <task-private-dir>",
+      "tests_passed": 474,
+      "tests_skipped": 0,
+      "duration_seconds": 203.87,
+      "snapshot_method": "Git archive of base_commit plus exactly the five owned candidate files",
+      "runtime": "CPython 3.12.5",
+      "cache": "task-private uv cache populated from the exact locked runtime requirements; no project dependency or lock change"
+    },
+    "diff_check": "PASS",
+    "independent_security_review": "ACCEPTED_BOUNDED; reviewer confirmed process-handle family/image binding, callback-before-resume ordering, alias-swap rejection and suspended-process cleanup"
+  },
+  "candidate_sha256": {
+    "specs/features/security-hardening.spec.md": "E119E3A8FDA5FCB435A835F8C6A7FE8065BD29D4E4622C671B93558F875F8B74",
+    "src/video_chronicle/process_control.py": "73445A692E902FDE6A05C34C1E14413EDDD4B867FE843C5A20645A98D3DFAEE0",
+    "src/video_chronicle/tool_setup.py": "B8F88BEDBB9446BDBA20738B95D4E5D150A65C76216605AFF85113F874F031AF",
+    "src/video_chronicle/tooling.py": "850FF092301E552BCE79EF91E0F66B7105A60C3AC6EE9F477325205167D2D0FD",
+    "tests/test_winget_admission.py": "92DE4BD2AE103F9C70211746EC4E076CBEC8640373B3C8D01FBCFA5D0117ED12"
+  },
+  "scope_limits": [
+    "No live WinGet process or package installation was run.",
+    "Synthetic tests verify the Windows process-admission API seam and lifecycle, not a live Microsoft package installation.",
+    "uv remains PATH-selected for developer build tooling; no source-grounded canonical executable identity or version pin is present in the global tool registry.",
+    "Global DEV remains the source of FFmpeg/FFprobe version and SHA-256 provenance; this slice does not verify a binary signature.",
+    "Dependency license inventory, the remaining SEC-H terminal review, clean-VM/distribution, Android semantic playback, and whole Stage 15 completion remain open."
+  ]
+}

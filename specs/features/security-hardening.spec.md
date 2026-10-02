@@ -72,6 +72,41 @@ Production source admission: 4096 items, 64 GiB per source, 256 GiB aggregate; k
   real managed timeout/output/success/cancel children and worker cleanup, full
   locked suite, independent review. Stage15 stays partial until terminal review.
 
+### WinGet executable admission (2026-10-02)
+
+- `VC15-WINGET-IDENTITY`: automatic setup does not trust a PATH-resolved
+  `winget.exe` or caller-supplied `LOCALAPPDATA`. Resolve the OS per-user
+  LocalAppData known folder, construct only its `Microsoft/WindowsApps/winget.exe`
+  alias candidate, and inspect the candidate without following it. Admit only
+  the Windows AppExecutionAlias reparse tag; missing, ordinary-file, symlink,
+  junction, or another reparse type returns to manual setup.
+- The alias location/tag is discovery evidence, not package identity. The
+  existing managed Windows process runner must create the process suspended,
+  assign it to its owned Job, then invoke an optional admission callback against
+  that process handle before resuming its primary thread. The callback checks
+  the process package family equals
+  `Microsoft.DesktopAppInstaller_8wekyb3d8bbwe`, and that the actual image path
+  is `winget.exe` under the registered package root. Package/API errors,
+  no-package results, malformed/oversized values, or identity/path mismatch
+  reject admission; the suspended process is terminated and reaped through the
+  existing bounded ownership path. The callback is optional and defaults off
+  for other managed-runner consumers.
+- No PowerShell/registry mutation, WinGet invocation during validation,
+  package installation, version floor, Authenticode thumbprint pin, raw process
+  fallback, or automatic launch after failed admission is allowed. The existing
+  exact Gyan.FFmpeg 9.0.1 user-scope argument list remains unchanged. Fixture
+  tests establish process-admission behavior only; they do not prove a live
+  WinGet install or redistribution/license approval.
+- Acceptance: PATH shadow and caller LocalAppData spoof are ignored; missing,
+  ordinary, symlink/junction, wrong-tag aliases fail closed; successful order
+  is suspended spawn -> Job assignment -> package/image admission -> resume;
+  no-package, wrong-family, malformed/API failure, wrong package root/image,
+  and alias-swap cases never resume and are reaped. Exact-family/package-root
+  fixtures resume once. Accepted tests remain unchanged; full locked suite and
+  independent security review are required. The separate uv provenance gap and
+  global FFmpeg binary-signature ownership remain unresolved; Stage 15 remains
+  partial until those and its terminal review gates are closed.
+
 - Qt queued finished -> deleteLater is the worker lifecycle authority after
   managed runner confirms tree/Job reap; GUI does not synchronously join.
   Adapter cancellation is proven as a port; current GUI close waits for setup

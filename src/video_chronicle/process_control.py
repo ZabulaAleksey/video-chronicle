@@ -290,9 +290,16 @@ class ManagedProcess:
         cwd: Path | None = None,
         env: Mapping[str, str] | None = None,
         cooperative_stdin: bool = True,
+        admission_callback: Callable[[subprocess.Popen[bytes]], None] | None = None,
     ) -> None:
         if type(cooperative_stdin) is not bool:
             raise TypeError("cooperative_stdin must be boolean")
+        if admission_callback is not None and not callable(admission_callback):
+            raise TypeError("admission_callback must be callable")
+        if admission_callback is not None and os.name != "nt":
+            raise ProcessTreeUnavailable(
+                "executable admission callbacks are supported only on Windows"
+            )
         if not command or not all(isinstance(part, str) for part in command):
             raise TypeError("command must be a non-empty list of strings")
         if not safe_cancel_supported():
@@ -328,6 +335,8 @@ class ManagedProcess:
         if self._job is not None:
             try:
                 self._job.assign(self.process)
+                if admission_callback is not None:
+                    admission_callback(self.process)
                 self._job.resume_primary(self.process)
             except BaseException:
                 # Before resume no tool code can spawn descendants. After resume,
@@ -449,11 +458,14 @@ def run_managed_command(
     env: Mapping[str, str] | None = None,
     output_received: Callable[[str], None] | None = None,
     cooperative_stdin: bool = True,
+    admission_callback: Callable[[subprocess.Popen[bytes]], None] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run one command with bounded capture and whole-tree termination."""
 
     if type(cooperative_stdin) is not bool:
         raise TypeError("cooperative_stdin must be boolean")
+    if admission_callback is not None and not callable(admission_callback):
+        raise TypeError("admission_callback must be callable")
     if max_output_bytes < 0:
         raise ValueError("max_output_bytes must be non-negative")
     if (output_file is None) != (max_output_file_bytes is None):
@@ -473,6 +485,8 @@ def run_managed_command(
         spawn_options["env"] = env
     if not cooperative_stdin:
         spawn_options["cooperative_stdin"] = False
+    if admission_callback is not None:
+        spawn_options["admission_callback"] = admission_callback
     managed = ManagedProcess(command, **spawn_options)
     try:
         process = managed.process

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import math
+import os
 import subprocess
 from collections.abc import Callable
+from pathlib import Path
 
 from PySide6.QtCore import QObject, QProcess, QThread, Signal, Slot
 
@@ -93,13 +95,29 @@ class ManagedToolSetupProcess(QObject):
             raise RuntimeError("setup requires a program and a single start")
         self._started = True
         command = [self._program, *self._arguments]
-        thread = _SetupThread(
-            lambda: run_managed_command(
+
+        def run_setup() -> subprocess.CompletedProcess[str]:
+            options = {}
+            program_path = Path(self._program)
+            if (
+                os.name == "nt"
+                and program_path.name.casefold() == "winget.exe"
+                and program_path.parent.name.casefold() == "windowsapps"
+                and program_path.parent.parent.name.casefold() == "microsoft"
+            ):
+                from video_chronicle.tooling import admit_winget_process
+
+                options["admission_callback"] = admit_winget_process
+            return run_managed_command(
                 command,
                 cancellation=self._cancellation,
                 timeout=self._timeout,
                 max_output_bytes=self._max_output_bytes,
-            ),
+                **options,
+            )
+
+        thread = _SetupThread(
+            run_setup,
             self,
         )
         self._thread = thread

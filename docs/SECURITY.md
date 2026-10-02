@@ -202,4 +202,13 @@ scope remains under terminal review. The canonical wheel build uses locked
 project setuptools/wheel and a fresh no-pip installed consumer. Historical
 accepted global-pip wheel tests retain compatibility scope only.
 
+The WinGet candidate no longer trusts PATH or caller `LOCALAPPDATA`: discovery
+uses the OS-known LocalAppData app-execution alias and checks its reparse tag
+without following it. After suspended spawn and Job assignment, process-handle
+admission requires the Microsoft Desktop App Installer package family and an
+image under its registered package root before resume. Synthetic regressions
+and bounded independent review accept this admission slice; no live installer
+was invoked. Developer `uv` executable identity and Global DEV-owned FFmpeg
+binary provenance remain open Stage 15 security tails.
+
 Production GUI setup now uses the managed tree boundary with1800s deadline/1MiB captured output; process errors return to manual paths without a raw QProcess retry. Qt worker lifecycle follows queued finished/deleteLater after runner tree reap. Raw setup constructor compatibility and executable PATH provenance remain residual scopes; this bounded change is not a whole Stage15 security verdict.
